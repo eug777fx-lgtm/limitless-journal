@@ -631,7 +631,7 @@ function AuthPage({ onAuth }) {
       <div className="auth-outer" style={{ position: 'relative', zIndex: 2, width: tab === 'signup' ? '440px' : '380px', transition: 'width 0.2s', margin: '40px auto' }}>
         {/* Logo */}
         <div className="auth-logo-block" style={{ textAlign: 'center', marginBottom: '36px' }}>
-          <img className="auth-logo-img" src="/src/assets/logo2.png" alt="logo" style={{ height: '64px', marginBottom: '14px', display: 'block', margin: '0 auto 14px' }} />
+          <img className="auth-logo-img" src="/logo2.png" alt="logo" style={{ height: '64px', marginBottom: '14px', display: 'block', margin: '0 auto 14px' }} />
           <div style={{ fontSize: '22px', fontWeight: '800', letterSpacing: '0.22em', color: '#fff', lineHeight: 1 }}>
             LIMITLESS
           </div>
@@ -945,7 +945,7 @@ function PendingScreen({ onLogout }) {
       <style dangerouslySetInnerHTML={{ __html: ANIM_CSS }} />
       <AuroraBackground theme="white" />
       <div style={{ position: 'relative', zIndex: 2, textAlign: 'center', animation: 'pageFade 0.3s ease both' }}>
-        <img src="/src/assets/logo2.png" alt="logo" style={{ height: '64px', display: 'block', margin: '0 auto 16px' }} />
+        <img src="/logo2.png" alt="logo" style={{ height: '64px', display: 'block', margin: '0 auto 16px' }} />
         <div style={{ fontSize: '22px', fontWeight: '800', letterSpacing: '0.22em', color: '#fff', lineHeight: 1 }}>LIMITLESS</div>
         <div style={{ fontSize: '9px', color: '#444', letterSpacing: '0.3em', marginTop: '7px', textTransform: 'uppercase', fontWeight: '600', marginBottom: '48px' }}>Private Journal</div>
         <div style={{ background: 'rgba(10,10,10,0.85)', border: '1px solid #1c1c1c', borderRadius: '18px', padding: '36px 44px', maxWidth: '420px', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}>
@@ -3110,7 +3110,7 @@ export default function App() {
       }}>
         {/* Logo */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', marginBottom: '8px' }}>
-          <img src="/src/assets/logo2.png" alt="logo" style={{ height: '28px', display: 'block' }} />
+          <img src="/logo2.png" alt="logo" style={{ height: '28px', display: 'block' }} />
           <div style={{ fontSize: '16px', fontWeight: '700', letterSpacing: '0.15em', color: '#fff', lineHeight: 1 }}>
             LIMITLESS
           </div>
