@@ -1304,7 +1304,7 @@ function useCountAnimation(target, duration = ANIM_MS) {
     const to   = target
     if (from === to) { setValue(to); return }
     const animate = (ts) => {
-      if (!startRef.current) startRef.current = ts
+      if (!startRef.current) { startRef.current = ts; console.log('[ANIM] counter start', performance.now().toFixed(1)) }
       const progress = Math.min((ts - startRef.current) / duration, 1)
       const eased    = 1 - Math.pow(1 - progress, 4) // easeOutQuart
       setValue(from + (to - from) * eased)
@@ -1349,6 +1349,10 @@ function Dashboard({ trades, onAddTrade, loading }) {
   const animAvgRR  = useCountAnimation(loading ? 0 : avgRRNum,  ANIM_MS)
   const animPF     = useCountAnimation(loading ? 0 : pfNum,     ANIM_MS)
   const animStreak = useCountAnimation(loading ? 0 : streak,    ANIM_MS)
+
+  useEffect(() => {
+    if (!loading) console.log('[ANIM] chart + counters start', performance.now().toFixed(1))
+  }, [loading])
 
   if (loading) return <DashboardSkeleton />
 
@@ -1447,8 +1451,9 @@ function Dashboard({ trades, onAddTrade, loading }) {
               {totalPnl >= 0 ? '+' : '−'}${Math.abs(Math.round(totalPnl)).toLocaleString()} MTD
             </div>
           </div>
+          <div style={{ opacity: loading ? 0 : 1 }}>
           <ResponsiveContainer width="100%" height={190}>
-            <AreaChart data={pnlCurve} margin={{ top: 4, right: 4, bottom: 0, left: 10 }}>
+            <AreaChart key={trades.map(t => t.id).join('')} data={pnlCurve} margin={{ top: 4, right: 4, bottom: 0, left: 10 }}>
               <defs>
                 <linearGradient id="pnlGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%"   stopColor="#aaffa0" stopOpacity={0.14} />
@@ -1458,9 +1463,10 @@ function Dashboard({ trades, onAddTrade, loading }) {
               <XAxis dataKey="day" tick={{ fill: '#555', fontSize: 10 }} axisLine={false} tickLine={false} interval={Math.max(0, Math.floor(pnlCurve.length / 6) - 1)} />
               <YAxis tick={{ fill: '#555', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `$${Math.abs(v) >= 1000 ? Math.round(v / 1000) + 'k' : v}`} width={36} />
               <Tooltip content={<PnlTooltip />} cursor={{ stroke: '#2a2a2a', strokeWidth: 1 }} />
-              <Area key={loading ? 'loading' : 'loaded'} type="monotone" dataKey="pnl" stroke="#aaffa0" strokeWidth={1.5} fill="url(#pnlGrad)" dot={false} activeDot={{ r: 4, fill: '#aaffa0', stroke: '#080808', strokeWidth: 2 }} isAnimationActive={true} animationDuration={ANIM_MS} animationBegin={0} animationEasing="ease-out" />
+              <Area type="monotone" dataKey="pnl" stroke="#aaffa0" strokeWidth={1.5} fill="url(#pnlGrad)" dot={false} activeDot={{ r: 4, fill: '#aaffa0', stroke: '#080808', strokeWidth: 2 }} isAnimationActive={true} animationDuration={ANIM_MS} animationBegin={0} animationEasing="ease-out" />
             </AreaChart>
           </ResponsiveContainer>
+          </div>
         </div>
 
         <div style={{ ...card, overflowX: 'auto' }}>
