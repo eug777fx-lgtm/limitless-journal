@@ -1290,7 +1290,9 @@ function DashboardSkeleton() {
 }
 
 // ─── useCountAnimation hook ───────────────────────────────────
-function useCountAnimation(target, duration = 1500) {
+const ANIM_MS = 1800
+
+function useCountAnimation(target, duration = ANIM_MS) {
   const [value, setValue] = useState(0)
   const rafRef   = useRef(null)
   const startRef = useRef(null)
@@ -1342,11 +1344,11 @@ function Dashboard({ trades, onAddTrade, loading }) {
   }
 
   // ── Animation hooks (called unconditionally before any early return) ──
-  const animPnl    = useCountAnimation(loading ? 0 : totalPnl,  1500)
-  const animWR     = useCountAnimation(loading ? 0 : winRate,   1500)
-  const animAvgRR  = useCountAnimation(loading ? 0 : avgRRNum,  1500)
-  const animPF     = useCountAnimation(loading ? 0 : pfNum,     1500)
-  const animStreak = useCountAnimation(loading ? 0 : streak,    1500)
+  const animPnl    = useCountAnimation(loading ? 0 : totalPnl,  ANIM_MS)
+  const animWR     = useCountAnimation(loading ? 0 : winRate,   ANIM_MS)
+  const animAvgRR  = useCountAnimation(loading ? 0 : avgRRNum,  ANIM_MS)
+  const animPF     = useCountAnimation(loading ? 0 : pfNum,     ANIM_MS)
+  const animStreak = useCountAnimation(loading ? 0 : streak,    ANIM_MS)
 
   if (loading) return <DashboardSkeleton />
 
@@ -1456,7 +1458,7 @@ function Dashboard({ trades, onAddTrade, loading }) {
               <XAxis dataKey="day" tick={{ fill: '#555', fontSize: 10 }} axisLine={false} tickLine={false} interval={Math.max(0, Math.floor(pnlCurve.length / 6) - 1)} />
               <YAxis tick={{ fill: '#555', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `$${Math.abs(v) >= 1000 ? Math.round(v / 1000) + 'k' : v}`} width={36} />
               <Tooltip content={<PnlTooltip />} cursor={{ stroke: '#2a2a2a', strokeWidth: 1 }} />
-              <Area type="monotone" dataKey="pnl" stroke="#aaffa0" strokeWidth={1.5} fill="url(#pnlGrad)" dot={false} activeDot={{ r: 4, fill: '#aaffa0', stroke: '#080808', strokeWidth: 2 }} />
+              <Area key={loading ? 'loading' : 'loaded'} type="monotone" dataKey="pnl" stroke="#aaffa0" strokeWidth={1.5} fill="url(#pnlGrad)" dot={false} activeDot={{ r: 4, fill: '#aaffa0', stroke: '#080808', strokeWidth: 2 }} isAnimationActive={true} animationDuration={ANIM_MS} animationBegin={0} animationEasing="ease-out" />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -1480,7 +1482,7 @@ function Dashboard({ trades, onAddTrade, loading }) {
               <PolarGrid stroke="#1e1e1e" strokeDasharray="3 3" />
               <PolarAngleAxis dataKey="metric" tick={{ fill: '#666', fontSize: 9, fontFamily: 'Inter, sans-serif' }} />
               <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
-              <Radar name="score" dataKey="score" stroke="rgba(255,255,255,0.5)" fill="rgba(255,255,255,0.04)" strokeWidth={1.5} dot={{ fill: '#fff', r: 2.5, strokeWidth: 0 }} />
+              <Radar key={loading ? 'loading' : 'loaded'} name="score" dataKey="score" stroke="rgba(255,255,255,0.5)" fill="rgba(255,255,255,0.04)" strokeWidth={1.5} dot={{ fill: '#fff', r: 2.5, strokeWidth: 0 }} isAnimationActive={true} animationDuration={ANIM_MS} animationBegin={0} animationEasing="ease-out" />
             </RadarChart>
           </ResponsiveContainer>
           <div style={{ textAlign: 'center', paddingTop: '12px', borderTop: '1px solid #111', marginTop: 'auto' }}>
