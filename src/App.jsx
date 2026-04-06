@@ -1289,11 +1289,38 @@ function DashboardSkeleton() {
   )
 }
 
+// ─── useCountAnimation hook ───────────────────────────────────
+function useCountAnimation(target, duration = 1200) {
+  const [value, setValue] = useState(0)
+  const rafRef   = useRef(null)
+  const startRef = useRef(null)
+
+  useEffect(() => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    startRef.current = null
+    const from = 0
+    const to   = target
+    if (from === to) { setValue(to); return }
+    const animate = (ts) => {
+      if (!startRef.current) startRef.current = ts
+      const progress = Math.min((ts - startRef.current) / duration, 1)
+      const eased    = 1 - Math.pow(1 - progress, 4) // easeOutQuart
+      setValue(from + (to - from) * eased)
+      if (progress < 1) rafRef.current = requestAnimationFrame(animate)
+      else setValue(to)
+    }
+    rafRef.current = requestAnimationFrame(animate)
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
+  }, [target, duration])
+
+  return value
+}
+
 // ─── Dashboard ────────────────────────────────────────────────
 function Dashboard({ trades, onAddTrade, loading }) {
   const [calViewDate, setCalViewDate] = useState(() => new Date())
-  if (loading) return <DashboardSkeleton />
-  // ── Computed stats ──
+
+  // ── Computed stats (safe with empty trades array) ──
   const wins   = trades.filter(t => (t.pnl || 0) > 0)
   const losses = trades.filter(t => (t.pnl || 0) < 0)
 
@@ -1302,8 +1329,10 @@ function Dashboard({ trades, onAddTrade, loading }) {
   const grossWins    = wins.reduce((s, t) => s + t.pnl, 0)
   const grossLosses  = Math.abs(losses.reduce((s, t) => s + t.pnl, 0))
   const profitFactor = grossLosses > 0 ? (grossWins / grossLosses).toFixed(2) : grossWins > 0 ? '∞' : '—'
-  const avgRR        = wins.length ? (wins.reduce((s, t) => s + (t.rr || 0), 0) / wins.length).toFixed(1) : '—'
+  const avgRRNum     = wins.length ? wins.reduce((s, t) => s + (t.rr || 0), 0) / wins.length : 0
+  const avgRR        = wins.length ? avgRRNum.toFixed(1) : '—'
   const avgWin       = wins.length ? Math.round(grossWins / wins.length) : 0
+  const pfNum        = grossLosses > 0 ? grossWins / grossLosses : 0
 
   const byDate = [...trades].sort((a, b) => new Date(b.trade_date) - new Date(a.trade_date))
   let streak = 0
@@ -1311,6 +1340,15 @@ function Dashboard({ trades, onAddTrade, loading }) {
     if ((t.pnl || 0) > 0) streak++
     else break
   }
+
+  // ── Animation hooks (called unconditionally before any early return) ──
+  const animPnl    = useCountAnimation(loading ? 0 : totalPnl,  1200)
+  const animWR     = useCountAnimation(loading ? 0 : winRate,   1200)
+  const animAvgRR  = useCountAnimation(loading ? 0 : avgRRNum,  1200)
+  const animPF     = useCountAnimation(loading ? 0 : pfNum,     1200)
+  const animStreak = useCountAnimation(loading ? 0 : streak,    1200)
+
+  if (loading) return <DashboardSkeleton />
 
   // ── P&L curve ──
   const sortedAsc = [...trades].sort((a, b) => new Date(a.trade_date) - new Date(b.trade_date))
@@ -1338,12 +1376,16 @@ function Dashboard({ trades, onAddTrade, loading }) {
 
   const monthLabel = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 
+  const animPnlRounded    = Math.round(animPnl)
+  const animWRRounded     = Math.round(animWR)
+  const animStreakRounded = Math.round(animStreak)
+
   const stats = [
-    { label: 'Net P&L',       val: `${totalPnl >= 0 ? '+' : '−'}$${Math.abs(Math.round(totalPnl)).toLocaleString()}`, color: totalPnl >= 0 ? '#aaffa0' : '#ff8080', sub: 'Month to date' },
-    { label: 'Win Rate',       val: `${winRate}%`,      color: '#fff', sub: `${wins.length} / ${trades.length} trades`   },
-    { label: 'Avg Win / Loss', val: `${avgRR}R`,        color: '#fff', sub: avgWin ? `$${avgWin.toLocaleString()} avg win` : 'No wins yet' },
-    { label: 'Profit Factor',  val: `${profitFactor}`,  color: '#fff', sub: 'Gross P / gross L'                           },
-    { label: 'Win Streak',     val: streak > 0 ? `${streak}W` : '—', color: '#fff', sub: streak > 0 ? `${streak} in a row` : 'No active streak' },
+    { label: 'Net P&L',       val: `${animPnlRounded >= 0 ? '+' : '−'}$${Math.abs(animPnlRounded).toLocaleString()}`, color: totalPnl >= 0 ? '#aaffa0' : '#ff8080', sub: 'Month to date' },
+    { label: 'Win Rate',       val: `${animWRRounded}%`,                                                               color: '#fff', sub: `${wins.length} / ${trades.length} trades`   },
+    { label: 'Avg Win / Loss', val: wins.length ? `${animAvgRR.toFixed(1)}R` : '—',                                   color: '#fff', sub: avgWin ? `$${avgWin.toLocaleString()} avg win` : 'No wins yet' },
+    { label: 'Profit Factor',  val: grossLosses > 0 ? animPF.toFixed(2) : profitFactor,                               color: '#fff', sub: 'Gross P / gross L'                           },
+    { label: 'Win Streak',     val: streak > 0 ? `${animStreakRounded}W` : '—',                                       color: '#fff', sub: streak > 0 ? `${streak} in a row` : 'No active streak' },
   ]
 
   // ── Empty state ──
