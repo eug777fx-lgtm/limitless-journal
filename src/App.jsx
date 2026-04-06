@@ -161,10 +161,6 @@ html { scroll-behavior: smooth; }
   from { opacity: 0; transform: scale(0.95); }
   to   { opacity: 1; transform: scale(1); }
 }
-@keyframes dashFadeIn {
-  from { opacity: 0; transform: translateY(15px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
 @keyframes shimmer {
   0%   { background-position: -600px 0; }
   100% { background-position:  600px 0; }
@@ -1442,7 +1438,7 @@ function Dashboard({ trades, onAddTrade, loading }) {
 
       {/* P&L curve + Calendar */}
       <div className="chart-grid">
-        <div style={{ ...card, animation: 'dashFadeIn 1.5s ease-out both' }}>
+        <div style={card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
             <div style={{ ...lbl, color: '#999' }}>Cumulative P&L</div>
             <div style={{ fontSize: '12px', color: totalPnl >= 0 ? '#aaffa0' : '#ff8080', fontWeight: '700', letterSpacing: '-0.3px' }}>
@@ -1460,7 +1456,7 @@ function Dashboard({ trades, onAddTrade, loading }) {
               <XAxis dataKey="day" tick={{ fill: '#555', fontSize: 10 }} axisLine={false} tickLine={false} interval={Math.max(0, Math.floor(pnlCurve.length / 6) - 1)} />
               <YAxis tick={{ fill: '#555', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `$${Math.abs(v) >= 1000 ? Math.round(v / 1000) + 'k' : v}`} width={36} />
               <Tooltip content={<PnlTooltip />} cursor={{ stroke: '#2a2a2a', strokeWidth: 1 }} />
-              <Area type="monotone" dataKey="pnl" stroke="#aaffa0" strokeWidth={1.5} fill="url(#pnlGrad)" dot={false} activeDot={{ r: 4, fill: '#aaffa0', stroke: '#080808', strokeWidth: 2 }} animationDuration={1500} animationBegin={0} animationEasing="ease-out" />
+              <Area type="monotone" dataKey="pnl" stroke="#aaffa0" strokeWidth={1.5} fill="url(#pnlGrad)" dot={false} activeDot={{ r: 4, fill: '#aaffa0', stroke: '#080808', strokeWidth: 2 }} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -1477,14 +1473,14 @@ function Dashboard({ trades, onAddTrade, loading }) {
 
       {/* Radar + Recent trades */}
       <div className="radar-grid">
-        <div style={{ ...card, display: 'flex', flexDirection: 'column', animation: 'dashFadeIn 1.5s ease-out both' }}>
+        <div style={{ ...card, display: 'flex', flexDirection: 'column' }}>
           <div style={{ ...lbl, color: '#999' }}>Performance Radar</div>
           <ResponsiveContainer width="100%" height={220}>
             <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="56%" margin={{ top: 18, right: 42, bottom: 18, left: 42 }}>
               <PolarGrid stroke="#1e1e1e" strokeDasharray="3 3" />
               <PolarAngleAxis dataKey="metric" tick={{ fill: '#666', fontSize: 9, fontFamily: 'Inter, sans-serif' }} />
               <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
-              <Radar name="score" dataKey="score" stroke="rgba(255,255,255,0.5)" fill="rgba(255,255,255,0.04)" strokeWidth={1.5} dot={{ fill: '#fff', r: 2.5, strokeWidth: 0 }} animationDuration={1500} animationBegin={0} animationEasing="ease-out" />
+              <Radar name="score" dataKey="score" stroke="rgba(255,255,255,0.5)" fill="rgba(255,255,255,0.04)" strokeWidth={1.5} dot={{ fill: '#fff', r: 2.5, strokeWidth: 0 }} />
             </RadarChart>
           </ResponsiveContainer>
           <div style={{ textAlign: 'center', paddingTop: '12px', borderTop: '1px solid #111', marginTop: 'auto' }}>
