@@ -2471,10 +2471,14 @@ const NEWS_FALLBACK = (() => {
   ]
 })()
 
+const NEWS_CACHE_KEY = 'news_cache_v1'
+const NEWS_CACHE_TTL = 60 * 60 * 1000 // 1 hour
+
 function NewsCalendar() {
   const [events,       setEvents]       = useState([])
   const [loading,      setLoading]      = useState(true)
   const [useFallback,  setUseFallback]  = useState(false)
+  const [cachedAt,     setCachedAt]     = useState(null)
   const [impactFilter, setImpactFilter] = useState('All')
   const [currFilter,   setCurrFilter]   = useState('All')
 
@@ -2494,22 +2498,37 @@ function NewsCalendar() {
         const parsed = await res.json()
         if (Array.isArray(parsed) && parsed.length > 0) {
           data = parsed
-          console.log(`News: loaded from ${url}`, parsed[0])
           break
         }
       } catch { /* try next */ }
     }
     if (data) {
+      const ts = Date.now()
+      try { localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify({ ts, data })) } catch {}
       setEvents(data)
+      setCachedAt(ts)
     } else {
-      console.log('News: all proxies failed — using fallback data')
       setEvents(NEWS_FALLBACK)
       setUseFallback(true)
     }
     setLoading(false)
   }
 
-  useEffect(() => { fetchNews() }, [])
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(NEWS_CACHE_KEY)
+      if (raw) {
+        const { ts, data } = JSON.parse(raw)
+        if (Date.now() - ts < NEWS_CACHE_TTL && Array.isArray(data) && data.length > 0) {
+          setEvents(data)
+          setCachedAt(ts)
+          setLoading(false)
+          return
+        }
+      }
+    } catch {}
+    fetchNews()
+  }, [])
 
   const impactColor = (impact) => {
     const i = (impact || '').toLowerCase()
@@ -2696,8 +2715,21 @@ function NewsCalendar() {
       })}
 
       {useFallback && (
+        <div style={{ textAlign: 'center', marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--divider)' }}>
+          <div style={{ fontSize: '11px', color: 'var(--text-dim)', letterSpacing: '0.04em', marginBottom: '10px' }}>Live feed temporarily unavailable</div>
+          <button
+            onClick={() => { try { localStorage.removeItem(NEWS_CACHE_KEY) } catch {} fetchNews() }}
+            style={{ background: 'transparent', border: '1px solid var(--card-border)', color: 'var(--text-md)', borderRadius: '8px', padding: '6px 14px', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}
+          >Retry</button>
+        </div>
+      )}
+
+      {!useFallback && cachedAt && (
         <div style={{ textAlign: 'center', fontSize: '11px', color: 'var(--text-dim)', marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--divider)', letterSpacing: '0.04em' }}>
-          Live feed temporarily unavailable
+          {(() => {
+            const mins = Math.round((Date.now() - cachedAt) / 60000)
+            return mins < 1 ? 'Updated just now' : `Updated ${mins} minute${mins !== 1 ? 's' : ''} ago`
+          })()}
         </div>
       )}
     </div>
