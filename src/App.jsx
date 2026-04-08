@@ -161,6 +161,10 @@ html { scroll-behavior: smooth; }
   from { opacity: 0; transform: scale(0.95); }
   to   { opacity: 1; transform: scale(1); }
 }
+@keyframes chartReveal {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 0% 0 0); }
+}
 @keyframes shimmer {
   0%   { background-position: -600px 0; }
   100% { background-position:  600px 0; }
@@ -1304,7 +1308,7 @@ function useCountAnimation(target, duration = ANIM_MS) {
     const to   = target
     if (from === to) { setValue(to); return }
     const animate = (ts) => {
-      if (!startRef.current) { startRef.current = ts; console.log('[ANIM] counter start', performance.now().toFixed(1)) }
+      if (!startRef.current) startRef.current = ts
       const progress = Math.min((ts - startRef.current) / duration, 1)
       const eased    = 1 - Math.pow(1 - progress, 4) // easeOutQuart
       setValue(from + (to - from) * eased)
@@ -1321,7 +1325,6 @@ function useCountAnimation(target, duration = ANIM_MS) {
 // ─── Dashboard ────────────────────────────────────────────────
 function Dashboard({ trades, onAddTrade, loading }) {
   const [calViewDate,  setCalViewDate]  = useState(() => new Date())
-  const [chartKey,     setChartKey]     = useState(0)
   const [chartVisible, setChartVisible] = useState(false)
 
   // ── Computed stats (safe with empty trades array) ──
@@ -1353,11 +1356,7 @@ function Dashboard({ trades, onAddTrade, loading }) {
   const animStreak = useCountAnimation(loading ? 0 : streak,    ANIM_MS)
 
   useEffect(() => {
-    if (!loading) {
-      console.log('[ANIM] chart + counters start', performance.now().toFixed(1))
-      setChartKey(k => k + 1)
-      setChartVisible(true)
-    }
+    if (!loading) setChartVisible(true)
   }, [loading])
 
   if (loading) return <DashboardSkeleton />
@@ -1457,9 +1456,9 @@ function Dashboard({ trades, onAddTrade, loading }) {
               {totalPnl >= 0 ? '+' : '−'}${Math.abs(Math.round(totalPnl)).toLocaleString()} MTD
             </div>
           </div>
-          <div style={{ opacity: chartVisible ? 1 : 0 }}>
+          <div style={chartVisible ? { animation: `chartReveal ${ANIM_MS}ms ease-out both` } : { clipPath: 'inset(0 100% 0 0)' }}>
             <ResponsiveContainer width="100%" height={190}>
-              <AreaChart key={chartKey} data={pnlCurve} margin={{ top: 4, right: 4, bottom: 0, left: 10 }}>
+              <AreaChart data={pnlCurve} margin={{ top: 4, right: 4, bottom: 0, left: 10 }}>
                 <defs>
                   <linearGradient id="pnlGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%"   stopColor="#aaffa0" stopOpacity={0.14} />
@@ -1469,7 +1468,7 @@ function Dashboard({ trades, onAddTrade, loading }) {
                 <XAxis dataKey="day" tick={{ fill: '#555', fontSize: 10 }} axisLine={false} tickLine={false} interval={Math.max(0, Math.floor(pnlCurve.length / 6) - 1)} />
                 <YAxis tick={{ fill: '#555', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `$${Math.abs(v) >= 1000 ? Math.round(v / 1000) + 'k' : v}`} width={36} />
                 <Tooltip content={<PnlTooltip />} cursor={{ stroke: '#2a2a2a', strokeWidth: 1 }} />
-                <Area type="monotone" dataKey="pnl" stroke="#aaffa0" strokeWidth={1.5} fill="url(#pnlGrad)" dot={false} activeDot={{ r: 4, fill: '#aaffa0', stroke: '#080808', strokeWidth: 2 }} isAnimationActive={true} animationDuration={ANIM_MS} animationBegin={0} animationEasing="ease-out" />
+                <Area type="monotone" dataKey="pnl" stroke="#aaffa0" strokeWidth={1.5} fill="url(#pnlGrad)" dot={false} activeDot={{ r: 4, fill: '#aaffa0', stroke: '#080808', strokeWidth: 2 }} isAnimationActive={false} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -1489,13 +1488,13 @@ function Dashboard({ trades, onAddTrade, loading }) {
       <div className="radar-grid">
         <div style={{ ...card, display: 'flex', flexDirection: 'column' }}>
           <div style={{ ...lbl, color: '#999' }}>Performance Radar</div>
-          <div style={{ opacity: chartVisible ? 1 : 0 }}>
+          <div style={chartVisible ? { animation: `chartReveal ${ANIM_MS}ms ease-out both` } : { clipPath: 'inset(0 100% 0 0)' }}>
             <ResponsiveContainer width="100%" height={220}>
-              <RadarChart key={chartKey} data={radarData} cx="50%" cy="50%" outerRadius="56%" margin={{ top: 18, right: 42, bottom: 18, left: 42 }}>
+              <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="56%" margin={{ top: 18, right: 42, bottom: 18, left: 42 }}>
                 <PolarGrid stroke="#1e1e1e" strokeDasharray="3 3" />
                 <PolarAngleAxis dataKey="metric" tick={{ fill: '#666', fontSize: 9, fontFamily: 'Inter, sans-serif' }} />
                 <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
-                <Radar name="score" dataKey="score" stroke="rgba(255,255,255,0.5)" fill="rgba(255,255,255,0.04)" strokeWidth={1.5} dot={{ fill: '#fff', r: 2.5, strokeWidth: 0 }} isAnimationActive={true} animationDuration={ANIM_MS} animationBegin={0} animationEasing="ease-out" />
+                <Radar name="score" dataKey="score" stroke="rgba(255,255,255,0.5)" fill="rgba(255,255,255,0.04)" strokeWidth={1.5} dot={{ fill: '#fff', r: 2.5, strokeWidth: 0 }} isAnimationActive={false} />
               </RadarChart>
             </ResponsiveContainer>
           </div>
