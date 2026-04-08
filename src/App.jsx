@@ -1673,6 +1673,12 @@ function parseChartUrls(raw) {
 // ─── Trade Detail Modal ───────────────────────────────────────
 function TradeDetailModal({ trade, session, onClose, onSave }) {
   const [form, setForm] = useState({
+    symbol:          trade.symbol          || '',
+    dir:             trade.direction       || 'Long',
+    date:            trade.trade_date      || '',
+    session:         trade.session         || 'New York',
+    pnl:             trade.pnl != null     ? String(trade.pnl)  : '',
+    rr:              trade.rr  != null     ? String(trade.rr)   : '',
     emotional_state: trade.emotional_state || '',
     trade_rating:    trade.trade_rating    || '',
     entry_reason:    trade.entry_reason    || '',
@@ -1698,6 +1704,12 @@ function TradeDetailModal({ trade, session, onClose, onSave }) {
       : chartUrls.length === 1 ? chartUrls[0]
       : JSON.stringify(chartUrls)
     const updates = {
+      symbol:          form.symbol          || null,
+      direction:       form.dir             || null,
+      trade_date:      form.date            || null,
+      session:         form.session         || null,
+      pnl:             parseFloat(form.pnl) || null,
+      rr:              parseFloat(form.rr)  || null,
       emotional_state: form.emotional_state || null,
       trade_rating:    form.trade_rating    || null,
       entry_reason:    form.entry_reason    || null,
@@ -1757,61 +1769,49 @@ function TradeDetailModal({ trade, session, onClose, onSave }) {
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '22px' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-              <span style={{ fontSize: '20px', fontWeight: '800', letterSpacing: '-0.5px' }}>{trade.symbol}</span>
-              <span style={badge(trade.direction === 'Long')}>{trade.direction}</span>
-              <span style={{ ...badge((trade.pnl || 0) >= 0), fontSize: '13px', padding: '4px 10px' }}>
-                {(trade.pnl || 0) >= 0 ? `+$${Math.round(trade.pnl)}` : `−$${Math.abs(Math.round(trade.pnl))}`}
-              </span>
-            </div>
-            <div style={{ fontSize: '11px', color: '#666', display: 'flex', gap: '12px' }}>
-              <span>{formatDate(trade.trade_date)}</span>
-              {trade.session && <span>{trade.session}</span>}
-              {trade.rr != null && <span>R:R {Number(trade.rr).toFixed(1)}</span>}
-            </div>
-          </div>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', fontSize: '22px', lineHeight: 1, padding: '0 4px', marginTop: '-2px' }}>✕</button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '22px' }}>
+          <div style={{ fontSize: '18px', fontWeight: '800', letterSpacing: '-0.5px', color: '#fff' }}>Edit Trade</div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', fontSize: '22px', lineHeight: 1, padding: '0 4px' }}>✕</button>
         </div>
 
-        {/* Chart thumbnails */}
-        {chartUrls.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
-            {chartUrls.map((url, idx) => (
-              <div key={idx} style={{ position: 'relative', width: '80px', height: '80px', flexShrink: 0 }}>
-                <img
-                  src={url} alt={`Chart ${idx + 1}`}
-                  onClick={() => setLightbox(url)}
-                  style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #1c1c1c', cursor: 'zoom-in', display: 'block' }}
-                />
-                <button
-                  onClick={() => removeChart(idx)}
-                  style={{ position: 'absolute', top: '-6px', right: '-6px', width: '18px', height: '18px', borderRadius: '50%', background: '#222', border: '1px solid #444', color: '#aaa', fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit', lineHeight: 1, padding: 0 }}
-                >✕</button>
-              </div>
-            ))}
+        {/* Symbol · Direction · Date · Session */}
+        <div className="form-grid-4">
+          <div>
+            <div style={{ ...lbl, marginBottom: '7px', color: '#666' }}>Symbol</div>
+            <SymbolSearch value={form.symbol} onChange={s => setForm(f => ({ ...f, symbol: s }))} />
           </div>
-        )}
+          <div>
+            <div style={{ ...lbl, marginBottom: '7px', color: '#666' }}>Direction</div>
+            <CustomSelect value={form.dir} onChange={v => setForm(f => ({ ...f, dir: v }))} options={['Long', 'Short']} />
+          </div>
+          <div>
+            <div style={{ ...lbl, marginBottom: '7px', color: '#666' }}>Date</div>
+            <input type="date" value={form.date} onChange={F('date')} style={{ ...inp, colorScheme: 'dark' }} />
+          </div>
+          <div>
+            <div style={{ ...lbl, marginBottom: '7px', color: '#666' }}>Session</div>
+            <CustomSelect value={form.session} onChange={v => setForm(f => ({ ...f, session: v }))} options={['London', 'New York', 'Asian', 'Overlap']} />
+          </div>
+        </div>
 
-        {/* Upload button */}
-        <div style={{ marginBottom: '4px' }}>
-          <input ref={fileRef} type="file" accept="image/*" multiple onChange={uploadCharts} style={{ display: 'none' }} />
-          {chartUrls.length < 5 && (
-            <button
-              onClick={() => fileRef.current?.click()}
-              disabled={uploading}
-              style={{ background: 'transparent', border: '1px solid #1c1c1c', color: uploading ? '#555' : '#888', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', cursor: uploading ? 'not-allowed' : 'pointer', fontFamily: 'inherit', transition: 'all 0.15s' }}
-            >
-              {uploading ? 'Uploading…' : chartUrls.length > 0 ? '+ Add more' : '↑ Upload Chart'}
-            </button>
-          )}
+        {divider}
+
+        {/* P&L · R:R */}
+        <div className="form-grid-2">
+          <div>
+            <div style={{ ...lbl, marginBottom: '7px', color: '#666' }}>P&L ($)</div>
+            <input type="number" placeholder="0.00" value={form.pnl} onChange={F('pnl')} style={inp} />
+          </div>
+          <div>
+            <div style={{ ...lbl, marginBottom: '7px', color: '#666' }}>R:R</div>
+            <input type="number" placeholder="0.00" value={form.rr} onChange={F('rr')} style={inp} />
+          </div>
         </div>
 
         {divider}
 
         {/* Emotional state + Rating */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '18px' }}>
+        <div className="form-grid-2" style={{ marginBottom: '18px' }}>
           <div>
             <div style={{ ...lbl, marginBottom: '7px', color: '#999' }}>Emotional State</div>
             <CustomSelect value={form.emotional_state} onChange={v => setForm(f => ({ ...f, emotional_state: v }))} options={['Focused', 'Patient', 'Confident', 'Disciplined', 'Anxious', 'Tired', 'FOMO', 'Revenge']} />
@@ -1829,7 +1829,7 @@ function TradeDetailModal({ trade, session, onClose, onSave }) {
         </div>
 
         {/* Did correctly / wrong */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '18px' }}>
+        <div className="form-grid-2" style={{ marginBottom: '18px' }}>
           <div>
             <div style={{ ...lbl, marginBottom: '7px', color: '#999' }}>What I Did Correctly</div>
             <textarea value={form.did_correctly} onChange={F('did_correctly')} style={ta} placeholder="What went well?" />
@@ -1861,13 +1861,48 @@ function TradeDetailModal({ trade, session, onClose, onSave }) {
         </div>
 
         {/* Notes */}
-        <div style={{ marginBottom: '22px' }}>
+        <div style={{ marginBottom: '18px' }}>
           <div style={{ ...lbl, marginBottom: '7px', color: '#999' }}>Additional Notes</div>
           <textarea value={form.notes} onChange={F('notes')} style={ta} placeholder="Any other observations..." />
         </div>
 
+        {divider}
+
+        {/* Chart thumbnails */}
+        {chartUrls.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
+            {chartUrls.map((url, idx) => (
+              <div key={idx} style={{ position: 'relative', width: '80px', height: '80px', flexShrink: 0 }}>
+                <img
+                  src={url} alt={`Chart ${idx + 1}`}
+                  onClick={() => setLightbox(url)}
+                  style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #1c1c1c', cursor: 'zoom-in', display: 'block' }}
+                />
+                <button
+                  onClick={() => removeChart(idx)}
+                  style={{ position: 'absolute', top: '-6px', right: '-6px', width: '18px', height: '18px', borderRadius: '50%', background: '#222', border: '1px solid #444', color: '#aaa', fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit', lineHeight: 1, padding: 0 }}
+                >✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Upload button */}
+        <div style={{ marginBottom: '22px' }}>
+          <input ref={fileRef} type="file" accept="image/*" multiple onChange={uploadCharts} style={{ display: 'none' }} />
+          {chartUrls.length < 5 && (
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              style={{ background: 'transparent', border: '1px solid #1c1c1c', color: uploading ? '#555' : '#888', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', cursor: uploading ? 'not-allowed' : 'pointer', fontFamily: 'inherit', transition: 'all 0.15s' }}
+            >
+              {uploading ? 'Uploading…' : chartUrls.length > 0 ? '+ Add more' : '↑ Upload Chart'}
+            </button>
+          )}
+        </div>
+
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button style={{ ...btn, opacity: saving ? 0.6 : 1 }} onClick={save} disabled={saving}>
+          <button style={{ ...btn, flex: 1, opacity: saving ? 0.6 : 1 }} onClick={save} disabled={saving}>
             {saving ? 'Saving…' : 'Save Changes'}
           </button>
           <button style={{ ...btn, background: 'transparent', color: '#888', border: '1px solid #1c1c1c' }} onClick={onClose}>Cancel</button>
