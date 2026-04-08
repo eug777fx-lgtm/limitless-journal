@@ -1320,7 +1320,9 @@ function useCountAnimation(target, duration = ANIM_MS) {
 
 // ─── Dashboard ────────────────────────────────────────────────
 function Dashboard({ trades, onAddTrade, loading }) {
-  const [calViewDate, setCalViewDate] = useState(() => new Date())
+  const [calViewDate,  setCalViewDate]  = useState(() => new Date())
+  const [chartKey,     setChartKey]     = useState(0)
+  const [chartVisible, setChartVisible] = useState(false)
 
   // ── Computed stats (safe with empty trades array) ──
   const wins   = trades.filter(t => (t.pnl || 0) > 0)
@@ -1351,7 +1353,11 @@ function Dashboard({ trades, onAddTrade, loading }) {
   const animStreak = useCountAnimation(loading ? 0 : streak,    ANIM_MS)
 
   useEffect(() => {
-    if (!loading) console.log('[ANIM] chart + counters start', performance.now().toFixed(1))
+    if (!loading) {
+      console.log('[ANIM] chart + counters start', performance.now().toFixed(1))
+      setChartKey(k => k + 1)
+      setChartVisible(true)
+    }
   }, [loading])
 
   if (loading) return <DashboardSkeleton />
@@ -1451,21 +1457,21 @@ function Dashboard({ trades, onAddTrade, loading }) {
               {totalPnl >= 0 ? '+' : '−'}${Math.abs(Math.round(totalPnl)).toLocaleString()} MTD
             </div>
           </div>
-          <div style={{ opacity: loading ? 0 : 1 }}>
-          <ResponsiveContainer width="100%" height={190}>
-            <AreaChart key={trades.map(t => t.id).join('')} data={pnlCurve} margin={{ top: 4, right: 4, bottom: 0, left: 10 }}>
-              <defs>
-                <linearGradient id="pnlGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%"   stopColor="#aaffa0" stopOpacity={0.14} />
-                  <stop offset="100%" stopColor="#aaffa0" stopOpacity={0}    />
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="day" tick={{ fill: '#555', fontSize: 10 }} axisLine={false} tickLine={false} interval={Math.max(0, Math.floor(pnlCurve.length / 6) - 1)} />
-              <YAxis tick={{ fill: '#555', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `$${Math.abs(v) >= 1000 ? Math.round(v / 1000) + 'k' : v}`} width={36} />
-              <Tooltip content={<PnlTooltip />} cursor={{ stroke: '#2a2a2a', strokeWidth: 1 }} />
-              <Area type="monotone" dataKey="pnl" stroke="#aaffa0" strokeWidth={1.5} fill="url(#pnlGrad)" dot={false} activeDot={{ r: 4, fill: '#aaffa0', stroke: '#080808', strokeWidth: 2 }} isAnimationActive={true} animationDuration={ANIM_MS} animationBegin={0} animationEasing="ease-out" />
-            </AreaChart>
-          </ResponsiveContainer>
+          <div style={{ opacity: chartVisible ? 1 : 0 }}>
+            <ResponsiveContainer width="100%" height={190}>
+              <AreaChart key={chartKey} data={pnlCurve} margin={{ top: 4, right: 4, bottom: 0, left: 10 }}>
+                <defs>
+                  <linearGradient id="pnlGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%"   stopColor="#aaffa0" stopOpacity={0.14} />
+                    <stop offset="100%" stopColor="#aaffa0" stopOpacity={0}    />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="day" tick={{ fill: '#555', fontSize: 10 }} axisLine={false} tickLine={false} interval={Math.max(0, Math.floor(pnlCurve.length / 6) - 1)} />
+                <YAxis tick={{ fill: '#555', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `$${Math.abs(v) >= 1000 ? Math.round(v / 1000) + 'k' : v}`} width={36} />
+                <Tooltip content={<PnlTooltip />} cursor={{ stroke: '#2a2a2a', strokeWidth: 1 }} />
+                <Area type="monotone" dataKey="pnl" stroke="#aaffa0" strokeWidth={1.5} fill="url(#pnlGrad)" dot={false} activeDot={{ r: 4, fill: '#aaffa0', stroke: '#080808', strokeWidth: 2 }} isAnimationActive={true} animationDuration={ANIM_MS} animationBegin={0} animationEasing="ease-out" />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         </div>
 
@@ -1483,14 +1489,16 @@ function Dashboard({ trades, onAddTrade, loading }) {
       <div className="radar-grid">
         <div style={{ ...card, display: 'flex', flexDirection: 'column' }}>
           <div style={{ ...lbl, color: '#999' }}>Performance Radar</div>
-          <ResponsiveContainer width="100%" height={220}>
-            <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="56%" margin={{ top: 18, right: 42, bottom: 18, left: 42 }}>
-              <PolarGrid stroke="#1e1e1e" strokeDasharray="3 3" />
-              <PolarAngleAxis dataKey="metric" tick={{ fill: '#666', fontSize: 9, fontFamily: 'Inter, sans-serif' }} />
-              <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
-              <Radar key={loading ? 'loading' : 'loaded'} name="score" dataKey="score" stroke="rgba(255,255,255,0.5)" fill="rgba(255,255,255,0.04)" strokeWidth={1.5} dot={{ fill: '#fff', r: 2.5, strokeWidth: 0 }} isAnimationActive={true} animationDuration={ANIM_MS} animationBegin={0} animationEasing="ease-out" />
-            </RadarChart>
-          </ResponsiveContainer>
+          <div style={{ opacity: chartVisible ? 1 : 0 }}>
+            <ResponsiveContainer width="100%" height={220}>
+              <RadarChart key={chartKey} data={radarData} cx="50%" cy="50%" outerRadius="56%" margin={{ top: 18, right: 42, bottom: 18, left: 42 }}>
+                <PolarGrid stroke="#1e1e1e" strokeDasharray="3 3" />
+                <PolarAngleAxis dataKey="metric" tick={{ fill: '#666', fontSize: 9, fontFamily: 'Inter, sans-serif' }} />
+                <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
+                <Radar name="score" dataKey="score" stroke="rgba(255,255,255,0.5)" fill="rgba(255,255,255,0.04)" strokeWidth={1.5} dot={{ fill: '#fff', r: 2.5, strokeWidth: 0 }} isAnimationActive={true} animationDuration={ANIM_MS} animationBegin={0} animationEasing="ease-out" />
+              </RadarChart>
+            </ResponsiveContainer>
+          </div>
           <div style={{ textAlign: 'center', paddingTop: '12px', borderTop: '1px solid #111', marginTop: 'auto' }}>
             <div style={{ fontSize: '44px', fontWeight: '800', letterSpacing: '-2px', lineHeight: 1, color: '#fff' }}>{overallScore}</div>
             <div style={{ fontSize: '10px', color: '#666', letterSpacing: '0.14em', textTransform: 'uppercase', marginTop: '5px', fontWeight: '600' }}>Overall Score</div>
