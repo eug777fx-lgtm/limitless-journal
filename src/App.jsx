@@ -1670,8 +1670,27 @@ function parseChartUrls(raw) {
   }
 }
 
+async function uploadImages(files, userId) {
+  const urls = []
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i]
+    const ext = file.name.split('.').pop()
+    const fileName = `${userId}_${Date.now()}_${i}.${ext}`
+    const { error } = await supabase.storage
+      .from('trade-charts')
+      .upload(fileName, file, { cacheControl: '3600', upsert: false, contentType: file.type })
+    if (error) {
+      console.error('Upload error:', error)
+      throw new Error(error.message)
+    }
+    const { data: urlData } = supabase.storage.from('trade-charts').getPublicUrl(fileName)
+    urls.push(urlData.publicUrl)
+  }
+  return urls
+}
+
 // ─── Trade Detail Modal ───────────────────────────────────────
-function TradeDetailModal({ trade, session, onClose, onSave }) {
+function TradeDetailModal({ trade, onClose, onSave }) {
   const [form, setForm] = useState({
     symbol:          trade.symbol          || '',
     dir:             trade.direction       || 'Long',
@@ -1727,21 +1746,16 @@ function TradeDetailModal({ trade, session, onClose, onSave }) {
   const uploadCharts = async (e) => {
     const files = Array.from(e.target.files || [])
     if (!files.length) return
-    const remaining = 5 - chartUrls.length
-    const toUpload = files.slice(0, remaining)
+    const toUpload = files.slice(0, 5 - chartUrls.length)
     setUploading(true)
-    const newUrls = []
-    for (let i = 0; i < toUpload.length; i++) {
-      const file = toUpload[i]
-      const ext  = file.name.split('.').pop()
-      const path = `${session.user.id}/${trade.id}/${Date.now()}_${i}.${ext}`
-      const { error: upErr } = await supabase.storage.from('trade-charts').upload(path, file, { upsert: true })
-      if (!upErr) {
-        const { data: { publicUrl } } = supabase.storage.from('trade-charts').getPublicUrl(path)
-        newUrls.push(publicUrl)
-      }
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      const newUrls = await uploadImages(toUpload, user.id)
+      setChartUrls(prev => [...prev, ...newUrls])
+    } catch (err) {
+      console.error('Chart upload failed:', err)
+      alert(`Upload failed: ${err.message}`)
     }
-    setChartUrls(prev => [...prev, ...newUrls])
     setUploading(false)
     e.target.value = ''
   }
@@ -1952,20 +1966,16 @@ function AddTradeModal({ open, onClose, session, onTradeAdded }) {
     setChartWarn('')
     setSaving(true)
 
-    const uploadedUrls = []
-    let uploadFailed = false
-    for (let i = 0; i < chartFiles.length; i++) {
-      const file = chartFiles[i]
-      const ext  = file.name.split('.').pop()
-      const path = `${session.user.id}/${Date.now()}_${i}.${ext}`
-      const { error: upErr } = await supabase.storage
-        .from('trade-charts')
-        .upload(path, file, { contentType: file.type })
-      if (upErr) { uploadFailed = true; break }
-      const { data: urlData } = supabase.storage.from('trade-charts').getPublicUrl(path)
-      uploadedUrls.push(urlData.publicUrl)
+    let uploadedUrls = []
+    if (chartFiles.length > 0) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        uploadedUrls = await uploadImages(chartFiles, user.id)
+      } catch (err) {
+        console.error('Chart upload failed:', err)
+        setChartWarn(`Image upload failed: ${err.message} — trade saved without chart.`)
+      }
     }
-    if (uploadFailed) setChartWarn('Image upload failed — trade saved without chart.')
     const chart_url = uploadedUrls.length === 0 ? null
       : uploadedUrls.length === 1 ? uploadedUrls[0]
       : JSON.stringify(uploadedUrls)
@@ -2491,7 +2501,6 @@ function Trades({ trades, session, onTradeAdded, onTradeDeleted, onTradeUpdated,
       {selectedTrade && (
         <TradeDetailModal
           trade={selectedTrade}
-          session={session}
           onClose={() => setSelectedTrade(null)}
           onSave={updated => { onTradeUpdated(updated); setSelectedTrade(null) }}
         />
