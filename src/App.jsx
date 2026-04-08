@@ -1766,10 +1766,14 @@ function TradeDetailModal({ trade, onClose, onSave }) {
     <>
     {lightbox && (
       <div
-        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}
+        style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.95)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         onClick={() => setLightbox(null)}
       >
-        <img src={lightbox} alt="Chart" style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: '10px', objectFit: 'contain' }} />
+        <button
+          onClick={() => setLightbox(null)}
+          style={{ position: 'absolute', top: '20px', right: '20px', width: '40px', height: '40px', borderRadius: '50%', background: '#fff', border: 'none', color: '#111', fontSize: '18px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit', lineHeight: 1 }}
+        >✕</button>
+        <img src={lightbox} alt="Chart" onClick={e => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: '10px' }} />
       </div>
     )}
     <div
@@ -1884,17 +1888,17 @@ function TradeDetailModal({ trade, onClose, onSave }) {
 
         {/* Chart thumbnails */}
         {chartUrls.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: chartUrls.length === 1 ? '1fr' : '1fr 1fr', gap: '8px', marginBottom: '10px' }}>
             {chartUrls.map((url, idx) => (
-              <div key={idx} style={{ position: 'relative', width: '80px', height: '80px', flexShrink: 0 }}>
+              <div key={idx} style={{ position: 'relative' }}>
                 <img
                   src={url} alt={`Chart ${idx + 1}`}
                   onClick={() => setLightbox(url)}
-                  style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #1c1c1c', cursor: 'zoom-in', display: 'block' }}
+                  style={{ width: '100%', height: chartUrls.length === 1 ? '200px' : '180px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #1c1c1c', cursor: 'zoom-in', display: 'block' }}
                 />
                 <button
                   onClick={() => removeChart(idx)}
-                  style={{ position: 'absolute', top: '-6px', right: '-6px', width: '18px', height: '18px', borderRadius: '50%', background: '#222', border: '1px solid #444', color: '#aaa', fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit', lineHeight: 1, padding: 0 }}
+                  style={{ position: 'absolute', top: '6px', right: '6px', width: '20px', height: '20px', borderRadius: '50%', background: 'rgba(0,0,0,0.7)', border: '1px solid #555', color: '#ccc', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit', lineHeight: 1, padding: 0 }}
                 >✕</button>
               </div>
             ))}
@@ -2121,7 +2125,7 @@ function AddTradeModal({ open, onClose, session, onTradeAdded }) {
                         <img
                           src={URL.createObjectURL(f)} alt={`Chart ${idx + 1}`}
                           onClick={() => setLightbox(URL.createObjectURL(f))}
-                          style={{ width: '100%', height: chartFiles.length === 1 ? '200px' : '150px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #1c1c1c', display: 'block', cursor: 'zoom-in' }}
+                          style={{ width: '100%', height: chartFiles.length === 1 ? '200px' : '180px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #1c1c1c', display: 'block', cursor: 'zoom-in' }}
                         />
                         <button onClick={() => setChartFiles(prev => prev.filter((_, i) => i !== idx))}
                           style={{ position: 'absolute', top: '6px', right: '6px', width: '20px', height: '20px', borderRadius: '50%', background: 'rgba(0,0,0,0.7)', border: '1px solid #555', color: '#ccc', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit', lineHeight: 1, padding: 0 }}>✕</button>
@@ -2266,7 +2270,7 @@ function AddTradeModal({ open, onClose, session, onTradeAdded }) {
                         <img
                           src={URL.createObjectURL(f)} alt={`Chart ${idx + 1}`}
                           onClick={() => setLightbox(URL.createObjectURL(f))}
-                          style={{ width: '100%', height: chartFiles.length === 1 ? '200px' : '150px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #1c1c1c', display: 'block', cursor: 'zoom-in' }}
+                          style={{ width: '100%', height: chartFiles.length === 1 ? '200px' : '180px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #1c1c1c', display: 'block', cursor: 'zoom-in' }}
                         />
                         <button onClick={() => setChartFiles(prev => prev.filter((_, i) => i !== idx))}
                           style={{ position: 'absolute', top: '6px', right: '6px', width: '20px', height: '20px', borderRadius: '50%', background: 'rgba(0,0,0,0.7)', border: '1px solid #555', color: '#ccc', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit', lineHeight: 1, padding: 0 }}>✕</button>
