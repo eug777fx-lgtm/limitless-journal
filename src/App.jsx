@@ -22,6 +22,17 @@ body { margin: 0; padding: 0; background: var(--bg); overflow: hidden; overflow-
   --sidebar-bg: rgba(6,6,6,0.96); --sidebar-border: #141414;
   --text-hi: #ffffff; --text-md: #888888; --text-lo: #666666; --text-dim: #444444;
   --inp-bg: #080808; --inp-border: #1c1c1c; --divider: #111111;
+  --card-shadow: none;
+}
+[data-glass="true"] {
+  --card-bg: rgba(255,255,255,0.04);
+  --card-border: rgba(255,255,255,0.08);
+  --card-shadow: 0 4px 24px rgba(0,0,0,0.3);
+}
+[data-glass="true"][data-mode="light"] {
+  --card-bg: rgba(255,255,255,0.65);
+  --card-border: rgba(0,0,0,0.08);
+  --card-shadow: 0 4px 24px rgba(0,0,0,0.12);
 }
 [data-mode="light"] {
   --bg: #f5f5f5; --card-bg: #ffffff; --card-border: #e0e0e0;
@@ -157,8 +168,12 @@ html { scroll-behavior: smooth; }
   from { opacity: 0; }
   to   { opacity: 1; }
 }
+@keyframes pageEnter {
+  from { opacity: 0; transform: translateX(8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
 @keyframes modalIn {
-  from { opacity: 0; transform: scale(0.95); }
+  from { opacity: 0; transform: scale(0.96); }
   to   { opacity: 1; transform: scale(1); }
 }
 @keyframes chartReveal {
@@ -166,15 +181,21 @@ html { scroll-behavior: smooth; }
   to   { clip-path: inset(0 0% 0 0); }
 }
 @keyframes shimmer {
-  0%   { background-position: -600px 0; }
-  100% { background-position:  600px 0; }
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
 }
 .skeleton {
-  background: linear-gradient(90deg, #111 25%, #1a1a1a 50%, #111 75%);
-  background-size: 600px 100%;
-  animation: shimmer 1.4s infinite linear;
+  background: linear-gradient(90deg, #1a1a1a 25%, #2a2a2a 50%, #1a1a1a 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite linear;
   border-radius: 6px;
 }
+.btn-scale { transition: transform 0.15s ease, opacity 0.15s !important; }
+.btn-scale:hover:not(:disabled) { transform: scale(1.02) !important; }
+.card-lift { transition: transform 0.15s ease, box-shadow 0.15s ease !important; }
+.card-lift:hover { transform: translateY(-2px) !important; }
+input:focus, textarea:focus, select:focus { border-color: #444 !important; outline: none; }
+[data-mode="light"] input:focus, [data-mode="light"] textarea:focus, [data-mode="light"] select:focus { border-color: #aaa !important; }
 .news-filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
 .news-pills { display: flex; gap: 6px; flex-shrink: 0; }
 @media (max-width: 768px) {
@@ -183,7 +204,8 @@ html { scroll-behavior: smooth; }
 }
 .add-modal-overlay {
   position: fixed; inset: 0; z-index: 1000;
-  background: rgba(0,0,0,0.82);
+  background: rgba(0,0,0,0.75);
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
   display: flex; align-items: center; justify-content: center;
   padding: 24px; box-sizing: border-box;
 }
@@ -227,6 +249,8 @@ const card = {
   border: '1px solid var(--card-border)',
   borderRadius: '16px',
   padding: '24px',
+  boxShadow: 'var(--card-shadow)',
+  transition: 'background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease',
 }
 
 const lbl = {
@@ -288,7 +312,7 @@ const btn = {
   fontSize: '13px',
   letterSpacing: '-0.2px',
   fontFamily: 'inherit',
-  transition: 'opacity 0.15s',
+  transition: 'opacity 0.15s, transform 0.15s',
 }
 
 const inp = {
@@ -1210,7 +1234,7 @@ function Sk({ w = '100%', h = 16, style = {} }) {
 
 function TradesSkeleton() {
   return (
-    <div className="page-wrap" style={{ animation: 'fadeIn 0.3s ease both' }}>
+    <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '24px' }}>
         <div>
           <Sk w={50} h={10} style={{ marginBottom: '10px' }} />
@@ -1243,7 +1267,7 @@ function TradesSkeleton() {
 
 function DashboardSkeleton() {
   return (
-    <div className="page-wrap" style={{ animation: 'fadeIn 0.3s ease both' }}>
+    <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both' }}>
       <div style={{ marginBottom: '24px' }}>
         <Sk w={60} h={10} style={{ marginBottom: '10px' }} />
         <Sk w={160} h={32} />
@@ -1402,7 +1426,7 @@ function Dashboard({ trades, onAddTrade, loading }) {
   // ── Empty state ──
   if (trades.length === 0) {
     return (
-      <div className="page-wrap" style={{ animation: 'pageFade 0.2s ease both' }}>
+      <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '24px' }}>
           <div>
             <h1 style={{ fontSize: '32px', fontWeight: '800', letterSpacing: '-1px', color: '#fff' }}>Dashboard</h1>
@@ -1426,7 +1450,7 @@ function Dashboard({ trades, onAddTrade, loading }) {
   }
 
   return (
-    <div className="page-wrap" style={{ animation: 'pageFade 0.2s ease both' }}>
+    <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '24px' }}>
         <div>
           <h1 style={{ fontSize: '32px', fontWeight: '800', letterSpacing: '-1px', color: 'var(--text-hi)' }}>Dashboard</h1>
@@ -1439,7 +1463,7 @@ function Dashboard({ trades, onAddTrade, loading }) {
       {/* Stat cards */}
       <div className="stat-grid">
         {stats.map(s => (
-          <div key={s.label} style={{ ...card, padding: '18px 20px' }}>
+          <div key={s.label} className="card-lift" style={{ ...card, padding: '18px 20px' }}>
             <div style={{ ...lbl, marginBottom: '10px', color: '#999' }}>{s.label}</div>
             <div style={{ fontSize: '24px', fontWeight: '800', letterSpacing: '-1px', color: s.color, lineHeight: 1, marginBottom: '8px' }}>{s.val}</div>
             <div style={{ fontSize: '11px', color: '#888' }}>{s.sub}</div>
@@ -1778,7 +1802,7 @@ function TradeDetailModal({ trade, onClose, onSave }) {
     )}
     <div
       className="modal-overlay"
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
       onClick={onClose}
     >
       <div
@@ -2376,7 +2400,7 @@ function Trades({ trades, session, onTradeAdded, onTradeDeleted, onTradeUpdated,
   const sorted = [...trades].sort((a, b) => new Date(b.trade_date) - new Date(a.trade_date))
 
   return (
-    <div className="page-wrap" style={{ animation: 'pageFade 0.2s ease both' }}>
+    <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '24px' }}>
         <div>
           <h1 style={{ fontSize: '28px', fontWeight: '800', letterSpacing: '-1px' }}>Trade Log</h1>
@@ -2517,7 +2541,7 @@ function Trades({ trades, session, onTradeAdded, onTradeDeleted, onTradeUpdated,
 function NewsSkeleton() {
   const cardRow = { background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: '12px', padding: '13px 18px', display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '6px' }
   return (
-    <div className="page-wrap" style={{ animation: 'fadeIn 0.3s ease both' }}>
+    <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both' }}>
       <div style={{ marginBottom: '24px' }}>
         <Sk w={70} h={10} style={{ marginBottom: '10px' }} />
         <Sk w={190} h={30} />
@@ -2698,7 +2722,7 @@ function NewsCalendar() {
   if (loading) return <NewsSkeleton />
 
   return (
-    <div className="page-wrap" style={{ animation: 'pageFade 0.2s ease both' }}>
+    <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both' }}>
       {/* Header */}
       <div style={{ marginBottom: '24px' }}>
         <h1 style={{ fontSize: '28px', fontWeight: '800', letterSpacing: '-1px' }}>News Calendar</h1>
@@ -2883,7 +2907,7 @@ function TradingPlan() {
   const ta = { ...inp, minHeight: '80px', resize: 'vertical', lineHeight: '1.65' }
 
   return (
-    <div className="page-wrap" style={{ animation: 'pageFade 0.2s ease both' }}>
+    <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both' }}>
       <div style={{ marginBottom: '28px' }}>
         <h1 style={{ fontSize: '28px', fontWeight: '800', letterSpacing: '-1px', color: 'var(--text-hi)' }}>Trading Plan</h1>
       </div>
@@ -2969,7 +2993,7 @@ function TradingPlan() {
 
 
 // ─── Settings ─────────────────────────────────────────────────
-function Settings({ theme, setTheme, session, profile, setProfile }) {
+function Settings({ theme, setTheme, session, profile, setProfile, glassMode, setGlassMode }) {
   const [localFirstName, setLocalFirstName] = useState(profile?.first_name   || '')
   const [localLastName,  setLocalLastName]  = useState(profile?.last_name    || '')
   const [localPhone,     setLocalPhone]     = useState(profile?.phone        || '')
@@ -3000,7 +3024,7 @@ function Settings({ theme, setTheme, session, profile, setProfile }) {
   }
 
   return (
-    <div className="page-wrap" style={{ animation: 'pageFade 0.2s ease both' }}>
+    <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both' }}>
       <div style={{ marginBottom: '28px' }}>
         <h1 style={{ fontSize: '28px', fontWeight: '800', letterSpacing: '-1px', color: 'var(--text-hi)' }}>Settings</h1>
       </div>
@@ -3008,6 +3032,16 @@ function Settings({ theme, setTheme, session, profile, setProfile }) {
       {/* Theme color section */}
       <div style={{ ...card, marginBottom: '14px' }}>
         <div style={{ ...lbl, marginBottom: '12px' }}>Journal Theme</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <div>
+            <div style={{ fontSize: '15px', fontWeight: '700', marginBottom: '2px', letterSpacing: '-0.3px', color: 'var(--text-hi)' }}>Glass Mode</div>
+            <div style={{ fontSize: '13px', color: 'var(--text-md)', lineHeight: 1.5 }}>Frosted glass cards with blur effect</div>
+          </div>
+          <div className={`toggle-track ${glassMode ? 'on' : ''}`} onClick={() => setGlassMode(!glassMode)}>
+            <div className="toggle-knob" />
+          </div>
+        </div>
+        <div style={{ height: '1px', background: 'var(--divider)', marginBottom: '20px' }} />
         <div style={{ fontSize: '15px', fontWeight: '700', marginBottom: '4px', letterSpacing: '-0.3px', color: 'var(--text-hi)' }}>Background Color</div>
         <div style={{ fontSize: '13px', color: 'var(--text-md)', marginBottom: '20px', lineHeight: 1.5 }}>Choose the aurora vibe of your journal</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
@@ -3097,6 +3131,7 @@ export default function App() {
   const [showAddTrade,   setShowAddTrade]   = useState(false)
   const [theme,          setTheme]          = useState('white')
   const [colorMode,      setColorMode]      = useState('dark')
+  const [glassMode,      setGlassMode]      = useState(() => localStorage.getItem('glass_mode') === 'true')
 
   // ── Auth init ──
   useEffect(() => {
@@ -3211,6 +3246,7 @@ export default function App() {
   return (
     <div
       data-mode={colorMode}
+      data-glass={glassMode ? 'true' : 'false'}
       style={{
         display: 'flex',
         height: '100%',
@@ -3259,6 +3295,7 @@ export default function App() {
         {/* Add Trade button */}
         <button
           onClick={goAddTrade}
+          className="btn-scale"
           style={{ ...btn, width: '100%', marginTop: '10px', marginBottom: '14px', padding: '11px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', borderRadius: '10px', fontSize: '13px' }}
         >
           <Plus size={16} />
@@ -3335,7 +3372,7 @@ export default function App() {
         )}
         {page === 'news'        && <NewsCalendar />}
         {page === 'plan'        && <TradingPlan />}
-        {page === 'settings'    && <Settings theme={theme} setTheme={handleSetTheme} session={session} profile={profile} setProfile={setProfile} />}
+        {page === 'settings'    && <Settings theme={theme} setTheme={handleSetTheme} session={session} profile={profile} setProfile={setProfile} glassMode={glassMode} setGlassMode={v => { setGlassMode(v); localStorage.setItem('glass_mode', v) }} />}
       </main>
 
       <BottomNav page={page} setPage={setPage} />
