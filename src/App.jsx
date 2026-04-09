@@ -3431,7 +3431,10 @@ export default function App() {
         {/* Mobile logo header — only visible on mobile via CSS */}
         <div className="mobile-header">
           <img src="/logo2.png" alt="logo" style={{ height: '24px', display: 'block' }} />
-          <span style={{ fontSize: '14px', fontWeight: '700', letterSpacing: '0.15em', color: 'var(--text-hi)' }}>LIMITLESS</span>
+          <div>
+            <div style={{ fontSize: '14px', fontWeight: '700', letterSpacing: '0.15em', color: 'var(--text-hi)', lineHeight: 1 }}>LIMITLESS</div>
+            <div style={{ fontSize: '9px', color: '#555', letterSpacing: '0.2em', textTransform: 'uppercase', marginTop: '2px' }}>Private Journal</div>
+          </div>
         </div>
         {page === 'dashboard'   && <Dashboard trades={trades} onAddTrade={goAddTrade} loading={tradesLoading} />}
         {page === 'trades'      && (
