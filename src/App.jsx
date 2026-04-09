@@ -94,32 +94,21 @@ select option { background: #0d0d0d; color: #fff; }
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%; }
 .cal-scroll  { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .page-wrap   { padding: 36px 40px; }
-/* ─── Bottom nav (desktop: hidden) ─── */
-.bottom-nav  { display: none; }
 * { -webkit-overflow-scrolling: touch; }
-/* ─── Light mode overrides ─── */
-[data-mode="light"] .bottom-nav { background: rgba(248,248,248,0.98) !important; border-top-color: #e0e0e0 !important; }
 /* ─── Mobile ─── */
 @media (max-width: 768px) {
-  /* Sidebar / nav */
+  /* Sidebar / bottom nav — both hidden on mobile (replaced by hamburger) */
   .app-sidebar { display: none !important; }
-  .bottom-nav  {
-    display: flex !important;
-    position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
-    background: rgba(10,10,10,0.97);
-    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-    border-top: 1px solid #1e1e1e;
-    justify-content: space-around; align-items: center;
-    padding: 4px 0 max(8px, env(safe-area-inset-bottom));
-    height: 52px; box-sizing: content-box;
-  }
-  /* Mobile logo header */
+  .bottom-nav  { display: none !important; }
+  /* Mobile top header */
   .mobile-header {
-    display: flex !important; align-items: center; gap: 10px;
-    padding: 14px 16px; position: sticky; top: 0; z-index: 50;
-    background: rgba(8,8,8,0.90);
+    display: flex !important;
+    position: fixed; top: 0; left: 0; right: 0; height: 56px; z-index: 100;
+    align-items: center; justify-content: space-between;
+    padding: 0 16px; box-sizing: border-box;
+    background: rgba(10,10,10,0.95);
     backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-    border-bottom: 1px solid #161616;
+    border-bottom: 1px solid #1f1f1f;
   }
   /* Grids */
   .stat-grid   { grid-template-columns: repeat(2,1fr) !important; gap: 10px !important; }
@@ -134,8 +123,8 @@ select option { background: #0d0d0d; color: #fff; }
   .modal-inner   { width: 100% !important; max-width: 100% !important; border-radius: 18px 18px 0 0 !important; max-height: 92vh !important; }
   /* Touch targets */
   button { min-height: 44px; }
-  /* Page padding — bottom clears fixed nav + safe area */
-  .page-wrap { padding: 20px 16px !important; padding-bottom: calc(90px + env(safe-area-inset-bottom)) !important; overflow-x: hidden !important; max-width: 100vw !important; box-sizing: border-box !important; }
+  /* Page padding — top clears fixed header, no bottom nav */
+  .page-wrap { padding: 76px 16px 24px !important; overflow-x: hidden !important; max-width: 100vw !important; box-sizing: border-box !important; }
   /* Aurora blobs — boost visibility on mobile */
   .aurora-blob { opacity: 0.4 !important; min-width: 400px !important; min-height: 400px !important; }
   /* Dashboard grid children — must not stretch past viewport */
@@ -164,6 +153,20 @@ select option { background: #0d0d0d; color: #fff; }
 @keyframes pageFadeMobile {
   from { opacity: 0; }
   to   { opacity: 1; }
+}
+@keyframes mobileSidebarIn {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+.mobile-sidebar-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 198;
+}
+.mobile-sidebar {
+  position: fixed; top: 0; left: 0; bottom: 0; width: 280px;
+  background: #0d0d0d; border-right: 1px solid #1f1f1f;
+  z-index: 199; display: flex; flex-direction: column;
+  padding: 24px 14px; box-sizing: border-box; overflow-y: auto;
+  animation: mobileSidebarIn 0.25s ease-out both;
 }
 @media (max-width: 480px) {
   /* Stack form-grid-2 single column on phone */
@@ -1227,41 +1230,6 @@ function PsychologyTracker({ trades }) {
         <Lightbulb size={14} style={{ flexShrink: 0, marginTop: '2px', opacity: 0.6 }} />
         {insight}
       </div>
-    </div>
-  )
-}
-
-// ─── Bottom Nav (mobile) ──────────────────────────────────────
-function BottomNav({ page, setPage }) {
-  const items = [
-    { id: 'dashboard', Icon: LayoutDashboard, label: 'Home'    },
-    { id: 'trades',    Icon: BookOpen,        label: 'Trades'  },
-    { id: 'news',      Icon: CalendarDays,    label: 'News'    },
-    { id: 'plan',      Icon: ClipboardList,   label: 'Plan'    },
-    { id: 'settings',  Icon: Settings2,       label: 'More'    },
-  ]
-  return (
-    <div className="bottom-nav">
-      {items.map(({ id, Icon, label }) => {
-        const active = page === id
-        return (
-          <button
-            key={id}
-            onClick={() => setPage(id)}
-            style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px',
-              background: 'transparent', border: 'none', padding: '4px 6px',
-              color: active ? '#ffffff' : '#555',
-              fontSize: '9px', fontFamily: 'inherit', cursor: 'pointer',
-              flex: 1, minHeight: '44px', justifyContent: 'center',
-              transition: 'color 0.15s', letterSpacing: '0.02em',
-            }}
-          >
-            <Icon size={18} />
-            <span style={{ fontWeight: active ? '600' : '400' }}>{label}</span>
-          </button>
-        )
-      })}
     </div>
   )
 }
@@ -3200,6 +3168,7 @@ export default function App() {
   const [theme,          setTheme]          = useState('white')
   const [colorMode,      setColorMode]      = useState('dark')
   const [glassMode,      setGlassMode]      = useState(() => localStorage.getItem('glass_mode') === 'true')
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
 
   // ── Auth init ──
   useEffect(() => {
@@ -3426,16 +3395,27 @@ export default function App() {
         </div>
       </aside>
 
+      {/* ── Mobile top header (hidden on desktop via CSS) ── */}
+      <div className="mobile-header">
+        <button
+          onClick={() => setMobileSidebarOpen(true)}
+          style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: '22px', cursor: 'pointer', padding: '4px', lineHeight: 1, display: 'flex', alignItems: 'center', minHeight: '44px' }}
+        >☰</button>
+        <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', textAlign: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '7px', justifyContent: 'center' }}>
+            <img src="/logo2.png" alt="logo" style={{ height: '22px', display: 'block' }} />
+            <span style={{ fontSize: '14px', fontWeight: '700', letterSpacing: '0.15em', color: '#fff', lineHeight: 1 }}>LIMITLESS</span>
+          </div>
+          <div style={{ fontSize: '9px', color: '#555', letterSpacing: '0.2em', textTransform: 'uppercase', marginTop: '2px' }}>Private Journal</div>
+        </div>
+        <button
+          onClick={goAddTrade}
+          style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid #333', borderRadius: '99px', color: '#fff', fontSize: '12px', padding: '6px 14px', cursor: 'pointer', fontFamily: 'inherit', minHeight: '36px', whiteSpace: 'nowrap' }}
+        >+ Add</button>
+      </div>
+
       {/* ── Main content ── */}
       <main style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1, minWidth: 0 }}>
-        {/* Mobile logo header — only visible on mobile via CSS */}
-        <div className="mobile-header">
-          <img src="/logo2.png" alt="logo" style={{ height: '24px', display: 'block' }} />
-          <div>
-            <div style={{ fontSize: '14px', fontWeight: '700', letterSpacing: '0.15em', color: 'var(--text-hi)', lineHeight: 1 }}>LIMITLESS</div>
-            <div style={{ fontSize: '9px', color: '#555', letterSpacing: '0.2em', textTransform: 'uppercase', marginTop: '2px' }}>Private Journal</div>
-          </div>
-        </div>
         {page === 'dashboard'   && <Dashboard trades={trades} onAddTrade={goAddTrade} loading={tradesLoading} />}
         {page === 'trades'      && (
           <Trades
@@ -3453,14 +3433,80 @@ export default function App() {
         {page === 'settings'    && <Settings theme={theme} setTheme={handleSetTheme} session={session} profile={profile} setProfile={setProfile} glassMode={glassMode} setGlassMode={v => { setGlassMode(v); localStorage.setItem('glass_mode', v) }} />}
       </main>
 
-      <BottomNav page={page} setPage={setPage} />
-
       <AddTradeModal
         open={showAddTrade}
         onClose={() => setShowAddTrade(false)}
         session={session}
         onTradeAdded={t => setTrades(prev => [t, ...prev])}
       />
+
+      {/* ── Mobile slide-in sidebar ── */}
+      {mobileSidebarOpen && createPortal(
+        <>
+          <div className="mobile-sidebar-overlay" onClick={() => setMobileSidebarOpen(false)} />
+          <div className="mobile-sidebar">
+            {/* Close button */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <img src="/logo2.png" alt="logo" style={{ height: '22px' }} />
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: '700', letterSpacing: '0.12em', color: '#fff', lineHeight: 1 }}>LIMITLESS</div>
+                  <div style={{ fontSize: '8px', color: '#555', letterSpacing: '0.2em', textTransform: 'uppercase', marginTop: '2px' }}>Private Journal</div>
+                </div>
+              </div>
+              <button
+                onClick={() => setMobileSidebarOpen(false)}
+                style={{ background: 'transparent', border: 'none', color: '#666', fontSize: '20px', cursor: 'pointer', padding: '4px', lineHeight: 1, minHeight: '36px' }}
+              >✕</button>
+            </div>
+
+            <div style={{ height: '1px', background: '#1a1a1a', marginBottom: '12px' }} />
+
+            {/* Nav items */}
+            {nav.map(n => (
+              <button
+                key={n.id}
+                onClick={() => { setPage(n.id); setMobileSidebarOpen(false) }}
+                className="nav-item"
+                style={{
+                  background: page === n.id ? 'rgba(255,255,255,0.05)' : 'transparent',
+                  border: page === n.id ? '1px solid #1e1e1e' : '1px solid transparent',
+                  borderLeft: page === n.id ? '2px solid rgba(255,255,255,0.4)' : '2px solid transparent',
+                  color: page === n.id ? '#ddd' : '#777',
+                  borderRadius: '10px',
+                  padding: '11px 13px',
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  width: '100%', textAlign: 'left',
+                  cursor: 'pointer', fontFamily: 'inherit',
+                  fontSize: '13px', fontWeight: page === n.id ? '600' : '400',
+                  transition: 'all 0.15s', marginBottom: '2px', minHeight: '44px',
+                }}
+              >
+                <n.Icon size={16} />
+                {n.label}
+              </button>
+            ))}
+
+            {/* User card at bottom */}
+            <div style={{ marginTop: 'auto', paddingTop: '20px', borderTop: '1px solid #1a1a1a' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+                <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: '#141414', border: '1px solid #222', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: '700', flexShrink: 0, color: '#777' }}>
+                  {initials}
+                </div>
+                <div>
+                  <div style={{ fontWeight: '600', fontSize: '13px', color: '#ccc' }}>{displayName}</div>
+                  <div style={{ color: '#666', fontSize: '11px', marginTop: '1px' }}>{marketFocus}</div>
+                </div>
+              </div>
+              <button
+                onClick={() => { logout(); setMobileSidebarOpen(false) }}
+                style={{ width: '100%', background: 'transparent', border: '1px solid #1c1c1c', borderRadius: '7px', color: '#555', fontSize: '11px', padding: '8px', cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.04em' }}
+              >Log out</button>
+            </div>
+          </div>
+        </>,
+        document.body
+      )}
     </div>
   )
 }
