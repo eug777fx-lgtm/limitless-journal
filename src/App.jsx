@@ -154,19 +154,22 @@ select option { background: #0d0d0d; color: #fff; }
   from { opacity: 0; }
   to   { opacity: 1; }
 }
-@keyframes mobileSidebarIn {
-  from { transform: translateX(-100%); }
-  to   { transform: translateX(0); }
-}
 .mobile-sidebar-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 198;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.28s ease;
 }
 .mobile-sidebar {
   position: fixed; top: 0; left: 0; bottom: 0; width: 280px;
   background: #0d0d0d; border-right: 1px solid #1f1f1f;
   z-index: 199; display: flex; flex-direction: column;
-  padding: 24px 14px; box-sizing: border-box; overflow-y: auto;
-  animation: mobileSidebarIn 0.25s ease-out both;
+  padding: 24px 14px; box-sizing: border-box;
+  overflow-y: auto; overflow-x: hidden;
+  transform: translateX(-100%);
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 @media (max-width: 480px) {
   /* Stack form-grid-2 single column on phone */
@@ -3403,7 +3406,7 @@ export default function App() {
         >☰</button>
         <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', textAlign: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '7px', justifyContent: 'center' }}>
-            <img src="/logo2.png" alt="logo" style={{ height: '22px', display: 'block' }} />
+            <img src="/logo2.png" alt="logo" style={{ height: '22px', width: 'auto', display: 'block', flexShrink: 0 }} onError={e => { e.target.style.display = 'none' }} />
             <span style={{ fontSize: '14px', fontWeight: '700', letterSpacing: '0.15em', color: '#fff', lineHeight: 1 }}>LIMITLESS</span>
           </div>
           <div style={{ fontSize: '9px', color: '#555', letterSpacing: '0.2em', textTransform: 'uppercase', marginTop: '2px' }}>Private Journal</div>
@@ -3440,15 +3443,29 @@ export default function App() {
         onTradeAdded={t => setTrades(prev => [t, ...prev])}
       />
 
-      {/* ── Mobile slide-in sidebar ── */}
-      {mobileSidebarOpen && createPortal(
+      {/* ── Mobile slide-in sidebar — always in DOM, CSS transition for smooth open/close ── */}
+      {createPortal(
         <>
-          <div className="mobile-sidebar-overlay" onClick={() => setMobileSidebarOpen(false)} />
-          <div className="mobile-sidebar">
-            {/* Close button */}
+          {/* Overlay — fades in/out via opacity transition */}
+          <div
+            className="mobile-sidebar-overlay"
+            style={{ opacity: mobileSidebarOpen ? 1 : 0, pointerEvents: mobileSidebarOpen ? 'auto' : 'none' }}
+            onClick={() => setMobileSidebarOpen(false)}
+          />
+          {/* Sidebar — slides in/out via transform transition */}
+          <div
+            className="mobile-sidebar"
+            style={{ transform: mobileSidebarOpen ? 'translateX(0)' : 'translateX(-100%)' }}
+          >
+            {/* Header row: logo + X */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <img src="/logo2.png" alt="logo" style={{ height: '22px' }} />
+                <img
+                  src="/logo2.png"
+                  alt="logo"
+                  style={{ height: '22px', width: 'auto', display: 'block', flexShrink: 0 }}
+                  onError={e => { e.target.style.display = 'none' }}
+                />
                 <div>
                   <div style={{ fontSize: '13px', fontWeight: '700', letterSpacing: '0.12em', color: '#fff', lineHeight: 1 }}>LIMITLESS</div>
                   <div style={{ fontSize: '8px', color: '#555', letterSpacing: '0.2em', textTransform: 'uppercase', marginTop: '2px' }}>Private Journal</div>
@@ -3466,15 +3483,14 @@ export default function App() {
             {nav.map(n => (
               <button
                 key={n.id}
-                onClick={() => { setPage(n.id); setMobileSidebarOpen(false) }}
+                onClick={() => { setMobileSidebarOpen(false); setTimeout(() => setPage(n.id), 20) }}
                 className="nav-item"
                 style={{
                   background: page === n.id ? 'rgba(255,255,255,0.05)' : 'transparent',
                   border: page === n.id ? '1px solid #1e1e1e' : '1px solid transparent',
                   borderLeft: page === n.id ? '2px solid rgba(255,255,255,0.4)' : '2px solid transparent',
                   color: page === n.id ? '#ddd' : '#777',
-                  borderRadius: '10px',
-                  padding: '11px 13px',
+                  borderRadius: '10px', padding: '11px 13px',
                   display: 'flex', alignItems: 'center', gap: '10px',
                   width: '100%', textAlign: 'left',
                   cursor: 'pointer', fontFamily: 'inherit',
@@ -3499,7 +3515,7 @@ export default function App() {
                 </div>
               </div>
               <button
-                onClick={() => { logout(); setMobileSidebarOpen(false) }}
+                onClick={() => { setMobileSidebarOpen(false); setTimeout(logout, 20) }}
                 style={{ width: '100%', background: 'transparent', border: '1px solid #1c1c1c', borderRadius: '7px', color: '#555', fontSize: '11px', padding: '8px', cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.04em' }}
               >Log out</button>
             </div>
