@@ -23,29 +23,44 @@ export default async function handler(req, res) {
     if (!isNaN(d.getTime())) requestedMonday = d
   }
 
-  // Determine which FF URL to use
-  let url
-  if (!requestedMonday) {
-    url = 'https://nfs.faireconomy.media/ff_calendar_thisweek.json'
-  } else {
+  // Determine offset in weeks
+  let diffWeeks = 0
+  if (requestedMonday) {
     const diffMs = requestedMonday.getTime() - thisMonday.getTime()
-    const diffWeeks = Math.round(diffMs / (7 * 24 * 60 * 60 * 1000))
-    if (diffWeeks <= 0) {
-      url = 'https://nfs.faireconomy.media/ff_calendar_thisweek.json'
-    } else if (diffWeeks === 1) {
-      url = 'https://nfs.faireconomy.media/ff_calendar_nextweek.json'
-    } else {
-      return res.status(200).json({ unavailable: true, message: 'Only current and next week data available from Forex Factory.' })
+    diffWeeks = Math.round(diffMs / (7 * 24 * 60 * 60 * 1000))
+  }
+
+  if (diffWeeks > 1) {
+    console.log('[news] Requested week is beyond next week — returning unavailable')
+    return res.status(200).json({ unavailable: true, message: 'Only current and next week data available from Forex Factory.' })
+  }
+
+  // For next week, try both known URL variants in order
+  const urls = diffWeeks <= 0
+    ? ['https://nfs.faireconomy.media/ff_calendar_thisweek.json']
+    : [
+        'https://nfs.faireconomy.media/ff_calendar_nextweek.json',
+        'https://nfs.faireconomy.media/ff_calendar_next_week.json',
+      ]
+
+  let lastError = null
+  for (const url of urls) {
+    try {
+      console.log(`[news] Fetching: ${url}`)
+      const response = await fetch(url, {
+        headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' }
+      })
+      console.log(`[news] Response status: ${response.status} from ${url}`)
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const data = await response.json()
+      const count = Array.isArray(data) ? data.length : 0
+      console.log(`[news] Events returned: ${count}`)
+      return res.status(200).json(data)
+    } catch (err) {
+      console.log(`[news] Failed ${url}: ${err.message}`)
+      lastError = err
     }
   }
 
-  try {
-    const response = await fetch(url, {
-      headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' }
-    })
-    const data = await response.json()
-    res.status(200).json(data)
-  } catch (error) {
-    res.status(500).json({ error: error.message })
-  }
+  res.status(500).json({ error: lastError?.message || 'All URLs failed' })
 }
