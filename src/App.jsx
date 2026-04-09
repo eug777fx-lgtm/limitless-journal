@@ -29,6 +29,7 @@ body { margin: 0; padding: 0; background: var(--bg); overflow: hidden; overflow-
   --card-bg: rgba(255,255,255,0.04);
   --card-border: rgba(255,255,255,0.08);
   --card-shadow: 0 4px 24px rgba(0,0,0,0.3);
+  --card-blur: blur(20px);
   --modal-bg: rgba(14,14,14,0.85);
   --modal-border: rgba(255,255,255,0.08);
   --sidebar-bg: rgba(6,6,6,0.75);
@@ -3062,12 +3063,12 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
     setTimeout(() => setSaved(false), 2000)
   }
 
-  const sectionCard = { background: '#0d0d0d', border: '1px solid #1f1f1f', borderRadius: '14px', padding: '28px', marginBottom: '16px' }
+  const sectionCard = { background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: '14px', padding: '28px', marginBottom: '16px', backdropFilter: 'var(--card-blur, none)', WebkitBackdropFilter: 'var(--card-blur, none)' }
   const sectionTitle = { fontSize: '11px', fontWeight: '600', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#555', marginBottom: '16px' }
   const divider = { height: '1px', background: '#1a1a1a', margin: '20px 0' }
 
   return (
-    <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both', maxWidth: '640px' }}>
+    <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both' }}>
       <div style={{ marginBottom: '28px' }}>
         <h1 style={{ fontSize: '28px', fontWeight: '800', letterSpacing: '-1px', color: 'var(--text-hi)' }}>Settings</h1>
       </div>
@@ -3098,7 +3099,7 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
         {/* Background Color */}
         <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-hi)', marginBottom: '4px' }}>Background Color</div>
         <div style={{ fontSize: '12px', color: '#666', marginBottom: '16px' }}>Choose the aurora vibe of your journal</div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+        <div style={{ display: 'flex', flexWrap: 'nowrap', gap: '8px', overflowX: 'auto', paddingBottom: '2px' }}>
           {SWATCHES.map(s => {
             const active = theme === s.id
             return (
@@ -3113,6 +3114,8 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
                   background: active ? 'rgba(255,255,255,0.06)' : 'transparent',
                   boxShadow: active ? `0 0 0 2px ${s.color}33` : 'none',
                   fontSize: '13px',
+                  minWidth: '70px',
+                  flexShrink: 0,
                 }}
               >
                 <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: s.color, flexShrink: 0 }} />
@@ -3188,7 +3191,7 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
 
         <div style={{ height: '1px', background: '#141414', marginBottom: '16px' }} />
         <div style={{ fontSize: '11px', color: '#444', letterSpacing: '0.04em' }}>
-          App version 1.0.0 · LIMITLESS Private Journal
+          LIMITLESS v1.0 · Private Journal
         </div>
       </div>
     </div>
