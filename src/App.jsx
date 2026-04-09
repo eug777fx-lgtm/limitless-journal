@@ -129,15 +129,12 @@ select option { background: #0d0d0d; color: #fff; }
   .chart-grid > *, .radar-grid > *, .stat-grid > * { min-width: 0; max-width: 100%; box-sizing: border-box !important; overflow-x: hidden; width: 100%; }
   /* iOS input zoom prevention (< 16px triggers zoom) */
   input, textarea, select { font-size: 16px !important; }
-  /* Trade log cards — single column, full width on mobile */
-  .trade-card { border-radius: 10px !important; }
   /* Page transitions — no translateX on mobile to avoid layout shift */
   .page-wrap { animation: pageFadeMobile 0.15s ease-out both !important; }
   /* Glass mode — ensure backdrop-filter works on mobile */
   [data-glass="true"] .modal-inner, [data-glass="true"] .add-modal-inner { background: rgba(12,12,12,0.92) !important; }
   /* Disable hover lifts on touch devices */
   .card-lift:hover { transform: none !important; }
-  .trade-card:hover { transform: none !important; border-color: #1a1a1a !important; }
   .btn-scale:hover { transform: none !important; }
   /* Auth */
   .auth-outer  { margin: 10px auto !important; width: calc(100vw - 28px) !important; max-width: 440px; }
@@ -220,7 +217,6 @@ html { scroll-behavior: smooth; }
 .btn-scale:hover:not(:disabled) { transform: scale(1.02) !important; }
 .btn-scale:active:not(:disabled) { transform: scale(0.97) !important; }
 button:active:not(:disabled) { transform: scale(0.97); }
-.trade-card:hover { transform: translateY(-2px) !important; border-color: #2a2a2a !important; }
 .thumb-wrap { overflow: hidden; border-radius: 8px; }
 .thumb-wrap img { transition: transform 0.2s ease !important; cursor: zoom-in !important; }
 .thumb-wrap img:hover { transform: scale(1.03) !important; }
@@ -2522,93 +2518,68 @@ function Trades({ trades, session, onTradeAdded, onTradeDeleted, onTradeUpdated,
         </div>
       )}
 
-      {sorted.length === 0 ? (
-        <div style={{ ...card, textAlign: 'center', padding: '64px 24px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+      <div style={card}>
+        {sorted.length === 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', padding: '64px 24px', textAlign: 'center' }}>
             <BookOpen size={36} color="#333" />
             <div style={{ fontSize: '17px', fontWeight: '700', color: 'var(--text-hi)' }}>No trades yet</div>
             <div style={{ fontSize: '13px', color: 'var(--text-lo)', lineHeight: 1.6 }}>Start journaling your first setup to see your stats here</div>
             <button style={{ ...btn, marginTop: '8px' }} onClick={onAddTrade}>+ Add Trade</button>
           </div>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {sorted.map(t => {
-            const pnlNum = parseFloat(t.pnl) || 0
-            const isWin  = pnlNum > 0
-            const isLoss = pnlNum < 0
-            const accentColor = isWin ? '#aaffa0' : isLoss ? '#ff8080' : '#666'
-            const resultLabel = isWin ? 'Win' : isLoss ? 'Loss' : 'BE'
-            const resultStyle = isWin ? badge(true) : isLoss ? badge(false) : badgeBE
-            const pnlDisplay = isWin
-              ? `+$${Math.round(pnlNum).toLocaleString()}`
-              : isLoss
-              ? `−$${Math.abs(Math.round(pnlNum)).toLocaleString()}`
-              : '$0'
-            const pnlColor = isWin ? '#aaffa0' : isLoss ? '#ff8080' : '#888'
-            const pnlShadow = isWin
-              ? '0 0 20px rgba(170,255,160,0.3)'
-              : isLoss
-              ? '0 0 20px rgba(255,128,128,0.3)'
-              : 'none'
-            return (
-              <div
-                key={t.id}
-                className="trade-card"
-                onClick={() => setSelectedTrade(t)}
-                style={{
-                  background: 'rgba(10,10,10,0.8)',
-                  border: '1px solid #1a1a1a',
-                  borderLeft: `3px solid ${accentColor}`,
-                  borderRadius: '12px',
-                  padding: '14px 16px',
-                  cursor: 'pointer',
-                  transition: 'transform 0.15s ease, border-color 0.15s ease',
-                  position: 'relative',
-                }}
-              >
-                {/* Top row: Symbol + Direction + Date */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-                  <span style={{ fontSize: '15px', fontWeight: '800', letterSpacing: '-0.3px', color: 'var(--text-hi)' }}>{t.symbol}</span>
-                  <span style={badge(t.direction === 'Long')}>{t.direction}</span>
-                  <span style={{ marginLeft: 'auto', fontSize: '12px', color: 'var(--text-lo)' }}>{formatDate(t.trade_date)}</span>
-                </div>
-
-                {/* Middle row: P&L + R:R + Session */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '10px' }}>
-                  <span style={{ fontSize: '22px', fontWeight: '800', letterSpacing: '-0.5px', color: pnlColor, textShadow: pnlShadow, lineHeight: 1 }}>{pnlDisplay}</span>
-                  {t.rr != null && (
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontSize: '9px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: '600' }}>R:R</span>
-                      <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-md)' }}>{Number(t.rr).toFixed(1)}</span>
-                    </div>
-                  )}
-                  {t.session && (
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontSize: '9px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: '600' }}>Session</span>
-                      <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-md)' }}>{t.session}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Bottom row: Result badge + notes preview */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={resultStyle}>{resultLabel}</span>
-                  {t.notes && (
-                    <span style={{ fontSize: '11px', color: '#555', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '360px' }}>{t.notes}</span>
-                  )}
-                  <button
-                    className="del-btn"
-                    onClick={e => { e.stopPropagation(); deleteTrade(t.id) }}
-                    style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid transparent', color: '#444', fontSize: '11px', cursor: 'pointer', padding: '3px 8px', borderRadius: '6px', fontFamily: 'inherit', transition: 'all 0.15s', lineHeight: 1 }}
-                    title="Delete trade"
-                  >✕</button>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
+        ) : (
+          <div className="table-scroll">
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '580px' }}>
+              <thead>
+                <tr>
+                  {['Date', 'Symbol', 'Direction', 'R:R', 'P&L', 'Session', 'Result', ''].map((h, i) => (
+                    <th key={i} style={TH}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map(t => {
+                  const pnlNum = parseFloat(t.pnl) || 0
+                  const isWin  = pnlNum > 0
+                  const isLoss = pnlNum < 0
+                  const pnlColor  = isWin ? '#aaffa0' : isLoss ? '#ff8080' : '#888'
+                  const pnlShadow = isWin ? '0 0 20px rgba(170,255,160,0.3)' : isLoss ? '0 0 20px rgba(255,128,128,0.3)' : 'none'
+                  const pnlDisplay = isWin
+                    ? `+$${Math.round(pnlNum).toLocaleString()}`
+                    : isLoss
+                    ? `−$${Math.abs(Math.round(pnlNum)).toLocaleString()}`
+                    : '$0'
+                  const resultLabel = isWin ? 'Win' : isLoss ? 'Loss' : 'BE'
+                  const resultStyle = isWin ? badge(true) : isLoss ? badge(false) : badgeBE
+                  return (
+                    <tr
+                      key={t.id}
+                      className="trade-row"
+                      onClick={() => setSelectedTrade(t)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <td style={{ ...TD, color: 'var(--text-lo)', fontSize: '12px', whiteSpace: 'nowrap' }}>{formatDate(t.trade_date)}</td>
+                      <td style={{ ...TD, fontWeight: '700', fontSize: '13px' }}>{t.symbol}</td>
+                      <td style={TD}><span style={badge(t.direction === 'Long')}>{t.direction}</span></td>
+                      <td style={{ ...TD, color: 'var(--text-md)', fontSize: '12px' }}>{t.rr != null ? Number(t.rr).toFixed(1) : '—'}</td>
+                      <td style={{ ...TD, fontWeight: '700', color: pnlColor, textShadow: pnlShadow, whiteSpace: 'nowrap' }}>{pnlDisplay}</td>
+                      <td style={{ ...TD, color: 'var(--text-lo)', fontSize: '12px' }}>{t.session || '—'}</td>
+                      <td style={TD}><span style={resultStyle}>{resultLabel}</span></td>
+                      <td style={TD}>
+                        <button
+                          className="del-btn"
+                          onClick={e => { e.stopPropagation(); deleteTrade(t.id) }}
+                          style={{ background: 'transparent', border: '1px solid transparent', color: '#444', fontSize: '11px', cursor: 'pointer', padding: '3px 8px', borderRadius: '6px', fontFamily: 'inherit', transition: 'all 0.15s' }}
+                          title="Delete trade"
+                        >✕</button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       {selectedTrade && (
         <TradeDetailModal
