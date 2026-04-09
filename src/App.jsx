@@ -2652,23 +2652,13 @@ function NewsCalendar() {
   const fetchNews = async () => {
     setLoading(true)
     setUseFallback(false)
-    const PROXIES = [
-      'https://api.allorigins.win/raw?url=https%3A%2F%2Fnfs.faireconomy.media%2Fff_calendar_thisweek.json',
-      'https://corsproxy.io/?https://nfs.faireconomy.media/ff_calendar_thisweek.json',
-      'https://thingproxy.freeboard.io/fetch/https://nfs.faireconomy.media/ff_calendar_thisweek.json',
-    ]
     let data = null
-    for (const url of PROXIES) {
-      try {
-        const res = await fetch(url)
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const parsed = await res.json()
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          data = parsed
-          break
-        }
-      } catch { /* try next */ }
-    }
+    try {
+      const res = await fetch('/api/news')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const parsed = await res.json()
+      if (Array.isArray(parsed) && parsed.length > 0) data = parsed
+    } catch { /* fall through to fallback */ }
     if (data) {
       const ts = Date.now()
       try { localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify({ ts, data })) } catch {}
