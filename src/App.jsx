@@ -1835,15 +1835,15 @@ function TradeDetailModal({ trade, onClose, onSave }) {
       </div>
     )}
     <div
-      style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', zIndex: 1000 }}
+      style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', zIndex: 1000 }}
       onClick={onClose}
     >
       <div
-        style={{ position: 'relative', width: '90%', maxWidth: '680px', maxHeight: '90vh', overflowY: 'auto', background: '#0a0a0a', border: '1px solid #1e1e1e', borderRadius: '18px', padding: '28px', boxShadow: '0 32px 100px rgba(0,0,0,0.9)', zIndex: 1001, animation: 'modalIn 0.2s ease both' }}
+        style={{ position: 'relative', width: '90%', maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto', background: '#0d0d0d', border: '1px solid #1f1f1f', borderRadius: '16px', padding: '32px', boxShadow: '0 32px 100px rgba(0,0,0,0.9)', zIndex: 1001, animation: 'modalIn 0.2s ease both' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '22px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
           <div style={{ fontSize: '18px', fontWeight: '800', letterSpacing: '-0.5px', color: '#fff' }}>Edit Trade</div>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', fontSize: '22px', lineHeight: 1, padding: '0 4px' }}>✕</button>
         </div>
@@ -2084,20 +2084,22 @@ function AddTradeModal({ open, onClose, session, onTradeAdded }) {
         <img src={lightbox} alt="Chart" onClick={e => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: '10px' }} />
       </div>
     )}
-    <div className="add-modal-overlay" onClick={e => { if (e.target === e.currentTarget) close() }}>
-      <div className="add-modal-inner">
-
+    <div
+      style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', zIndex: 1000 }}
+      onClick={e => { if (e.target === e.currentTarget) close() }}
+    >
+      <div
+        style={{ position: 'relative', width: '90%', maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto', background: '#0d0d0d', border: '1px solid #1f1f1f', borderRadius: '16px', padding: '32px', boxShadow: '0 32px 100px rgba(0,0,0,0.9)', zIndex: 1001, animation: 'modalIn 0.2s ease both' }}
+        onClick={e => e.stopPropagation()}
+      >
         {/* ── Header ── */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '22px 26px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
           <div style={{ fontSize: '18px', fontWeight: '800', letterSpacing: '-0.5px', color: '#fff' }}>New Trade Entry</div>
-          <button
-            onClick={close}
-            style={{ background: 'transparent', border: '1px solid #222', borderRadius: '8px', color: '#555', fontSize: '14px', cursor: 'pointer', padding: '5px 10px', fontFamily: 'inherit', transition: 'all 0.15s', lineHeight: 1 }}
-          >✕</button>
+          <button onClick={close} style={{ background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', fontSize: '22px', lineHeight: 1, padding: '0 4px' }}>✕</button>
         </div>
 
         {/* ── Mode Toggle ── */}
-        <div style={{ padding: '14px 26px 0' }}>
+        <div style={{ marginBottom: '24px' }}>
           <div style={{ display: 'inline-flex', background: '#111', border: '1px solid #222', borderRadius: '10px', padding: '3px', gap: '2px' }}>
             {['simple', 'advanced'].map(m => (
               <button
@@ -2116,14 +2118,12 @@ function AddTradeModal({ open, onClose, session, onTradeAdded }) {
           </div>
         </div>
 
-        {/* ── Body ── */}
-        <div style={{ padding: '20px 26px 30px' }}>
-          {err && (
-            <div style={{ fontSize: '12px', color: '#ff8080', marginBottom: '16px', padding: '8px 12px', background: 'rgba(255,128,128,0.05)', border: '1px solid rgba(255,128,128,0.15)', borderRadius: '7px' }}>{err}</div>
-          )}
-          {chartWarn && (
-            <div style={{ fontSize: '12px', color: '#ffd080', marginBottom: '16px', padding: '8px 12px', background: 'rgba(255,208,128,0.05)', border: '1px solid rgba(255,208,128,0.15)', borderRadius: '7px' }}>{chartWarn}</div>
-          )}
+        {err && (
+          <div style={{ fontSize: '12px', color: '#ff8080', marginBottom: '16px', padding: '8px 12px', background: 'rgba(255,128,128,0.05)', border: '1px solid rgba(255,128,128,0.15)', borderRadius: '7px' }}>{err}</div>
+        )}
+        {chartWarn && (
+          <div style={{ fontSize: '12px', color: '#ffd080', marginBottom: '16px', padding: '8px 12px', background: 'rgba(255,208,128,0.05)', border: '1px solid rgba(255,208,128,0.15)', borderRadius: '7px' }}>{chartWarn}</div>
+        )}
 
           {mode === 'simple' ? (
             <>
@@ -2358,7 +2358,6 @@ function AddTradeModal({ open, onClose, session, onTradeAdded }) {
             <button style={{ ...btn, background: 'transparent', color: '#888', border: '1px solid #1c1c1c' }} onClick={close}>
               Cancel
             </button>
-          </div>
         </div>
       </div>
     </div>
