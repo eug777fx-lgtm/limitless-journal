@@ -7,7 +7,7 @@ import {
 } from 'recharts'
 import {
   LayoutDashboard, BookOpen, ClipboardList, Settings2,
-  Lightbulb, Check, BarChart2, Plus, CalendarDays,
+  Lightbulb, Check, BarChart2, Plus, CalendarDays, Layers,
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 
@@ -3032,7 +3032,7 @@ function TradingPlan() {
 
 
 // ─── Settings ─────────────────────────────────────────────────
-function Settings({ theme, setTheme, session, profile, setProfile, glassMode, setGlassMode }) {
+function Settings({ theme, setTheme, session, profile, setProfile, glassMode, setGlassMode, onLogout }) {
   const [localFirstName, setLocalFirstName] = useState(profile?.first_name   || '')
   const [localLastName,  setLocalLastName]  = useState(profile?.last_name    || '')
   const [localPhone,     setLocalPhone]     = useState(profile?.phone        || '')
@@ -3062,28 +3062,43 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
     setTimeout(() => setSaved(false), 2000)
   }
 
+  const sectionCard = { background: '#0d0d0d', border: '1px solid #1f1f1f', borderRadius: '14px', padding: '28px', marginBottom: '16px' }
+  const sectionTitle = { fontSize: '11px', fontWeight: '600', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#555', marginBottom: '16px' }
+  const divider = { height: '1px', background: '#1a1a1a', margin: '20px 0' }
+
   return (
-    <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both' }}>
+    <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both', maxWidth: '640px' }}>
       <div style={{ marginBottom: '28px' }}>
         <h1 style={{ fontSize: '28px', fontWeight: '800', letterSpacing: '-1px', color: 'var(--text-hi)' }}>Settings</h1>
       </div>
 
-      {/* Theme color section */}
-      <div style={{ ...card, marginBottom: '14px' }}>
-        <div style={{ ...lbl, marginBottom: '12px' }}>Journal Theme</div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <div>
-            <div style={{ fontSize: '15px', fontWeight: '700', marginBottom: '2px', letterSpacing: '-0.3px', color: 'var(--text-hi)' }}>Glass Mode</div>
-            <div style={{ fontSize: '13px', color: 'var(--text-md)', lineHeight: 1.5 }}>Frosted glass cards with blur effect</div>
+      {/* ── Journal Theme ── */}
+      <div style={sectionCard}>
+        <div style={sectionTitle}>Journal Theme</div>
+        <div style={{ height: '1px', background: '#1a1a1a', marginBottom: '20px' }} />
+
+        {/* Glass Mode row */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: '#141414', border: '1px solid #222', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Layers size={16} color="#888" />
+            </div>
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-hi)', marginBottom: '2px' }}>Glass Mode</div>
+              <div style={{ fontSize: '12px', color: '#666', lineHeight: 1.4 }}>Frosted glass cards with blur effect</div>
+            </div>
           </div>
-          <div className={`toggle-track ${glassMode ? 'on' : ''}`} onClick={() => setGlassMode(!glassMode)}>
+          <div className={`toggle-track ${glassMode ? 'on' : ''}`} onClick={() => setGlassMode(!glassMode)} style={{ flexShrink: 0 }}>
             <div className="toggle-knob" />
           </div>
         </div>
-        <div style={{ height: '1px', background: 'var(--divider)', marginBottom: '20px' }} />
-        <div style={{ fontSize: '15px', fontWeight: '700', marginBottom: '4px', letterSpacing: '-0.3px', color: 'var(--text-hi)' }}>Background Color</div>
-        <div style={{ fontSize: '13px', color: 'var(--text-md)', marginBottom: '20px', lineHeight: 1.5 }}>Choose the aurora vibe of your journal</div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+
+        <div style={divider} />
+
+        {/* Background Color */}
+        <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-hi)', marginBottom: '4px' }}>Background Color</div>
+        <div style={{ fontSize: '12px', color: '#666', marginBottom: '16px' }}>Choose the aurora vibe of your journal</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
           {SWATCHES.map(s => {
             const active = theme === s.id
             return (
@@ -3092,10 +3107,12 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
                 onClick={() => setTheme(s.id)}
                 className="theme-pill"
                 style={{
-                  border: active ? '1.5px solid var(--text-hi)' : '1.5px solid var(--card-border)',
-                  color: active ? 'var(--text-hi)' : 'var(--text-md)',
+                  border: active ? `1.5px solid #fff` : '1.5px solid #222',
+                  color: active ? '#fff' : '#666',
                   fontWeight: active ? '600' : '400',
-                  boxShadow: active ? `0 0 0 1px ${s.color}44` : 'none',
+                  background: active ? 'rgba(255,255,255,0.06)' : 'transparent',
+                  boxShadow: active ? `0 0 0 2px ${s.color}33` : 'none',
+                  fontSize: '13px',
                 }}
               >
                 <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: s.color, flexShrink: 0 }} />
@@ -3106,10 +3123,12 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
         </div>
       </div>
 
-      {/* Profile section */}
-      <div style={{ ...card, marginBottom: '14px' }}>
-        <div style={{ ...lbl, marginBottom: '20px' }}>Profile</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '18px' }}>
+      {/* ── Profile ── */}
+      <div style={sectionCard}>
+        <div style={sectionTitle}>Profile</div>
+        <div style={{ height: '1px', background: '#1a1a1a', marginBottom: '20px' }} />
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
           <div>
             <div style={{ ...lbl, marginBottom: '7px' }}>First Name</div>
             <input value={localFirstName} onChange={e => setLocalFirstName(e.target.value)} style={inp} placeholder="First name" />
@@ -3120,39 +3139,57 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
           </div>
           <div>
             <div style={{ ...lbl, marginBottom: '7px' }}>Phone</div>
-            <input value={localPhone} onChange={e => setLocalPhone(e.target.value)} style={inp} placeholder="e.g. +1 555 000 0000" />
+            <input value={localPhone} onChange={e => setLocalPhone(e.target.value)} style={inp} placeholder="+1 555 000 0000" />
           </div>
           <div>
             <div style={{ ...lbl, marginBottom: '7px' }}>Display Name</div>
             <input value={localName} onChange={e => setLocalName(e.target.value)} style={inp} placeholder="Username or handle" />
           </div>
-          <div>
-            <div style={{ ...lbl, marginBottom: '7px' }}>Market Focus</div>
-            <input value={localMarket} onChange={e => setLocalMarket(e.target.value)} style={inp} placeholder="e.g. Futures · Forex" />
-          </div>
         </div>
-        <button style={btn} onClick={saveProfile}>
-          {saved ? '✓ Saved' : 'Save Changes'}
-        </button>
+        <div style={{ marginBottom: '20px' }}>
+          <div style={{ ...lbl, marginBottom: '7px' }}>Market Focus</div>
+          <input value={localMarket} onChange={e => setLocalMarket(e.target.value)} style={inp} placeholder="e.g. Futures · Forex · Crypto" />
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button
+            onClick={saveProfile}
+            style={{ background: saved ? '#1a1a1a' : '#fff', color: saved ? '#aaffa0' : '#000', border: 'none', borderRadius: '99px', padding: '10px 24px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.2s', minWidth: '130px' }}
+          >
+            {saved ? '✓ Saved' : 'Save Changes'}
+          </button>
+        </div>
       </div>
 
-      {/* Journal Info section */}
-      <div style={card}>
-        <div style={{ ...lbl, marginBottom: '6px' }}>Journal Info</div>
-        {[
-          { k: 'App',     v: 'LIMITLESS',        badge: false },
-          { k: 'Version', v: '1.0.0',            badge: false },
-          { k: 'Account', v: session.user.email, badge: false },
-          { k: 'Status',  v: 'Private ✓',        badge: true  },
-        ].map(row => (
-          <div key={row.k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0', borderBottom: '1px solid var(--divider)' }}>
-            <span style={{ fontSize: '13px', color: 'var(--text-md)' }}>{row.k}</span>
-            {row.badge
-              ? <span style={{ ...badge(true), fontSize: '12px', padding: '4px 12px' }}>{row.v}</span>
-              : <span style={{ fontSize: '13px', color: 'var(--text-hi)', fontWeight: '600' }}>{row.v}</span>
-            }
-          </div>
-        ))}
+      {/* ── Account ── */}
+      <div style={{ ...sectionCard, marginBottom: 0 }}>
+        <div style={sectionTitle}>Account</div>
+        <div style={{ height: '1px', background: '#1a1a1a', marginBottom: '20px' }} />
+
+        {/* Email */}
+        <div style={{ marginBottom: '20px' }}>
+          <div style={{ ...lbl, marginBottom: '7px' }}>Email Address</div>
+          <input
+            value={session?.user?.email || ''}
+            readOnly
+            style={{ ...inp, color: '#555', cursor: 'default' }}
+          />
+        </div>
+
+        {/* Log out */}
+        <div style={{ marginBottom: '20px' }}>
+          <button
+            onClick={onLogout}
+            style={{ background: 'transparent', border: '1px solid rgba(255,80,80,0.25)', borderRadius: '8px', color: '#cc4444', fontSize: '13px', fontWeight: '500', padding: '10px 20px', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s' }}
+          >
+            Log Out
+          </button>
+        </div>
+
+        <div style={{ height: '1px', background: '#141414', marginBottom: '16px' }} />
+        <div style={{ fontSize: '11px', color: '#444', letterSpacing: '0.04em' }}>
+          App version 1.0.0 · LIMITLESS Private Journal
+        </div>
       </div>
     </div>
   )
@@ -3433,7 +3470,7 @@ export default function App() {
         )}
         {page === 'news'        && <NewsCalendar />}
         {page === 'plan'        && <TradingPlan />}
-        {page === 'settings'    && <Settings theme={theme} setTheme={handleSetTheme} session={session} profile={profile} setProfile={setProfile} glassMode={glassMode} setGlassMode={v => { setGlassMode(v); localStorage.setItem('glass_mode', v) }} />}
+        {page === 'settings'    && <Settings theme={theme} setTheme={handleSetTheme} session={session} profile={profile} setProfile={setProfile} glassMode={glassMode} setGlassMode={v => { setGlassMode(v); localStorage.setItem('glass_mode', v) }} onLogout={logout} />}
       </main>
 
       <AddTradeModal
