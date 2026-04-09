@@ -1770,8 +1770,8 @@ function TradeDetailModal({ trade, onClose, onSave }) {
         onClick={() => setLightbox(null)}
       >
         <button
-          onClick={() => setLightbox(null)}
-          style={{ position: 'absolute', top: '20px', right: '20px', width: '40px', height: '40px', borderRadius: '50%', background: '#fff', border: 'none', color: '#111', fontSize: '18px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit', lineHeight: 1 }}
+          onClick={e => { e.stopPropagation(); setLightbox(null) }}
+          style={{ position: 'fixed', top: '20px', right: '20px', width: '44px', height: '44px', borderRadius: '50%', background: '#fff', border: 'none', color: '#000', fontSize: '20px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000 }}
         >✕</button>
         <img src={lightbox} alt="Chart" onClick={e => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: '10px' }} />
       </div>
@@ -2020,8 +2020,8 @@ function AddTradeModal({ open, onClose, session, onTradeAdded }) {
         onClick={() => setLightbox(null)}
       >
         <button
-          onClick={() => setLightbox(null)}
-          style={{ position: 'absolute', top: '20px', right: '20px', width: '40px', height: '40px', borderRadius: '50%', background: '#fff', border: 'none', color: '#111', fontSize: '18px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit', lineHeight: 1, zIndex: 1 }}
+          onClick={e => { e.stopPropagation(); setLightbox(null) }}
+          style={{ position: 'fixed', top: '20px', right: '20px', width: '44px', height: '44px', borderRadius: '50%', background: '#fff', border: 'none', color: '#000', fontSize: '20px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000 }}
         >✕</button>
         <img src={lightbox} alt="Chart" onClick={e => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: '10px' }} />
       </div>
