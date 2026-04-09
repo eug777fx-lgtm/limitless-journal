@@ -2638,54 +2638,93 @@ const NEWS_FALLBACK = (() => {
   ]
 })()
 
-const NEWS_CACHE_KEY = 'news_cache_v1'
 const NEWS_CACHE_TTL = 60 * 60 * 1000 // 1 hour
 
+// Get the Monday of a week containing the given date (or today)
+const getMonday = (d = new Date()) => {
+  const day = d.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  const mon = new Date(d)
+  mon.setDate(d.getDate() + diff)
+  mon.setHours(0, 0, 0, 0)
+  return mon
+}
+
+// Format a Monday date as YYYY-MM-DD for cache keys / API params
+const toDateKey = (d) => d.toISOString().split('T')[0]
+
+// Format week range label: "Apr 7 – Apr 11, 2026"
+const weekRangeLabel = (monday) => {
+  const friday = new Date(monday)
+  friday.setDate(monday.getDate() + 4)
+  const fmt = (dt) => dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return `${fmt(monday)} – ${fmt(friday)}, ${friday.getFullYear()}`
+}
+
 function NewsCalendar() {
+  const thisMonday = getMonday()
+  const [weekOffset,   setWeekOffset]   = useState(0)  // 0 = current week, 1 = next, etc.
   const [events,       setEvents]       = useState([])
   const [loading,      setLoading]      = useState(true)
   const [useFallback,  setUseFallback]  = useState(false)
+  const [unavailable,  setUnavailable]  = useState(false)
   const [cachedAt,     setCachedAt]     = useState(null)
   const [impactFilter, setImpactFilter] = useState('All')
   const [currFilter,   setCurrFilter]   = useState('All')
 
-  const fetchNews = async () => {
+  const currentMonday = new Date(thisMonday)
+  currentMonday.setDate(thisMonday.getDate() + weekOffset * 7)
+  const weekKey = toDateKey(currentMonday)
+  const cacheKey = `news_cache_${weekKey}`
+
+  const fetchNews = async (monday, key) => {
     setLoading(true)
     setUseFallback(false)
+    setUnavailable(false)
     let data = null
     try {
-      const res = await fetch('/api/news')
+      const res = await fetch(`/api/news?week=${toDateKey(monday)}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const parsed = await res.json()
+      if (parsed?.unavailable) {
+        setUnavailable(true)
+        setEvents([])
+        setLoading(false)
+        return
+      }
       if (Array.isArray(parsed) && parsed.length > 0) data = parsed
     } catch { /* fall through to fallback */ }
     if (data) {
       const ts = Date.now()
-      try { localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify({ ts, data })) } catch {}
+      try { localStorage.setItem(key, JSON.stringify({ ts, data })) } catch {}
       setEvents(data)
       setCachedAt(ts)
     } else {
-      setEvents(NEWS_FALLBACK)
-      setUseFallback(true)
+      setEvents(weekOffset === 0 ? NEWS_FALLBACK : [])
+      setUseFallback(weekOffset === 0)
     }
     setLoading(false)
   }
 
   useEffect(() => {
+    setImpactFilter('All')
+    setCurrFilter('All')
     try {
-      const raw = localStorage.getItem(NEWS_CACHE_KEY)
+      const raw = localStorage.getItem(cacheKey)
       if (raw) {
         const { ts, data } = JSON.parse(raw)
         if (Date.now() - ts < NEWS_CACHE_TTL && Array.isArray(data) && data.length > 0) {
           setEvents(data)
           setCachedAt(ts)
           setLoading(false)
+          setUseFallback(false)
+          setUnavailable(false)
           return
         }
       }
     } catch {}
-    fetchNews()
-  }, [])
+    fetchNews(currentMonday, cacheKey)
+  }, [weekOffset])
 
   const impactColor = (impact) => {
     const i = (impact || '').toLowerCase()
@@ -2749,11 +2788,52 @@ function NewsCalendar() {
 
   if (loading) return <NewsSkeleton />
 
+  const MAX_OFFSET = 1 // FF only provides this week + next week
+  const navBtn = (disabled) => ({
+    background: 'transparent',
+    border: '1px solid var(--card-border)',
+    borderRadius: '8px',
+    color: disabled ? 'var(--text-dim)' : 'var(--text-hi)',
+    width: '34px', height: '34px',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    fontFamily: 'inherit', fontSize: '16px',
+    transition: 'all 0.15s',
+    opacity: disabled ? 0.35 : 1,
+    flexShrink: 0,
+  })
+
   return (
     <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both' }}>
       {/* Header */}
-      <div style={{ marginBottom: '24px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
         <h1 style={{ fontSize: '28px', fontWeight: '800', letterSpacing: '-1px' }}>News Calendar</h1>
+        {/* Week navigator */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            style={navBtn(weekOffset === 0)}
+            disabled={weekOffset === 0}
+            onClick={() => setWeekOffset(o => Math.max(0, o - 1))}
+          >←</button>
+          <div style={{
+            background: 'var(--card-bg)', border: '1px solid var(--card-border)',
+            borderRadius: '8px', padding: '6px 14px', fontSize: '12px',
+            fontWeight: '600', color: weekOffset === 0 ? 'var(--text-hi)' : 'var(--text-md)',
+            whiteSpace: 'nowrap', letterSpacing: '0.01em',
+            borderColor: weekOffset === 0 ? 'rgba(255,255,255,0.15)' : 'var(--card-border)',
+          }}>
+            {weekOffset === 0 ? 'This Week' : weekOffset === 1 ? 'Next Week' : weekRangeLabel(currentMonday)}
+          </div>
+          <button
+            style={navBtn(weekOffset >= MAX_OFFSET)}
+            disabled={weekOffset >= MAX_OFFSET}
+            onClick={() => setWeekOffset(o => Math.min(MAX_OFFSET, o + 1))}
+          >→</button>
+        </div>
+      </div>
+      {/* Week range label */}
+      <div style={{ fontSize: '12px', color: 'var(--text-lo)', marginBottom: '20px', marginTop: '-16px' }}>
+        {weekRangeLabel(currentMonday)}
       </div>
 
       {/* Filters */}
@@ -2793,8 +2873,17 @@ function NewsCalendar() {
         </select>
       </div>
 
+      {/* Unavailable state */}
+      {unavailable && (
+        <div style={{ ...cardS, padding: '48px 24px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+          <CalendarDays size={28} color="#333" />
+          <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-hi)' }}>Data not available</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-lo)', maxWidth: '280px' }}>Forex Factory only provides data for the current week and next week</div>
+        </div>
+      )}
+
       {/* Empty */}
-      {filtered.length === 0 && (
+      {!unavailable && filtered.length === 0 && (
         <div style={{ ...cardS, padding: '48px 24px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
           <CalendarDays size={28} color="#333" />
           <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-hi)' }}>No events found</div>
@@ -2875,15 +2964,15 @@ function NewsCalendar() {
 
       {useFallback && (
         <div style={{ textAlign: 'center', marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--divider)' }}>
-          <div style={{ fontSize: '11px', color: 'var(--text-dim)', letterSpacing: '0.04em', marginBottom: '10px' }}>Live feed temporarily unavailable</div>
+          <div style={{ fontSize: '11px', color: 'var(--text-dim)', letterSpacing: '0.04em', marginBottom: '10px' }}>Live feed temporarily unavailable — showing sample data</div>
           <button
-            onClick={() => { try { localStorage.removeItem(NEWS_CACHE_KEY) } catch {} fetchNews() }}
+            onClick={() => { try { localStorage.removeItem(cacheKey) } catch {} fetchNews(currentMonday, cacheKey) }}
             style={{ background: 'transparent', border: '1px solid var(--card-border)', color: 'var(--text-md)', borderRadius: '8px', padding: '6px 14px', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}
           >Retry</button>
         </div>
       )}
 
-      {!useFallback && cachedAt && (
+      {!useFallback && !unavailable && cachedAt && (
         <div style={{ textAlign: 'center', fontSize: '11px', color: 'var(--text-dim)', marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--divider)', letterSpacing: '0.04em' }}>
           {(() => {
             const mins = Math.round((Date.now() - cachedAt) / 60000)
