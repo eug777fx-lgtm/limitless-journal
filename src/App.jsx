@@ -2873,28 +2873,16 @@ function NewsCalendar() {
         </select>
       </div>
 
-      {/* Unavailable state */}
-      {unavailable && (
+      {/* Empty — no data at all (next week not published yet, or unavailable) */}
+      {(unavailable || (!unavailable && events.length === 0)) && (
         <div style={{ ...cardS, padding: '48px 24px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
           <CalendarDays size={28} color="#333" />
-          <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-hi)' }}>Data not available</div>
-          <div style={{ fontSize: '12px', color: 'var(--text-lo)', maxWidth: '280px' }}>Forex Factory only provides data for the current week and next week</div>
+          <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-hi)' }}>Next week's events haven't been published yet</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-lo)' }}>Check back later in the week</div>
         </div>
       )}
-
-      {/* Empty */}
-      {!unavailable && filtered.length === 0 && events.length === 0 && weekOffset === 1 && (
-        <div style={{ ...cardS, padding: '48px 24px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-          <CalendarDays size={28} color="#333" />
-          <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-hi)' }}>Next week's calendar isn't available yet</div>
-          <div style={{ fontSize: '12px', color: 'var(--text-lo)', maxWidth: '280px', lineHeight: 1.6 }}>Forex Factory typically publishes it by Thursday or Friday of the current week.</div>
-          <button
-            onClick={() => { try { localStorage.removeItem(cacheKey) } catch {} fetchNews(currentMonday, cacheKey) }}
-            style={{ background: 'transparent', border: '1px solid var(--card-border)', color: 'var(--text-md)', borderRadius: '8px', padding: '6px 14px', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', marginTop: '4px' }}
-          >Check again</button>
-        </div>
-      )}
-      {!unavailable && filtered.length === 0 && events.length > 0 && (
+      {/* Empty — filters hide all events */}
+      {!unavailable && events.length > 0 && filtered.length === 0 && (
         <div style={{ ...cardS, padding: '48px 24px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
           <CalendarDays size={28} color="#333" />
           <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-hi)' }}>No events found</div>
