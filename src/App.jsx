@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   BarChart, Bar, Cell,
@@ -1820,7 +1821,7 @@ function TradeDetailModal({ trade, onClose, onSave }) {
 
   const removeChart = (idx) => setChartUrls(prev => prev.filter((_, i) => i !== idx))
 
-  return (
+  return createPortal(
     <>
     {lightbox && (
       <div
@@ -1985,7 +1986,8 @@ function TradeDetailModal({ trade, onClose, onSave }) {
         </div>
       </div>
     </div>
-    </>
+    </>,
+    document.body
   )
 }
 
