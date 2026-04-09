@@ -28,12 +28,24 @@ body { margin: 0; padding: 0; background: var(--bg); overflow: hidden; overflow-
   --card-bg: rgba(255,255,255,0.04);
   --card-border: rgba(255,255,255,0.08);
   --card-shadow: 0 4px 24px rgba(0,0,0,0.3);
+  --modal-bg: rgba(14,14,14,0.85);
+  --modal-border: rgba(255,255,255,0.08);
+  --sidebar-bg: rgba(6,6,6,0.75);
 }
 [data-glass="true"][data-mode="light"] {
   --card-bg: rgba(255,255,255,0.65);
   --card-border: rgba(0,0,0,0.08);
   --card-shadow: 0 4px 24px rgba(0,0,0,0.12);
+  --modal-bg: rgba(248,248,248,0.85);
+  --modal-border: rgba(0,0,0,0.08);
+  --sidebar-bg: rgba(248,248,248,0.75);
 }
+[data-glass="false"], :root {
+  --modal-bg: #0a0a0a;
+  --modal-border: #1e1e1e;
+}
+[data-glass="true"] .modal-inner { background: var(--modal-bg) !important; border-color: var(--modal-border) !important; backdrop-filter: blur(24px) !important; -webkit-backdrop-filter: blur(24px) !important; }
+[data-glass="true"] .add-modal-inner { background: var(--modal-bg) !important; border-color: var(--modal-border) !important; backdrop-filter: blur(24px) !important; -webkit-backdrop-filter: blur(24px) !important; }
 [data-mode="light"] {
   --bg: #f5f5f5; --card-bg: #ffffff; --card-border: #e0e0e0;
   --sidebar-bg: rgba(248,248,248,0.98); --sidebar-border: #e0e0e0;
@@ -117,6 +129,16 @@ select option { background: #0d0d0d; color: #fff; }
   .chart-grid > *, .radar-grid > *, .stat-grid > * { min-width: 0; max-width: 100%; box-sizing: border-box !important; overflow-x: hidden; width: 100%; }
   /* iOS input zoom prevention (< 16px triggers zoom) */
   input, textarea, select { font-size: 16px !important; }
+  /* Trade log cards — single column, full width on mobile */
+  .trade-card { border-radius: 10px !important; }
+  /* Page transitions — no translateX on mobile to avoid layout shift */
+  .page-wrap { animation: pageFadeMobile 0.15s ease-out both !important; }
+  /* Glass mode — ensure backdrop-filter works on mobile */
+  [data-glass="true"] .modal-inner, [data-glass="true"] .add-modal-inner { background: rgba(12,12,12,0.92) !important; }
+  /* Disable hover lifts on touch devices */
+  .card-lift:hover { transform: none !important; }
+  .trade-card:hover { transform: none !important; border-color: #1a1a1a !important; }
+  .btn-scale:hover { transform: none !important; }
   /* Auth */
   .auth-outer  { margin: 10px auto !important; width: calc(100vw - 28px) !important; max-width: 440px; }
   .auth-logo-block { margin-bottom: 18px !important; }
@@ -128,6 +150,10 @@ select option { background: #0d0d0d; color: #fff; }
   .auth-field  { margin-bottom: 10px !important; }
   .auth-pw     { margin-bottom: 14px !important; }
   .auth-tabs button { padding: 8px !important; font-size: 13px !important; }
+}
+@keyframes pageFadeMobile {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 @media (max-width: 480px) {
   /* Stack form-grid-2 single column on phone */
@@ -929,7 +955,10 @@ function CalendarHeatmap({ trades, viewDate, onPrev, onNext }) {
               <button onClick={() => setPopupDay(null)} style={{ background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: '4px' }}>✕</button>
             </div>
             {dayTrades.length === 0 ? (
-              <div style={{ color: '#555', fontSize: '13px' }}>No trades this day.</div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '24px 0', textAlign: 'center' }}>
+                <BookOpen size={24} color="#333" />
+                <div style={{ fontSize: '13px', fontWeight: '600', color: '#555' }}>No trades this day</div>
+              </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {dayTrades.map(t => (
@@ -999,9 +1028,10 @@ function PendingScreen({ onLogout }) {
 function PerformanceAnalytics({ trades }) {
   if (trades.length < 3) {
     return (
-      <div style={{ ...card, marginTop: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '36px', flexDirection: 'column', gap: '10px' }}>
-        <BarChart2 size={24} style={{ opacity: 0.25, color: 'var(--text-md)' }} />
-        <div style={{ fontSize: '13px', color: 'var(--text-md)' }}>Add more trades to see analytics.</div>
+      <div style={{ ...card, marginTop: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 24px', flexDirection: 'column', gap: '10px', textAlign: 'center' }}>
+        <BarChart2 size={36} color="#333" />
+        <div style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-hi)' }}>No analytics yet</div>
+        <div style={{ fontSize: '13px', color: 'var(--text-lo)', lineHeight: 1.6, maxWidth: '260px' }}>Log at least 3 trades to unlock performance breakdowns</div>
       </div>
     )
   }
@@ -1054,7 +1084,7 @@ function PerformanceAnalytics({ trades }) {
     <div style={card}>
       <div style={{ ...lbl, marginBottom: '14px' }}>{label}</div>
       {data.length === 0
-        ? <div style={{ fontSize: '12px', color: 'var(--text-dim)', padding: '10px 0' }}>No data yet</div>
+        ? <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', padding: '24px 0', textAlign: 'center' }}><BarChart2 size={20} color="#333" /><div style={{ fontSize: '12px', color: 'var(--text-lo)' }}>No data yet</div></div>
         : <ResponsiveContainer width="100%" height={Math.max(100, data.length * 38)}>
             <BarChart layout="vertical" data={data} margin={{ top: 0, right: 12, bottom: 0, left: 10 }}>
               <XAxis type="number" tick={axTick} {...noAxis} tickFormatter={xKey === 'pnl' ? fmt : v => `${v}%`} />
@@ -1079,7 +1109,7 @@ function PerformanceAnalytics({ trades }) {
     <div style={card}>
       <div style={{ ...lbl, marginBottom: '14px' }}>{label}</div>
       {data.length === 0
-        ? <div style={{ fontSize: '12px', color: 'var(--text-dim)', padding: '10px 0' }}>No data yet</div>
+        ? <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', padding: '24px 0', textAlign: 'center' }}><BarChart2 size={20} color="#333" /><div style={{ fontSize: '12px', color: 'var(--text-lo)' }}>No data yet</div></div>
         : <ResponsiveContainer width="100%" height={160}>
             <BarChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 10 }}>
               <XAxis dataKey={xKey} tick={axTick} {...noAxis} />
@@ -1120,9 +1150,10 @@ function PsychologyTracker({ trades }) {
 
   if (tradesWithEmotion.length === 0) {
     return (
-      <div style={{ ...card, marginTop: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px', flexDirection: 'column', gap: '10px' }}>
-        <div style={{ fontSize: '22px', opacity: 0.3 }}>🧠</div>
-        <div style={{ fontSize: '13px', color: 'var(--text-md)', textAlign: 'center' }}>Log your emotional state on trades to see patterns.</div>
+      <div style={{ ...card, marginTop: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 24px', flexDirection: 'column', gap: '10px', textAlign: 'center' }}>
+        <Lightbulb size={36} color="#333" />
+        <div style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-hi)' }}>No psychology data yet</div>
+        <div style={{ fontSize: '13px', color: 'var(--text-lo)', lineHeight: 1.6, maxWidth: '260px' }}>Log your emotional state on trades to see patterns here</div>
       </div>
     )
   }
@@ -2820,8 +2851,10 @@ function NewsCalendar() {
 
       {/* Empty */}
       {filtered.length === 0 && (
-        <div style={{ ...cardS, padding: '48px 24px', textAlign: 'center' }}>
-          <div style={{ fontSize: '13px', color: 'var(--text-lo)' }}>No events match the selected filters.</div>
+        <div style={{ ...cardS, padding: '48px 24px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+          <CalendarDays size={28} color="#333" />
+          <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-hi)' }}>No events found</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-lo)' }}>No events match the selected filters</div>
         </div>
       )}
 
