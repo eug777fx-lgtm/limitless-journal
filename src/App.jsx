@@ -84,6 +84,7 @@ select option { background: #0d0d0d; color: #fff; }
 [data-mode="light"] .theme-pill:hover { background: rgba(0,0,0,0.04); }
 /* ─── Layout grids ─── */
 .stat-grid   { display: grid; grid-template-columns: repeat(5,1fr); gap: 10px; margin-bottom: 16px; }
+.mobile-header { display: none; }
 .chart-grid  { display: grid; grid-template-columns: 3fr 2fr; gap: 12px; margin-bottom: 12px; }
 .radar-grid  { display: grid; grid-template-columns: 2fr 3fr; gap: 12px; }
 .ana-grid    { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
@@ -112,11 +113,20 @@ select option { background: #0d0d0d; color: #fff; }
     padding: 4px 0 max(8px, env(safe-area-inset-bottom));
     height: 52px; box-sizing: content-box;
   }
+  /* Mobile logo header */
+  .mobile-header {
+    display: flex !important; align-items: center; gap: 10px;
+    padding: 14px 16px; position: sticky; top: 0; z-index: 50;
+    background: rgba(8,8,8,0.90);
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid #161616;
+  }
   /* Grids */
-  .stat-grid   { grid-template-columns: repeat(2,1fr) !important; }
-  .chart-grid  { grid-template-columns: 1fr !important; }
-  .radar-grid  { grid-template-columns: 1fr !important; }
-  .ana-grid    { grid-template-columns: 1fr !important; }
+  .stat-grid   { grid-template-columns: repeat(2,1fr) !important; gap: 10px !important; }
+  .stat-grid > *:last-child { grid-column: span 2; }
+  .chart-grid  { grid-template-columns: 1fr !important; gap: 10px !important; }
+  .radar-grid  { grid-template-columns: 1fr !important; gap: 10px !important; }
+  .ana-grid    { grid-template-columns: 1fr !important; gap: 10px !important; }
   .form-grid-4 { grid-template-columns: 1fr 1fr !important; }
   .form-grid-3 { grid-template-columns: 1fr !important; }
   /* Modals */
@@ -125,7 +135,9 @@ select option { background: #0d0d0d; color: #fff; }
   /* Touch targets */
   button { min-height: 44px; }
   /* Page padding — bottom clears fixed nav + safe area */
-  .page-wrap { padding: 20px 16px !important; padding-bottom: calc(80px + env(safe-area-inset-bottom)) !important; overflow-x: hidden !important; max-width: 100vw !important; box-sizing: border-box !important; }
+  .page-wrap { padding: 20px 16px !important; padding-bottom: calc(90px + env(safe-area-inset-bottom)) !important; overflow-x: hidden !important; max-width: 100vw !important; box-sizing: border-box !important; }
+  /* Aurora blobs — boost visibility on mobile */
+  .aurora-blob { opacity: 0.4 !important; min-width: 400px !important; min-height: 400px !important; }
   /* Dashboard grid children — must not stretch past viewport */
   .chart-grid > *, .radar-grid > *, .stat-grid > * { min-width: 0; max-width: 100%; box-sizing: border-box !important; overflow-x: hidden; width: 100%; }
   /* iOS input zoom prevention (< 16px triggers zoom) */
@@ -379,13 +391,13 @@ function AuroraBackground({ theme }) {
   return (
     <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', zIndex: 0, pointerEvents: 'none' }}>
       {/* Blob 1 — top-left */}
-      <div style={blob(c1, 100, 'orb1 25s', 0.42, { top: '-10%',  left: '-10%',  width: '700px', height: '700px' })} />
+      <div className="aurora-blob" style={blob(c1, 100, 'orb1 25s', 0.42, { top: '-10%',  left: '-10%',  width: '700px', height: '700px' })} />
       {/* Blob 2 — bottom-right */}
-      <div style={blob(c2, 120, 'orb2 30s', 0.40, { bottom: '-15%', right: '-10%', width: '800px', height: '800px' })} />
+      <div className="aurora-blob" style={blob(c2, 120, 'orb2 30s', 0.40, { bottom: '-15%', right: '-10%', width: '800px', height: '800px' })} />
       {/* Blob 3 — center offset */}
-      <div style={blob(c1, 90,  'orb3 20s', 0.35, { top: '30%',   left: '28%',   width: '600px', height: '600px' })} />
+      <div className="aurora-blob" style={blob(c1, 90,  'orb3 20s', 0.35, { top: '30%',   left: '28%',   width: '600px', height: '600px' })} />
       {/* Blob 4 — top-right, half opacity */}
-      <div style={blob(c2, 80,  'orb4 35s', 0.20, { top: '-5%',   right: '-5%',  width: '500px', height: '500px' })} />
+      <div className="aurora-blob" style={blob(c2, 80,  'orb4 35s', 0.20, { top: '-5%',   right: '-5%',  width: '500px', height: '500px' })} />
       {/* Grain texture overlay */}
       <svg style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1, pointerEvents: 'none', opacity: 0.04 }}>
         <filter id="grain">
@@ -3416,6 +3428,11 @@ export default function App() {
 
       {/* ── Main content ── */}
       <main style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1, minWidth: 0 }}>
+        {/* Mobile logo header — only visible on mobile via CSS */}
+        <div className="mobile-header">
+          <img src="/logo2.png" alt="logo" style={{ height: '24px', display: 'block' }} />
+          <span style={{ fontSize: '14px', fontWeight: '700', letterSpacing: '0.15em', color: 'var(--text-hi)' }}>LIMITLESS</span>
+        </div>
         {page === 'dashboard'   && <Dashboard trades={trades} onAddTrade={goAddTrade} loading={tradesLoading} />}
         {page === 'trades'      && (
           <Trades
