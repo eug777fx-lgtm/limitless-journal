@@ -192,10 +192,16 @@ html { scroll-behavior: smooth; }
 }
 .btn-scale { transition: transform 0.15s ease, opacity 0.15s !important; }
 .btn-scale:hover:not(:disabled) { transform: scale(1.02) !important; }
+.btn-scale:active:not(:disabled) { transform: scale(0.97) !important; }
+button:active:not(:disabled) { transform: scale(0.97); }
+.trade-card:hover { transform: translateY(-2px) !important; border-color: #2a2a2a !important; }
+.thumb-wrap { overflow: hidden; border-radius: 8px; }
+.thumb-wrap img { transition: transform 0.2s ease !important; cursor: zoom-in !important; }
+.thumb-wrap img:hover { transform: scale(1.03) !important; }
 .card-lift { transition: transform 0.15s ease, box-shadow 0.15s ease !important; }
 .card-lift:hover { transform: translateY(-2px) !important; }
-input:focus, textarea:focus, select:focus { border-color: #444 !important; outline: none; }
-[data-mode="light"] input:focus, [data-mode="light"] textarea:focus, [data-mode="light"] select:focus { border-color: #aaa !important; }
+input:focus, textarea:focus, select:focus { border-color: #444 !important; outline: none; box-shadow: 0 0 0 2px rgba(255,255,255,0.1) !important; }
+[data-mode="light"] input:focus, [data-mode="light"] textarea:focus, [data-mode="light"] select:focus { border-color: #aaa !important; box-shadow: 0 0 0 2px rgba(0,0,0,0.07) !important; }
 .news-filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
 .news-pills { display: flex; gap: 6px; flex-shrink: 0; }
 @media (max-width: 768px) {
@@ -335,13 +341,6 @@ const formatDate = (dateStr) => {
   return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-const fmtNum = (n) => {
-  if (n == null) return '—'
-  const num = Number(n)
-  if (num >= 1000) return num.toLocaleString(undefined, { maximumFractionDigits: 0 })
-  if (num >= 10)   return num.toFixed(2)
-  return num.toFixed(4)
-}
 
 // ─── Aurora Background ────────────────────────────────────────
 function AuroraBackground({ theme }) {
@@ -1416,11 +1415,11 @@ function Dashboard({ trades, onAddTrade, loading }) {
   const animStreakRounded = Math.round(animStreak)
 
   const stats = [
-    { label: 'Net P&L',       val: `${animPnlRounded >= 0 ? '+' : '−'}$${Math.abs(animPnlRounded).toLocaleString()}`, color: totalPnl >= 0 ? '#aaffa0' : '#ff8080', sub: 'Month to date' },
-    { label: 'Win Rate',       val: `${animWRRounded}%`,                                                               color: '#fff', sub: `${wins.length} / ${trades.length} trades`   },
-    { label: 'Avg Win / Loss', val: wins.length ? `${animAvgRR.toFixed(1)}R` : '—',                                   color: '#fff', sub: avgWin ? `$${avgWin.toLocaleString()} avg win` : 'No wins yet' },
-    { label: 'Profit Factor',  val: grossLosses > 0 ? animPF.toFixed(2) : profitFactor,                               color: '#fff', sub: 'Gross P / gross L'                           },
-    { label: 'Win Streak',     val: streak > 0 ? `${animStreakRounded}W` : '—',                                       color: '#fff', sub: streak > 0 ? `${streak} in a row` : 'No active streak' },
+    { label: 'Net P&L',       val: `${animPnlRounded >= 0 ? '+' : '−'}$${Math.abs(animPnlRounded).toLocaleString()}`, color: totalPnl >= 0 ? '#aaffa0' : '#ff8080', shadow: totalPnl > 0 ? '0 0 20px rgba(170,255,160,0.3)' : totalPnl < 0 ? '0 0 20px rgba(255,128,128,0.3)' : 'none', sub: 'Month to date' },
+    { label: 'Win Rate',       val: `${animWRRounded}%`,                                                               color: '#fff', shadow: 'none', sub: `${wins.length} / ${trades.length} trades`   },
+    { label: 'Avg Win / Loss', val: wins.length ? `${animAvgRR.toFixed(1)}R` : '—',                                   color: '#fff', shadow: 'none', sub: avgWin ? `$${avgWin.toLocaleString()} avg win` : 'No wins yet' },
+    { label: 'Profit Factor',  val: grossLosses > 0 ? animPF.toFixed(2) : profitFactor,                               color: '#fff', shadow: 'none', sub: 'Gross P / gross L'                           },
+    { label: 'Win Streak',     val: streak > 0 ? `${animStreakRounded}W` : '—',                                       color: '#fff', shadow: 'none', sub: streak > 0 ? `${streak} in a row` : 'No active streak' },
   ]
 
   // ── Empty state ──
@@ -1436,13 +1435,13 @@ function Dashboard({ trades, onAddTrade, loading }) {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '36px', marginBottom: '18px', opacity: 0.3 }}>◎</div>
-            <div style={{ fontSize: '18px', fontWeight: '700', marginBottom: '8px', color: '#fff' }}>No trades yet</div>
-            <div style={{ fontSize: '13px', color: '#555', marginBottom: '28px', lineHeight: 1.6 }}>
-              Start logging your trades to see your stats,<br />P&amp;L curve, and calendar.
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', textAlign: 'center' }}>
+            <BarChart2 size={44} color="#333" />
+            <div style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text-hi)' }}>No trades yet</div>
+            <div style={{ fontSize: '13px', color: 'var(--text-lo)', lineHeight: 1.6, maxWidth: '280px' }}>
+              Start journaling your first setup to see your stats here
             </div>
-            <button style={btn} onClick={onAddTrade}>+ Add your first trade</button>
+            <button style={{ ...btn, marginTop: '8px' }} onClick={onAddTrade}>+ Add Trade</button>
           </div>
         </div>
       </div>
@@ -1465,7 +1464,7 @@ function Dashboard({ trades, onAddTrade, loading }) {
         {stats.map(s => (
           <div key={s.label} className="card-lift" style={{ ...card, padding: '18px 20px' }}>
             <div style={{ ...lbl, marginBottom: '10px', color: '#999' }}>{s.label}</div>
-            <div style={{ fontSize: '24px', fontWeight: '800', letterSpacing: '-1px', color: s.color, lineHeight: 1, marginBottom: '8px' }}>{s.val}</div>
+            <div style={{ fontSize: '24px', fontWeight: '800', letterSpacing: '-1px', color: s.color, textShadow: s.shadow, lineHeight: 1, marginBottom: '8px' }}>{s.val}</div>
             <div style={{ fontSize: '11px', color: '#888' }}>{s.sub}</div>
           </div>
         ))}
@@ -1533,24 +1532,32 @@ function Dashboard({ trades, onAddTrade, loading }) {
             <div style={{ ...lbl, color: '#999' }}>Recent Trades</div>
             <div style={{ fontSize: '11px', color: '#666' }}>Last 7 entries</div>
           </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>{['Date', 'Symbol', 'Dir', 'R:R', 'P&L'].map(h => <th key={h} style={TH}>{h}</th>)}</tr>
-            </thead>
-            <tbody>
-              {byDate.slice(0, 7).map(t => (
-                <tr key={t.id}>
-                  <td style={{ ...TD, color: '#888', fontSize: '12px' }}>{formatDate(t.trade_date)}</td>
-                  <td style={{ ...TD, fontWeight: '700', fontSize: '13px' }}>{t.symbol}</td>
-                  <td style={TD}><span style={badge(t.direction === 'Long')}>{t.direction}</span></td>
-                  <td style={{ ...TD, color: '#888', fontSize: '12px' }}>{t.rr != null ? Number(t.rr).toFixed(1) : '—'}</td>
-                  <td style={{ ...TD, fontWeight: '700', color: (t.pnl || 0) >= 0 ? '#aaffa0' : '#ff8080', whiteSpace: 'nowrap' }}>
-                    {(t.pnl || 0) >= 0 ? `+$${Math.round(t.pnl)}` : `−$${Math.abs(Math.round(t.pnl))}`}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {byDate.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '32px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+              <BookOpen size={28} color="#333" />
+              <div style={{ fontSize: '13px', fontWeight: '600', color: '#555' }}>No trades yet</div>
+              <div style={{ fontSize: '12px', color: '#444', lineHeight: 1.5 }}>Start journaling your first setup</div>
+            </div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>{['Date', 'Symbol', 'Dir', 'R:R', 'P&L'].map(h => <th key={h} style={TH}>{h}</th>)}</tr>
+              </thead>
+              <tbody>
+                {byDate.slice(0, 7).map(t => (
+                  <tr key={t.id}>
+                    <td style={{ ...TD, color: '#888', fontSize: '12px' }}>{formatDate(t.trade_date)}</td>
+                    <td style={{ ...TD, fontWeight: '700', fontSize: '13px' }}>{t.symbol}</td>
+                    <td style={TD}><span style={badge(t.direction === 'Long')}>{t.direction}</span></td>
+                    <td style={{ ...TD, color: '#888', fontSize: '12px' }}>{t.rr != null ? Number(t.rr).toFixed(1) : '—'}</td>
+                    <td style={{ ...TD, fontWeight: '700', whiteSpace: 'nowrap', color: (t.pnl || 0) >= 0 ? '#aaffa0' : '#ff8080', textShadow: (t.pnl || 0) > 0 ? '0 0 20px rgba(170,255,160,0.3)' : (t.pnl || 0) < 0 ? '0 0 20px rgba(255,128,128,0.3)' : 'none' }}>
+                      {(t.pnl || 0) >= 0 ? `+$${Math.round(t.pnl)}` : `−$${Math.abs(Math.round(t.pnl))}`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 
@@ -1915,11 +1922,13 @@ function TradeDetailModal({ trade, onClose, onSave }) {
           <div style={{ display: 'grid', gridTemplateColumns: chartUrls.length === 1 ? '1fr' : '1fr 1fr', gap: '8px', marginBottom: '10px' }}>
             {chartUrls.map((url, idx) => (
               <div key={idx} style={{ position: 'relative' }}>
+                <div className="thumb-wrap" style={{ border: '1px solid #1c1c1c', borderRadius: '8px' }}>
                 <img
                   src={url} alt={`Chart ${idx + 1}`}
                   onClick={() => setLightbox(url)}
-                  style={{ width: '100%', height: chartUrls.length === 1 ? '200px' : '180px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #1c1c1c', cursor: 'zoom-in', display: 'block' }}
+                  style={{ width: '100%', height: chartUrls.length === 1 ? '200px' : '180px', objectFit: 'cover', display: 'block' }}
                 />
+                </div>
                 <button
                   onClick={() => removeChart(idx)}
                   style={{ position: 'absolute', top: '6px', right: '6px', width: '20px', height: '20px', borderRadius: '50%', background: 'rgba(0,0,0,0.7)', border: '1px solid #555', color: '#ccc', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit', lineHeight: 1, padding: 0 }}
@@ -2146,11 +2155,13 @@ function AddTradeModal({ open, onClose, session, onTradeAdded }) {
                   <div style={{ display: 'grid', gridTemplateColumns: chartFiles.length === 1 ? '1fr' : '1fr 1fr', gap: '8px', marginBottom: '10px' }}>
                     {chartFiles.map((f, idx) => (
                       <div key={idx} style={{ position: 'relative' }}>
-                        <img
-                          src={URL.createObjectURL(f)} alt={`Chart ${idx + 1}`}
-                          onClick={() => setLightbox(URL.createObjectURL(f))}
-                          style={{ width: '100%', height: chartFiles.length === 1 ? '200px' : '180px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #1c1c1c', display: 'block', cursor: 'zoom-in' }}
-                        />
+                        <div className="thumb-wrap" style={{ border: '1px solid #1c1c1c', borderRadius: '8px' }}>
+                          <img
+                            src={URL.createObjectURL(f)} alt={`Chart ${idx + 1}`}
+                            onClick={() => setLightbox(URL.createObjectURL(f))}
+                            style={{ width: '100%', height: chartFiles.length === 1 ? '200px' : '180px', objectFit: 'cover', display: 'block' }}
+                          />
+                        </div>
                         <button onClick={() => setChartFiles(prev => prev.filter((_, i) => i !== idx))}
                           style={{ position: 'absolute', top: '6px', right: '6px', width: '20px', height: '20px', borderRadius: '50%', background: 'rgba(0,0,0,0.7)', border: '1px solid #555', color: '#ccc', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit', lineHeight: 1, padding: 0 }}>✕</button>
                       </div>
@@ -2291,11 +2302,13 @@ function AddTradeModal({ open, onClose, session, onTradeAdded }) {
                   <div style={{ display: 'grid', gridTemplateColumns: chartFiles.length === 1 ? '1fr' : '1fr 1fr', gap: '8px', marginBottom: '10px' }}>
                     {chartFiles.map((f, idx) => (
                       <div key={idx} style={{ position: 'relative' }}>
-                        <img
-                          src={URL.createObjectURL(f)} alt={`Chart ${idx + 1}`}
-                          onClick={() => setLightbox(URL.createObjectURL(f))}
-                          style={{ width: '100%', height: chartFiles.length === 1 ? '200px' : '180px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #1c1c1c', display: 'block', cursor: 'zoom-in' }}
-                        />
+                        <div className="thumb-wrap" style={{ border: '1px solid #1c1c1c', borderRadius: '8px' }}>
+                          <img
+                            src={URL.createObjectURL(f)} alt={`Chart ${idx + 1}`}
+                            onClick={() => setLightbox(URL.createObjectURL(f))}
+                            style={{ width: '100%', height: chartFiles.length === 1 ? '200px' : '180px', objectFit: 'cover', display: 'block' }}
+                          />
+                        </div>
                         <button onClick={() => setChartFiles(prev => prev.filter((_, i) => i !== idx))}
                           style={{ position: 'absolute', top: '6px', right: '6px', width: '20px', height: '20px', borderRadius: '50%', background: 'rgba(0,0,0,0.7)', border: '1px solid #555', color: '#ccc', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit', lineHeight: 1, padding: 0 }}>✕</button>
                       </div>
@@ -2478,53 +2491,93 @@ function Trades({ trades, session, onTradeAdded, onTradeDeleted, onTradeUpdated,
         </div>
       )}
 
-      <div style={card}>
-        {sorted.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '60px 0', color: '#555' }}>
-            <div style={{ fontSize: '13px' }}>No trades logged yet.</div>
+      {sorted.length === 0 ? (
+        <div style={{ ...card, textAlign: 'center', padding: '64px 24px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+            <BookOpen size={36} color="#333" />
+            <div style={{ fontSize: '17px', fontWeight: '700', color: 'var(--text-hi)' }}>No trades yet</div>
+            <div style={{ fontSize: '13px', color: 'var(--text-lo)', lineHeight: 1.6 }}>Start journaling your first setup to see your stats here</div>
+            <button style={{ ...btn, marginTop: '8px' }} onClick={onAddTrade}>+ Add Trade</button>
           </div>
-        ) : (
-          <div className="table-scroll">
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '640px' }}>
-            <thead>
-              <tr>{['Date','Symbol','Direction','Entry','Exit','R:R','P&L','Session','Result',''].map((h, i) => <th key={i} style={TH}>{h}</th>)}</tr>
-            </thead>
-            <tbody>
-              {sorted.map(t => (
-                <tr
-                  key={t.id}
-                  className="trade-row"
-                  onClick={() => setSelectedTrade(t)}
-                  style={{ cursor: 'pointer', transition: 'background 0.1s' }}
-                >
-                  <td style={{ ...TD, color: '#888' }}>{formatDate(t.trade_date)}</td>
-                  <td style={{ ...TD, fontWeight: '700' }}>{t.symbol}</td>
-                  <td style={TD}><span style={badge(t.direction === 'Long')}>{t.direction}</span></td>
-                  <td style={{ ...TD, color: '#888' }}>{fmtNum(t.entry)}</td>
-                  <td style={{ ...TD, color: '#888' }}>{fmtNum(t.exit)}</td>
-                  <td style={{ ...TD, color: '#888' }}>{t.rr != null ? Number(t.rr).toFixed(1) : '—'}</td>
-                  <td style={{ ...TD, fontWeight: '700', color: (t.pnl || 0) >= 0 ? '#aaffa0' : '#ff8080' }}>
-                    {(t.pnl || 0) >= 0 ? `+$${Math.round(t.pnl)}` : `−$${Math.abs(Math.round(t.pnl))}`}
-                  </td>
-                  <td style={{ ...TD, color: '#888', fontSize: '12px' }}>{t.session}</td>
-                  <td style={TD}>{(() => { const pnlNum = parseFloat(t.pnl); const resultLabel = pnlNum > 0 ? 'Win' : pnlNum < 0 ? 'Loss' : 'BE'; const resultStyle = pnlNum > 0 ? badge(true) : pnlNum < 0 ? badge(false) : { background: '#ffffff15', color: '#999999', border: '1px solid #333333', padding: '3px 10px', borderRadius: '99px', fontSize: '11px', fontWeight: '600' }; return <span style={resultStyle}>{resultLabel}</span> })()}</td>
-                  <td style={TD}>
-                    <button
-                      className="del-btn"
-                      onClick={e => { e.stopPropagation(); deleteTrade(t.id) }}
-                      style={{ background: 'transparent', border: '1px solid transparent', color: '#444', fontSize: '11px', cursor: 'pointer', padding: '3px 8px', borderRadius: '6px', fontFamily: 'inherit', transition: 'all 0.15s' }}
-                      title="Delete trade"
-                    >
-                      ✕
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {sorted.map(t => {
+            const pnlNum = parseFloat(t.pnl) || 0
+            const isWin  = pnlNum > 0
+            const isLoss = pnlNum < 0
+            const accentColor = isWin ? '#aaffa0' : isLoss ? '#ff8080' : '#666'
+            const resultLabel = isWin ? 'Win' : isLoss ? 'Loss' : 'BE'
+            const resultStyle = isWin ? badge(true) : isLoss ? badge(false) : badgeBE
+            const pnlDisplay = isWin
+              ? `+$${Math.round(pnlNum).toLocaleString()}`
+              : isLoss
+              ? `−$${Math.abs(Math.round(pnlNum)).toLocaleString()}`
+              : '$0'
+            const pnlColor = isWin ? '#aaffa0' : isLoss ? '#ff8080' : '#888'
+            const pnlShadow = isWin
+              ? '0 0 20px rgba(170,255,160,0.3)'
+              : isLoss
+              ? '0 0 20px rgba(255,128,128,0.3)'
+              : 'none'
+            return (
+              <div
+                key={t.id}
+                className="trade-card"
+                onClick={() => setSelectedTrade(t)}
+                style={{
+                  background: 'rgba(10,10,10,0.8)',
+                  border: '1px solid #1a1a1a',
+                  borderLeft: `3px solid ${accentColor}`,
+                  borderRadius: '12px',
+                  padding: '14px 16px',
+                  cursor: 'pointer',
+                  transition: 'transform 0.15s ease, border-color 0.15s ease',
+                  position: 'relative',
+                }}
+              >
+                {/* Top row: Symbol + Direction + Date */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                  <span style={{ fontSize: '15px', fontWeight: '800', letterSpacing: '-0.3px', color: 'var(--text-hi)' }}>{t.symbol}</span>
+                  <span style={badge(t.direction === 'Long')}>{t.direction}</span>
+                  <span style={{ marginLeft: 'auto', fontSize: '12px', color: 'var(--text-lo)' }}>{formatDate(t.trade_date)}</span>
+                </div>
+
+                {/* Middle row: P&L + R:R + Session */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '10px' }}>
+                  <span style={{ fontSize: '22px', fontWeight: '800', letterSpacing: '-0.5px', color: pnlColor, textShadow: pnlShadow, lineHeight: 1 }}>{pnlDisplay}</span>
+                  {t.rr != null && (
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: '9px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: '600' }}>R:R</span>
+                      <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-md)' }}>{Number(t.rr).toFixed(1)}</span>
+                    </div>
+                  )}
+                  {t.session && (
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: '9px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: '600' }}>Session</span>
+                      <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-md)' }}>{t.session}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Bottom row: Result badge + notes preview */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={resultStyle}>{resultLabel}</span>
+                  {t.notes && (
+                    <span style={{ fontSize: '11px', color: '#555', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '360px' }}>{t.notes}</span>
+                  )}
+                  <button
+                    className="del-btn"
+                    onClick={e => { e.stopPropagation(); deleteTrade(t.id) }}
+                    style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid transparent', color: '#444', fontSize: '11px', cursor: 'pointer', padding: '3px 8px', borderRadius: '6px', fontFamily: 'inherit', transition: 'all 0.15s', lineHeight: 1 }}
+                    title="Delete trade"
+                  >✕</button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {selectedTrade && (
         <TradeDetailModal
@@ -3296,7 +3349,7 @@ export default function App() {
         <button
           onClick={goAddTrade}
           className="btn-scale"
-          style={{ ...btn, width: '100%', marginTop: '10px', marginBottom: '14px', padding: '11px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', borderRadius: '10px', fontSize: '13px' }}
+          style={{ ...btn, background: 'linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%)', width: '100%', marginTop: '10px', marginBottom: '14px', padding: '11px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', borderRadius: '10px', fontSize: '13px' }}
         >
           <Plus size={16} />
           Add Trade
@@ -3313,9 +3366,11 @@ export default function App() {
             style={{
               background: page === n.id ? 'rgba(255,255,255,0.05)' : 'transparent',
               border: page === n.id ? '1px solid #1e1e1e' : '1px solid transparent',
+              borderLeft: page === n.id ? '2px solid rgba(255,255,255,0.4)' : '2px solid transparent',
               color: page === n.id ? '#ddd' : '#777',
               borderRadius: '10px',
               padding: '10px 14px',
+              paddingLeft: '12px',
               cursor: 'pointer',
               textAlign: 'left',
               fontSize: '13px',
