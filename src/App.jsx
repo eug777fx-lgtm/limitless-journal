@@ -7,7 +7,7 @@ import {
 } from 'recharts'
 import {
   LayoutDashboard, BookOpen, ClipboardList, Settings2,
-  Lightbulb, Check, BarChart2, Plus, CalendarDays, Layers,
+  Lightbulb, Check, BarChart2, Plus, CalendarDays, Layers, Target,
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 
@@ -154,6 +154,14 @@ select option { background: #0d0d0d; color: #fff; }
 @keyframes pageFadeMobile {
   from { opacity: 0; }
   to   { opacity: 1; }
+}
+@keyframes goalPulse {
+  0%, 100% { transform: scale(1);    opacity: 1;    }
+  50%      { transform: scale(1.04); opacity: 0.85; }
+}
+@keyframes confettiFall {
+  0%   { transform: translateY(-20px) rotate(0deg);   opacity: 1; }
+  100% { transform: translateY(120px) rotate(360deg); opacity: 0; }
 }
 .mobile-sidebar-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 198;
@@ -1357,8 +1365,110 @@ function useCountAnimation(target, duration = ANIM_MS) {
   return value
 }
 
+// ─── Monthly Goal Tracker Widget ──────────────────────────────
+function GoalTrackerWidget({ monthPnl, monthlyGoal }) {
+  const now = new Date()
+  const daysInMonth  = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+  const daysElapsed  = now.getDate()
+  const daysRemaining = daysInMonth - daysElapsed
+
+  const pct         = monthlyGoal > 0 ? (monthPnl / monthlyGoal) * 100 : 0
+  const expectedPct = (daysElapsed / daysInMonth) * 100
+  const remaining   = monthlyGoal - monthPnl
+
+  const isReached = pct >= 100
+  const isLosing  = monthPnl < 0
+  const isAhead   = !isLosing && !isReached && pct >= expectedPct
+
+  const barFill =
+    isReached ? 'linear-gradient(90deg, #ffd700 0%, #ffb300 100%)' :
+    isLosing  ? 'linear-gradient(90deg, #ff8080 0%, #cc4444 100%)' :
+    isAhead   ? 'linear-gradient(90deg, #aaffa0 0%, #00cc66 100%)' :
+                'linear-gradient(90deg, #ffd966 0%, #e6a500 100%)'
+
+  const pctColor = isReached ? '#ffd700' : isLosing ? '#ff8080' : isAhead ? '#aaffa0' : '#ffd966'
+
+  // Animate bar from 0 to actual pct over 1.5s on mount
+  const [animPct, setAnimPct] = useState(0)
+  useEffect(() => {
+    const t = setTimeout(() => setAnimPct(Math.max(0, Math.min(pct, 100))), 120)
+    return () => clearTimeout(t)
+  }, [pct])
+
+  return (
+    <div style={{ ...card, marginBottom: '16px', position: 'relative', overflow: 'hidden' }}>
+      {/* Confetti bits when goal reached */}
+      {isReached && (
+        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
+          {['#ffd700', '#aaffa0', '#ff8cb4', '#7cc9ff', '#ffb86b', '#c28cff'].map((clr, i) => (
+            <div key={i} style={{
+              position: 'absolute',
+              left: `${10 + i * 14}%`,
+              top: '-10px',
+              width: '6px', height: '10px',
+              background: clr,
+              borderRadius: '1px',
+              animation: `confettiFall 2.6s cubic-bezier(0.4, 0, 0.2, 1) ${i * 0.18}s infinite`,
+            }} />
+          ))}
+        </div>
+      )}
+
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <Target size={18} color={pctColor} />
+          <div style={{ fontSize: '13px', fontWeight: '700', letterSpacing: '0.02em', color: 'var(--text-hi)' }}>Monthly Goal</div>
+        </div>
+        {isReached && (
+          <div style={{ fontSize: '12px', fontWeight: '700', color: '#ffd700', animation: 'goalPulse 1.4s ease-in-out infinite' }}>
+            🎯 Goal Reached!
+          </div>
+        )}
+      </div>
+
+      {/* Amount row */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '12px' }}>
+        <div>
+          <span style={{ fontSize: '24px', fontWeight: '800', letterSpacing: '-0.5px', color: 'var(--text-hi)' }}>
+            ${Math.round(monthPnl).toLocaleString()}
+          </span>
+          <span style={{ fontSize: '12px', color: 'var(--text-lo)', marginLeft: '6px' }}>
+            / ${monthlyGoal.toLocaleString()}
+          </span>
+        </div>
+        <div style={{ fontSize: '14px', fontWeight: '700', color: pctColor }}>
+          {Math.round(pct)}%
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div style={{ height: '10px', background: '#1a1a1a', borderRadius: '99px', overflow: 'hidden', position: 'relative' }}>
+        <div style={{
+          width: `${animPct}%`,
+          height: '100%',
+          background: barFill,
+          transition: 'width 1.5s cubic-bezier(0.4, 0, 0.2, 1)',
+          borderRadius: '99px',
+          boxShadow: isReached ? '0 0 12px rgba(255,215,0,0.5)' : 'none',
+        }} />
+      </div>
+
+      {/* Footer */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', fontSize: '11px', color: 'var(--text-lo)', letterSpacing: '0.02em' }}>
+        <span>
+          {remaining > 0
+            ? `Remaining: $${Math.round(remaining).toLocaleString()}`
+            : `Exceeded by $${Math.round(-remaining).toLocaleString()}`}
+        </span>
+        <span>{daysRemaining === 0 ? 'Last day of the month' : `${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} remaining`}</span>
+      </div>
+    </div>
+  )
+}
+
 // ─── Dashboard ────────────────────────────────────────────────
-function Dashboard({ trades, onAddTrade, loading }) {
+function Dashboard({ trades, onAddTrade, loading, profile }) {
   const [calViewDate,  setCalViewDate]  = useState(() => new Date())
   const [chartVisible, setChartVisible] = useState(false)
 
@@ -1426,6 +1536,16 @@ function Dashboard({ trades, onAddTrade, loading }) {
   const animWRRounded     = Math.round(animWR)
   const animStreakRounded = Math.round(animStreak)
 
+  // ── Monthly P&L for Goal Tracker (this calendar month only) ──
+  const monthPnl = trades
+    .filter(t => {
+      const d = new Date(t.trade_date)
+      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
+    })
+    .reduce((s, t) => s + (t.pnl || 0), 0)
+  const goalEnabled = typeof window !== 'undefined' && localStorage.getItem('goal_tracker_enabled') === 'true'
+  const monthlyGoal = Number(profile?.monthly_goal) || 0
+
   const stats = [
     { label: 'Net P&L',       val: `${animPnlRounded >= 0 ? '+' : '−'}$${Math.abs(animPnlRounded).toLocaleString()}`, color: totalPnl >= 0 ? '#aaffa0' : '#ff8080', shadow: totalPnl > 0 ? '0 0 20px rgba(170,255,160,0.3)' : totalPnl < 0 ? '0 0 20px rgba(255,128,128,0.3)' : 'none', sub: 'Month to date' },
     { label: 'Win Rate',       val: `${animWRRounded}%`,                                                               color: '#fff', shadow: 'none', sub: `${wins.length} / ${trades.length} trades`   },
@@ -1481,6 +1601,11 @@ function Dashboard({ trades, onAddTrade, loading }) {
           </div>
         ))}
       </div>
+
+      {/* Monthly Goal Tracker */}
+      {goalEnabled && monthlyGoal > 0 && (
+        <GoalTrackerWidget monthPnl={monthPnl} monthlyGoal={monthlyGoal} />
+      )}
 
       {/* P&L curve + Calendar */}
       <div className="chart-grid">
@@ -3111,7 +3236,7 @@ function TradingPlan() {
 
 
 // ─── Settings ─────────────────────────────────────────────────
-function Settings({ theme, setTheme, session, profile, setProfile, glassMode, setGlassMode, onLogout }) {
+function Settings({ theme, setTheme, session, profile, setProfile, glassMode, setGlassMode, onLogout, trades = [] }) {
   const [localFirstName, setLocalFirstName] = useState(profile?.first_name   || '')
   const [localLastName,  setLocalLastName]  = useState(profile?.last_name    || '')
   const [localPhone,     setLocalPhone]     = useState(profile?.phone        || '')
@@ -3119,12 +3244,18 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
   const [localMarket,    setLocalMarket]    = useState(profile?.market_focus || '')
   const [saved,          setSaved]          = useState(false)
 
+  // Goal Tracker state
+  const [goalEnabled, setGoalEnabled] = useState(() => localStorage.getItem('goal_tracker_enabled') === 'true')
+  const [localGoal,   setLocalGoal]   = useState(profile?.monthly_goal ? String(profile.monthly_goal) : '')
+  const [goalSaved,   setGoalSaved]   = useState(false)
+
   useEffect(() => {
     setLocalFirstName(profile?.first_name   || '')
     setLocalLastName(profile?.last_name    || '')
     setLocalPhone(profile?.phone          || '')
     setLocalName(profile?.username        || '')
     setLocalMarket(profile?.market_focus  || '')
+    setLocalGoal(profile?.monthly_goal ? String(profile.monthly_goal) : '')
   }, [profile])
 
   const saveProfile = async () => {
@@ -3140,6 +3271,52 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
+
+  const toggleGoalEnabled = () => {
+    const next = !goalEnabled
+    setGoalEnabled(next)
+    try { localStorage.setItem('goal_tracker_enabled', next ? 'true' : 'false') } catch {}
+  }
+
+  const saveGoal = async () => {
+    const newGoal = parseFloat(localGoal) || 0
+    try {
+      await supabase.from('profiles').update({ monthly_goal: newGoal }).eq('id', session.user.id)
+    } catch {}
+    setProfile(p => ({ ...p, monthly_goal: newGoal }))
+    // Snapshot the goal for the current month into history
+    const now = new Date()
+    const key = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    try {
+      const h = JSON.parse(localStorage.getItem('goal_history') || '{}')
+      h[key] = newGoal
+      localStorage.setItem('goal_history', JSON.stringify(h))
+    } catch {}
+    setGoalSaved(true)
+    setTimeout(() => setGoalSaved(false), 2000)
+  }
+
+  // Compute past 3 months of achieved P&L from trades + goal from history
+  const pastMonths = (() => {
+    const now = new Date()
+    const historyGoals = (() => { try { return JSON.parse(localStorage.getItem('goal_history') || '{}') } catch { return {} } })()
+    return [1, 2, 3].map(offset => {
+      const target = new Date(now.getFullYear(), now.getMonth() - offset, 1)
+      const y = target.getFullYear(), m = target.getMonth()
+      const key = `${y}-${String(m + 1).padStart(2, '0')}`
+      const achieved = (trades || [])
+        .filter(t => { const d = new Date(t.trade_date); return d.getFullYear() === y && d.getMonth() === m })
+        .reduce((s, t) => s + (t.pnl || 0), 0)
+      const goal = Number(historyGoals[key]) || 0
+      const pct = goal > 0 ? Math.round((achieved / goal) * 100) : 0
+      return {
+        key, goal,
+        achieved: Math.round(achieved),
+        pct,
+        label: target.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+      }
+    })
+  })()
 
   const sectionCard = { background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: '14px', padding: '28px', marginBottom: '16px', backdropFilter: 'var(--card-blur, none)', WebkitBackdropFilter: 'var(--card-blur, none)' }
   const sectionTitle = { fontSize: '11px', fontWeight: '600', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#555', marginBottom: '16px' }
@@ -3240,6 +3417,86 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
             {saved ? '✓ Saved' : 'Save Changes'}
           </button>
         </div>
+      </div>
+
+      {/* ── Goal Tracker ── */}
+      <div style={sectionCard}>
+        <div style={sectionTitle}>Goal Tracker</div>
+        <div style={{ height: '1px', background: '#1a1a1a', marginBottom: '20px' }} />
+
+        {/* Enable toggle row */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: '#141414', border: '1px solid #222', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Target size={16} color="#aaffa0" />
+            </div>
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-hi)', marginBottom: '2px' }}>Enable Monthly Goal Tracker</div>
+              <div style={{ fontSize: '12px', color: '#666', lineHeight: 1.4 }}>Show monthly income goal progress on your dashboard</div>
+            </div>
+          </div>
+          <div className={`toggle-track ${goalEnabled ? 'on' : ''}`} onClick={toggleGoalEnabled} style={{ flexShrink: 0 }}>
+            <div className="toggle-knob" />
+          </div>
+        </div>
+
+        {goalEnabled && (
+          <>
+            <div style={divider} />
+
+            {/* Goal input */}
+            <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-hi)', marginBottom: '4px' }}>Monthly Income Goal</div>
+            <div style={{ fontSize: '12px', color: '#666', marginBottom: '14px' }}>Set your target profit for each month</div>
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '4px' }}>
+              <div style={{ position: 'relative', flex: 1 }}>
+                <span style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#555', fontSize: '14px', fontWeight: '600', pointerEvents: 'none' }}>$</span>
+                <input
+                  type="number"
+                  value={localGoal}
+                  onChange={e => setLocalGoal(e.target.value)}
+                  placeholder="5000"
+                  style={{ ...inp, paddingLeft: '28px' }}
+                />
+              </div>
+              <button
+                onClick={saveGoal}
+                style={{ background: goalSaved ? '#1a1a1a' : '#fff', color: goalSaved ? '#aaffa0' : '#000', border: 'none', borderRadius: '99px', padding: '0 22px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', minWidth: '120px', transition: 'all 0.2s' }}
+              >
+                {goalSaved ? '✓ Saved' : 'Save Goal'}
+              </button>
+            </div>
+
+            {/* Past 3 months history */}
+            {pastMonths.some(m => m.goal > 0 || m.achieved !== 0) && (
+              <>
+                <div style={divider} />
+                <div style={{ fontSize: '11px', fontWeight: '600', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#666', marginBottom: '12px' }}>Past 3 Months</div>
+                {pastMonths.map(m => {
+                  const hasGoal = m.goal > 0
+                  const dotColor = !hasGoal ? '#444' : m.pct >= 100 ? '#ffd700' : m.pct >= 80 ? '#aaffa0' : m.pct >= 50 ? '#ffd966' : '#ff8080'
+                  return (
+                    <div key={m.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #141414' }}>
+                      <div>
+                        <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-hi)' }}>{m.label}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-lo)', marginTop: '3px' }}>
+                          {hasGoal
+                            ? `$${m.achieved.toLocaleString()} / $${m.goal.toLocaleString()}`
+                            : `$${m.achieved.toLocaleString()} · no goal set`}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {hasGoal && (
+                          <div style={{ fontSize: '13px', fontWeight: '700', color: dotColor }}>{m.pct}%</div>
+                        )}
+                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: dotColor, boxShadow: hasGoal ? `0 0 8px ${dotColor}66` : 'none' }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </>
+            )}
+          </>
+        )}
       </div>
 
       {/* ── Account ── */}
@@ -3537,7 +3794,7 @@ export default function App() {
 
       {/* ── Main content ── */}
       <main style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1, minWidth: 0 }}>
-        {page === 'dashboard'   && <Dashboard trades={trades} onAddTrade={goAddTrade} loading={tradesLoading} />}
+        {page === 'dashboard'   && <Dashboard trades={trades} onAddTrade={goAddTrade} loading={tradesLoading} profile={profile} />}
         {page === 'trades'      && (
           <Trades
             trades={trades}
@@ -3551,7 +3808,7 @@ export default function App() {
         )}
         {page === 'news'        && <NewsCalendar />}
         {page === 'plan'        && <TradingPlan />}
-        {page === 'settings'    && <Settings theme={theme} setTheme={handleSetTheme} session={session} profile={profile} setProfile={setProfile} glassMode={glassMode} setGlassMode={v => { setGlassMode(v); localStorage.setItem('glass_mode', v) }} onLogout={logout} />}
+        {page === 'settings'    && <Settings theme={theme} setTheme={handleSetTheme} session={session} profile={profile} setProfile={setProfile} glassMode={glassMode} setGlassMode={v => { setGlassMode(v); localStorage.setItem('glass_mode', v) }} onLogout={logout} trades={trades} />}
       </main>
 
       <AddTradeModal
