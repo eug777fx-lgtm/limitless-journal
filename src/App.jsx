@@ -8,6 +8,7 @@ import {
 import {
   LayoutDashboard, BookOpen, ClipboardList, Settings2,
   Lightbulb, Check, BarChart2, Plus, CalendarDays, Layers, Target,
+  Pencil, Trash2, GripVertical, Sparkles, Loader2,
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 
@@ -159,6 +160,10 @@ select option { background: #0d0d0d; color: #fff; }
   0%, 100% { transform: scale(1);    opacity: 1;    }
   50%      { transform: scale(1.04); opacity: 0.85; }
 }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.spin { animation: spin 0.9s linear infinite; }
+.check-item .check-actions { opacity: 0; transition: opacity 0.15s; }
+.check-item:hover .check-actions, .check-item.editing .check-actions { opacity: 1; }
 @keyframes confettiFall {
   0%   { transform: translateY(-20px) rotate(0deg);   opacity: 1; }
   100% { transform: translateY(120px) rotate(360deg); opacity: 0; }
@@ -3111,25 +3116,94 @@ function NewsCalendar() {
 // ─── Trading Plan ─────────────────────────────────────────────
 function TradingPlan() {
   const today    = new Date().toISOString().slice(0, 10)
-  const CK       = `checklist_${today}`
+  const CK       = `checklist_${today}`     // daily check state (by item id)
+  const IK       = 'checklist_items'        // persistent item list
   const RK       = 'trading_rules'
+  const MAX_ITEMS = 12
 
-  const defaultChecks = { bias: false, liquidity: false, entryModel: false, risk: false, news: false, emotional: false }
+  const makeId = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `id_${Date.now()}_${Math.random().toString(36).slice(2)}`
+
+  const defaultItems = [
+    { id: 'bias',       label: 'Bias confirmed'        },
+    { id: 'liquidity',  label: 'Liquidity identified'  },
+    { id: 'entryModel', label: 'Entry model valid'     },
+    { id: 'risk',       label: 'Risk acceptable'       },
+    { id: 'news',       label: 'News/events checked'   },
+    { id: 'emotional',  label: 'Emotional state good'  },
+  ]
   const defaultRules  = { sessionTime: '', setupModel: '', entryConfirmations: '', riskPerTrade: '', rulesBefore: '' }
 
+  const [items, setItems] = useState(() => {
+    try {
+      const s = localStorage.getItem(IK)
+      if (s) {
+        const parsed = JSON.parse(s)
+        if (Array.isArray(parsed) && parsed.every(it => it && it.id && typeof it.label === 'string')) return parsed
+      }
+    } catch {}
+    return defaultItems
+  })
   const [checks, setChecks] = useState(() => {
-    try { const s = localStorage.getItem(CK); return s ? JSON.parse(s) : defaultChecks } catch { return defaultChecks }
+    try { const s = localStorage.getItem(CK); return s ? JSON.parse(s) : {} } catch { return {} }
   })
   const [rules, setRules] = useState(() => {
     try { const s = localStorage.getItem(RK); return s ? JSON.parse(s) : defaultRules } catch { return defaultRules }
   })
   const [rulesSaved, setRulesSaved] = useState(false)
 
-  const toggle = (key) => setChecks(prev => {
-    const next = { ...prev, [key]: !prev[key] }
-    localStorage.setItem(CK, JSON.stringify(next))
+  // Edit state
+  const [editingId, setEditingId] = useState(null)
+  const [editDraft, setEditDraft] = useState('')
+
+  // AI generation state
+  const [generating,  setGenerating]  = useState(false)
+  const [generateMsg, setGenerateMsg] = useState(null) // { type: 'success' | 'error', text: string }
+
+  const persistItems = (next) => {
+    try { localStorage.setItem(IK, JSON.stringify(next)) } catch {}
     return next
-  })
+  }
+  const persistChecks = (next) => {
+    try { localStorage.setItem(CK, JSON.stringify(next)) } catch {}
+    return next
+  }
+
+  const toggle = (id) => {
+    if (editingId === id) return // don't toggle while editing
+    setChecks(prev => persistChecks({ ...prev, [id]: !prev[id] }))
+  }
+
+  const startEdit = (item, e) => {
+    e?.stopPropagation?.()
+    setEditingId(item.id)
+    setEditDraft(item.label)
+  }
+  const commitEdit = () => {
+    const label = editDraft.trim()
+    if (!label) { cancelEdit(); return }
+    setItems(prev => persistItems(prev.map(it => it.id === editingId ? { ...it, label } : it)))
+    setEditingId(null)
+    setEditDraft('')
+  }
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditDraft('')
+  }
+
+  const deleteItem = (id, e) => {
+    e?.stopPropagation?.()
+    setItems(prev => persistItems(prev.filter(it => it.id !== id)))
+    setChecks(prev => { const next = { ...prev }; delete next[id]; return persistChecks(next) })
+    if (editingId === id) cancelEdit()
+  }
+
+  const addItem = () => {
+    if (items.length >= MAX_ITEMS) return
+    const newItem = { id: makeId(), label: 'New item' }
+    setItems(prev => persistItems([...prev, newItem]))
+    setEditingId(newItem.id)
+    setEditDraft('New item')
+  }
 
   const saveRules = () => {
     localStorage.setItem(RK, JSON.stringify(rules))
@@ -3137,16 +3211,47 @@ function TradingPlan() {
     setTimeout(() => setRulesSaved(false), 2000)
   }
 
-  const checkItems = [
-    { key: 'bias',       label: 'Bias confirmed'       },
-    { key: 'liquidity',  label: 'Liquidity identified'  },
-    { key: 'entryModel', label: 'Entry model valid'     },
-    { key: 'risk',       label: 'Risk acceptable'       },
-    { key: 'news',       label: 'News/events checked'   },
-    { key: 'emotional',  label: 'Emotional state good'  },
-  ]
-  const done = Object.values(checks).filter(Boolean).length
-  const allDone = done === checkItems.length
+  const generateFromRules = async () => {
+    const combined = [
+      rules.sessionTime && `Session time: ${rules.sessionTime}`,
+      rules.setupModel && `Setup / model: ${rules.setupModel}`,
+      rules.entryConfirmations && `Entry confirmations: ${rules.entryConfirmations}`,
+      rules.riskPerTrade && `Risk per trade: ${rules.riskPerTrade}`,
+      rules.rulesBefore && `Rules before entering: ${rules.rulesBefore}`,
+    ].filter(Boolean).join('\n\n')
+
+    if (!combined.trim()) {
+      setGenerateMsg({ type: 'error', text: 'Fill in at least one rule first' })
+      setTimeout(() => setGenerateMsg(null), 3000)
+      return
+    }
+
+    setGenerating(true)
+    setGenerateMsg(null)
+    try {
+      const res = await fetch('/api/generate-checklist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rules: combined }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
+      const list = (data.items || []).map(label => ({ id: makeId(), label }))
+      if (list.length === 0) throw new Error('No items returned')
+      setItems(persistItems(list))
+      setChecks(persistChecks({}))
+      setGenerateMsg({ type: 'success', text: 'Checklist updated from your rules!' })
+      setTimeout(() => setGenerateMsg(null), 3500)
+    } catch (err) {
+      setGenerateMsg({ type: 'error', text: err.message || 'Failed to generate' })
+      setTimeout(() => setGenerateMsg(null), 4000)
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  const done = items.reduce((s, it) => s + (checks[it.id] ? 1 : 0), 0)
+  const allDone = items.length > 0 && done === items.length
   const ta = { ...inp, minHeight: '80px', resize: 'vertical', lineHeight: '1.65' }
 
   return (
@@ -3163,24 +3268,32 @@ function TradingPlan() {
             <div style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-hi)', letterSpacing: '-0.3px' }}>Pre-Trade Checklist</div>
           </div>
           <div style={{ fontSize: '13px', fontWeight: '700', color: allDone ? '#aaffa0' : 'var(--text-md)', transition: 'color 0.3s' }}>
-            {done}/{checkItems.length} {allDone ? '✓' : ''}
+            {done}/{items.length} {allDone ? '✓' : ''}
           </div>
         </div>
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {checkItems.map(item => {
-            const on = checks[item.key]
+          {items.map(item => {
+            const on = !!checks[item.id]
+            const isEditing = editingId === item.id
             return (
               <div
-                key={item.key}
-                onClick={() => toggle(item.key)}
+                key={item.id}
+                className={`check-item${isEditing ? ' editing' : ''}`}
+                onClick={() => !isEditing && toggle(item.id)}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: '12px',
-                  padding: '11px 14px', borderRadius: '10px', cursor: 'pointer',
-                  border: `1px solid ${on ? 'rgba(170,255,160,0.22)' : 'var(--card-border)'}`,
-                  background: on ? 'rgba(170,255,160,0.05)' : 'transparent',
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  padding: '10px 12px', borderRadius: '10px',
+                  cursor: isEditing ? 'default' : 'pointer',
+                  border: `1px solid ${on && !isEditing ? 'rgba(170,255,160,0.22)' : 'var(--card-border)'}`,
+                  background: on && !isEditing ? 'rgba(170,255,160,0.05)' : isEditing ? 'rgba(255,255,255,0.02)' : 'transparent',
                   transition: 'all 0.15s', userSelect: 'none',
                 }}
               >
+                {/* Drag handle (visual) */}
+                <GripVertical size={14} color="#444" style={{ flexShrink: 0, cursor: 'grab' }} />
+
+                {/* Checkbox */}
                 <div style={{
                   width: '18px', height: '18px', borderRadius: '5px', flexShrink: 0,
                   border: `1.5px solid ${on ? '#aaffa0' : 'var(--inp-border)'}`,
@@ -3190,13 +3303,92 @@ function TradingPlan() {
                 }}>
                   {on && <Check size={11} strokeWidth={3.5} style={{ color: '#000' }} />}
                 </div>
-                <span style={{ fontSize: '14px', color: on ? 'var(--text-hi)' : 'var(--text-md)', fontWeight: on ? '500' : '400', transition: 'color 0.15s' }}>
-                  {item.label}
-                </span>
+
+                {/* Label or edit input */}
+                {isEditing ? (
+                  <input
+                    autoFocus
+                    value={editDraft}
+                    onChange={e => setEditDraft(e.target.value)}
+                    onClick={e => e.stopPropagation()}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') commitEdit()
+                      if (e.key === 'Escape') cancelEdit()
+                    }}
+                    onBlur={commitEdit}
+                    style={{
+                      flex: 1, background: 'var(--inp-bg)', border: '1px solid var(--inp-border)',
+                      borderRadius: '6px', color: 'var(--text-hi)', fontSize: '14px',
+                      padding: '6px 10px', fontFamily: 'inherit', outline: 'none',
+                      transition: 'all 0.15s',
+                    }}
+                  />
+                ) : (
+                  <span style={{ flex: 1, fontSize: '14px', color: on ? 'var(--text-hi)' : 'var(--text-md)', fontWeight: on ? '500' : '400', transition: 'color 0.15s' }}>
+                    {item.label}
+                  </span>
+                )}
+
+                {/* Actions */}
+                <div className="check-actions" style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                  {isEditing ? (
+                    <button
+                      onClick={e => { e.stopPropagation(); commitEdit() }}
+                      onMouseDown={e => e.preventDefault()}
+                      style={{ background: 'transparent', border: 'none', padding: '4px', cursor: 'pointer', color: '#aaffa0', display: 'flex', alignItems: 'center', transition: 'color 0.15s', minHeight: 'auto' }}
+                      title="Save"
+                    >
+                      <Check size={14} strokeWidth={2.5} />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={e => startEdit(item, e)}
+                      style={{ background: 'transparent', border: 'none', padding: '4px', cursor: 'pointer', color: '#666', display: 'flex', alignItems: 'center', transition: 'color 0.15s', minHeight: 'auto' }}
+                      onMouseEnter={e => { e.currentTarget.style.color = '#aaa' }}
+                      onMouseLeave={e => { e.currentTarget.style.color = '#666' }}
+                      title="Edit"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                  )}
+                  <button
+                    onClick={e => deleteItem(item.id, e)}
+                    style={{ background: 'transparent', border: 'none', padding: '4px', cursor: 'pointer', color: '#555', display: 'flex', alignItems: 'center', transition: 'color 0.15s', minHeight: 'auto' }}
+                    onMouseEnter={e => { e.currentTarget.style.color = '#ff8080' }}
+                    onMouseLeave={e => { e.currentTarget.style.color = '#555' }}
+                    title="Delete"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
               </div>
             )
           })}
         </div>
+
+        {/* Add item */}
+        {items.length < MAX_ITEMS && (
+          <button
+            onClick={addItem}
+            style={{
+              marginTop: '10px', width: '100%',
+              background: 'transparent', border: '1px dashed var(--card-border)',
+              borderRadius: '10px', padding: '10px',
+              color: 'var(--text-lo)', fontFamily: 'inherit', fontSize: '13px',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-hi)'; e.currentTarget.style.borderColor = 'var(--inp-border)' }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-lo)'; e.currentTarget.style.borderColor = 'var(--card-border)' }}
+          >
+            <Plus size={14} /> Add Item
+          </button>
+        )}
+        {items.length >= MAX_ITEMS && (
+          <div style={{ marginTop: '10px', fontSize: '11px', color: 'var(--text-dim)', textAlign: 'center' }}>
+            Maximum {MAX_ITEMS} items
+          </div>
+        )}
       </div>
 
       {/* My Rules */}
@@ -3227,7 +3419,43 @@ function TradingPlan() {
             <textarea value={rules.rulesBefore} onChange={e => setRules(r => ({ ...r, rulesBefore: e.target.value }))} style={{ ...ta, minHeight: '100px' }} placeholder="Your non-negotiable rules before any trade..." />
           </div>
         </div>
-        <button style={btn} onClick={saveRules}>{rulesSaved ? '✓ Rules Saved' : 'Save Rules'}</button>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <button style={btn} onClick={saveRules}>{rulesSaved ? '✓ Rules Saved' : 'Save Rules'}</button>
+
+          <button
+            onClick={generateFromRules}
+            disabled={generating}
+            style={{
+              background: 'transparent',
+              border: '1px solid rgba(170,255,160,0.25)',
+              color: generating ? 'var(--text-lo)' : '#aaffa0',
+              borderRadius: '10px', padding: '11px',
+              fontFamily: 'inherit', fontSize: '13px', fontWeight: '600',
+              cursor: generating ? 'wait' : 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+              transition: 'all 0.15s',
+              opacity: generating ? 0.7 : 1,
+            }}
+          >
+            {generating
+              ? <><Loader2 size={14} className="spin" /> Generating…</>
+              : <><Sparkles size={14} /> Generate Checklist from Rules</>}
+          </button>
+
+          {generateMsg && (
+            <div style={{
+              fontSize: '12px', textAlign: 'center', padding: '8px',
+              borderRadius: '8px',
+              background: generateMsg.type === 'success' ? 'rgba(170,255,160,0.08)' : 'rgba(255,128,128,0.08)',
+              color: generateMsg.type === 'success' ? '#aaffa0' : '#ff8080',
+              border: `1px solid ${generateMsg.type === 'success' ? 'rgba(170,255,160,0.2)' : 'rgba(255,128,128,0.2)'}`,
+              transition: 'all 0.15s',
+            }}>
+              {generateMsg.text}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
