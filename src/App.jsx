@@ -3156,12 +3156,8 @@ function TradingPlan() {
   const [editDraft, setEditDraft] = useState('')
 
   // Drag & drop state
-  const [draggedIndex,  setDraggedIndex]  = useState(null)
-  const [dragOverIndex, setDragOverIndex] = useState(null)
-  const dragOverRef   = useRef(null)
-  const draggedIdxRef = useRef(null)
-  useEffect(() => { dragOverRef.current   = dragOverIndex   }, [dragOverIndex])
-  useEffect(() => { draggedIdxRef.current = draggedIndex    }, [draggedIndex])
+  const [draggedIdx,  setDraggedIdx]  = useState(null)
+  const [dragOverIdx, setDragOverIdx] = useState(null)
 
   // AI generation state
   const [generating,  setGenerating]  = useState(false)
@@ -3212,83 +3208,6 @@ function TradingPlan() {
     setEditingId(newItem.id)
     setEditDraft('New item')
   }
-
-  // ── Reorder (drag & drop) ──
-  const reorderItems = (from, to) => {
-    if (from == null || to == null || from === to) return
-    setItems(prev => {
-      if (from < 0 || from >= prev.length || to < 0 || to >= prev.length) return prev
-      const next = [...prev]
-      const [moved] = next.splice(from, 1)
-      const insertIdx = from < to ? to - 1 : to
-      next.splice(insertIdx, 0, moved)
-      return persistItems(next)
-    })
-  }
-
-  const handleDragStart = (idx, e) => {
-    if (editingId) { e.preventDefault(); return }
-    setDraggedIndex(idx)
-    try {
-      e.dataTransfer.effectAllowed = 'move'
-      e.dataTransfer.setData('text/plain', String(idx))
-    } catch {}
-  }
-  const handleDragOver = (idx, e) => {
-    e.preventDefault()
-    try { e.dataTransfer.dropEffect = 'move' } catch {}
-    if (idx !== dragOverIndex) setDragOverIndex(idx)
-  }
-  const handleDrop = (idx, e) => {
-    e.preventDefault()
-    if (draggedIndex !== null && draggedIndex !== idx) {
-      reorderItems(draggedIndex, idx)
-    }
-    setDraggedIndex(null)
-    setDragOverIndex(null)
-  }
-  const handleDragEnd = () => {
-    setDraggedIndex(null)
-    setDragOverIndex(null)
-  }
-
-  // ── Touch drag (mobile) ──
-  const handleTouchStart = (idx, e) => {
-    if (editingId) return
-    e.stopPropagation()
-    setDraggedIndex(idx)
-  }
-  useEffect(() => {
-    if (draggedIndex === null) return
-    const handleMove = (ev) => {
-      const t = ev.touches?.[0]
-      if (!t) return
-      ev.preventDefault()
-      const el = document.elementFromPoint(t.clientX, t.clientY)
-      const row = el?.closest?.('[data-item-idx]')
-      if (row) {
-        const idx = parseInt(row.dataset.itemIdx, 10)
-        if (!isNaN(idx) && idx !== dragOverRef.current) setDragOverIndex(idx)
-      }
-    }
-    const handleEnd = () => {
-      const over = dragOverRef.current
-      const dragged = draggedIdxRef.current
-      if (over !== null && dragged !== null && over !== dragged) {
-        reorderItems(dragged, over)
-      }
-      setDraggedIndex(null)
-      setDragOverIndex(null)
-    }
-    document.addEventListener('touchmove', handleMove, { passive: false })
-    document.addEventListener('touchend',    handleEnd)
-    document.addEventListener('touchcancel', handleEnd)
-    return () => {
-      document.removeEventListener('touchmove', handleMove)
-      document.removeEventListener('touchend',    handleEnd)
-      document.removeEventListener('touchcancel', handleEnd)
-    }
-  }, [draggedIndex])
 
   const saveRules = () => {
     localStorage.setItem(RK, JSON.stringify(rules))
@@ -3361,45 +3280,51 @@ function TradingPlan() {
           {items.map((item, idx) => {
             const on = !!checks[item.id]
             const isEditing = editingId === item.id
-            const isDragging = draggedIndex === idx
-            const showDropIndicator = dragOverIndex === idx && draggedIndex !== null && draggedIndex !== idx
             return (
-              <div key={item.id} style={{ position: 'relative' }}>
-                {showDropIndicator && (
-                  <div style={{
-                    position: 'absolute', top: '-5px', left: '8px', right: '8px',
-                    height: '2px', borderRadius: '2px',
-                    background: 'linear-gradient(90deg, transparent, #aaffa0 20%, #aaffa0 80%, transparent)',
-                    boxShadow: '0 0 8px rgba(170,255,160,0.6)',
-                    pointerEvents: 'none', zIndex: 2,
-                  }} />
-                )}
-                <div
-                  className={`check-item${isEditing ? ' editing' : ''}`}
-                  data-item-idx={idx}
-                  draggable={!isEditing}
-                  onDragStart={e => handleDragStart(idx, e)}
-                  onDragOver={e => handleDragOver(idx, e)}
-                  onDrop={e => handleDrop(idx, e)}
-                  onDragEnd={handleDragEnd}
-                  onClick={() => !isEditing && toggle(item.id)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '10px',
-                    padding: '10px 12px', borderRadius: '10px',
-                    cursor: isEditing ? 'default' : 'pointer',
-                    border: `1px solid ${on && !isEditing ? 'rgba(170,255,160,0.22)' : 'var(--card-border)'}`,
-                    background: on && !isEditing ? 'rgba(170,255,160,0.05)' : isEditing ? 'rgba(255,255,255,0.02)' : 'transparent',
-                    transition: 'opacity 0.15s, background 0.15s, border-color 0.15s, color 0.15s',
-                    userSelect: 'none',
-                    opacity: isDragging ? 0.5 : 1,
-                  }}
-                >
+              <div
+                key={item.id}
+                className={`check-item${isEditing ? ' editing' : ''}`}
+                draggable={true}
+                onDragStart={(e) => {
+                  if (isEditing) { e.preventDefault(); return }
+                  e.dataTransfer.effectAllowed = 'move'
+                  setDraggedIdx(idx)
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault()
+                  e.dataTransfer.dropEffect = 'move'
+                  setDragOverIdx(idx)
+                }}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  if (draggedIdx === null || draggedIdx === idx) return
+                  const newItems = [...items]
+                  const [removed] = newItems.splice(draggedIdx, 1)
+                  newItems.splice(idx, 0, removed)
+                  setItems(newItems)
+                  localStorage.setItem('checklist_items', JSON.stringify(newItems))
+                  setDraggedIdx(null)
+                  setDragOverIdx(null)
+                }}
+                onDragEnd={() => { setDraggedIdx(null); setDragOverIdx(null) }}
+                onClick={() => !isEditing && toggle(item.id)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  padding: '10px 12px', borderRadius: '10px',
+                  cursor: isEditing ? 'default' : 'pointer',
+                  border: `1px solid ${on && !isEditing ? 'rgba(170,255,160,0.22)' : 'var(--card-border)'}`,
+                  borderTop: dragOverIdx === idx && draggedIdx !== idx ? '2px solid #aaffa0' : undefined,
+                  background: on && !isEditing ? 'rgba(170,255,160,0.05)' : isEditing ? 'rgba(255,255,255,0.02)' : 'transparent',
+                  transition: 'opacity 0.15s, background 0.15s, border-color 0.15s, color 0.15s',
+                  userSelect: 'none',
+                  opacity: draggedIdx === idx ? 0.4 : 1,
+                }}
+              >
                 {/* Drag handle */}
                 <GripVertical
                   size={14}
                   color="#444"
-                  style={{ flexShrink: 0, cursor: 'grab', touchAction: 'none' }}
-                  onTouchStart={e => handleTouchStart(idx, e)}
+                  style={{ flexShrink: 0, cursor: 'grab', userSelect: 'none' }}
                 />
 
                 {/* Checkbox */}
@@ -3469,7 +3394,6 @@ function TradingPlan() {
                   >
                     <Trash2 size={13} />
                   </button>
-                </div>
                 </div>
               </div>
             )
