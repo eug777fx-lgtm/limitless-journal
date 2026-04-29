@@ -1614,7 +1614,7 @@ function Dashboard({ trades, onAddTrade, loading, profile }) {
 
       {/* P&L curve + Calendar */}
       <div className="chart-grid">
-        <div style={card}>
+        <div style={{ ...card, alignSelf: 'start' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
             <div style={{ ...lbl, color: '#999' }}>Cumulative P&L</div>
             <div style={{ fontSize: '12px', color: totalPnl >= 0 ? '#aaffa0' : '#ff8080', fontWeight: '700', letterSpacing: '-0.3px' }}>
