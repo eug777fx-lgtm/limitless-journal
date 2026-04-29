@@ -636,7 +636,7 @@ const DEFAULT_COUNTRY = COUNTRIES.find(c => c.name === 'Aruba')
 
 // ─── Auth Page ────────────────────────────────────────────────
 function AuthPage({ onAuth }) {
-  const [tab, setTab]           = useState('login')
+  const [tab, setTab]           = useState('signup')
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [firstName, setFirstName] = useState('')
