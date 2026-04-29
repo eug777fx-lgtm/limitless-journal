@@ -632,7 +632,7 @@ const COUNTRIES = [
   { flag: '🇿🇼', name: 'Zimbabwe',                 code: '+263'  },
 ]
 
-const DEFAULT_COUNTRY = COUNTRIES.find(c => c.name === 'Aruba')
+const DEFAULT_COUNTRY = COUNTRIES.find(c => c.name === 'United States')
 
 // ─── Auth Page ────────────────────────────────────────────────
 function AuthPage({ onAuth }) {
@@ -799,12 +799,12 @@ function AuthPage({ onAuth }) {
                     >
                       {COUNTRIES.map(c => (
                         <option key={c.name} value={c.name}>
-                          {c.flag} {c.name} {c.code}
+                          {c.name} {c.code}
                         </option>
                       ))}
                     </select>
                     <div style={{ display: 'flex', alignItems: 'center', padding: '0 10px', color: '#555', fontSize: '13px', flexShrink: 0, borderRight: '1px solid #1c1c1c', whiteSpace: 'nowrap' }}>
-                      {country.flag} {country.code}
+                      {country.code}
                     </div>
                     <input
                       type="tel"
