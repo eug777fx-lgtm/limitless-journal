@@ -1614,15 +1614,15 @@ function Dashboard({ trades, onAddTrade, loading, profile }) {
 
       {/* P&L curve + Calendar */}
       <div className="chart-grid">
-        <div style={{ ...card, alignSelf: 'start' }}>
+        <div style={{ ...card, display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
             <div style={{ ...lbl, color: '#999' }}>Cumulative P&L</div>
             <div style={{ fontSize: '12px', color: totalPnl >= 0 ? '#aaffa0' : '#ff8080', fontWeight: '700', letterSpacing: '-0.3px' }}>
               {totalPnl >= 0 ? '+' : '−'}${Math.abs(Math.round(totalPnl)).toLocaleString()} MTD
             </div>
           </div>
-          <div style={chartVisible ? { animation: `chartReveal ${ANIM_MS}ms ease-out both` } : { clipPath: 'inset(0 100% 0 0)' }}>
-            <ResponsiveContainer width="100%" height={190}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, ...(chartVisible ? { animation: `chartReveal ${ANIM_MS}ms ease-out both` } : { clipPath: 'inset(0 100% 0 0)' }) }}>
+            <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={pnlCurve} margin={{ top: 4, right: 4, bottom: 0, left: 10 }}>
                 <defs>
                   <linearGradient id="pnlGrad" x1="0" y1="0" x2="0" y2="1">
