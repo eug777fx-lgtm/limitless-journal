@@ -8,7 +8,7 @@ import {
 import {
   LayoutDashboard, BookOpen, ClipboardList, Settings2,
   Lightbulb, Check, BarChart2, Plus, CalendarDays, Layers, Target,
-  Pencil, Trash2, GripVertical, Sparkles, Loader2,
+  Pencil, Trash2, GripVertical, Sparkles, Loader2, Shield, Users, Search, X,
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 
@@ -3991,6 +3991,293 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
   )
 }
 
+// ─── Admin Panel ──────────────────────────────────────────────
+const ADMIN_EMAIL = 'eug777fx@gmail.com'
+
+function AdminPanel({ session, setPage }) {
+  const [users,     setUsers]     = useState([])
+  const [trades,    setTrades]    = useState([])
+  const [loading,   setLoading]   = useState(true)
+  const [filter,    setFilter]    = useState('all') // 'all' | 'pending' | 'approved' | 'rejected'
+  const [search,    setSearch]    = useState('')
+  const [actioning, setActioning] = useState(null) // user id currently being updated
+  const [error,     setError]     = useState('')
+
+  const isAdmin = session?.user?.email === ADMIN_EMAIL
+
+  useEffect(() => {
+    if (!isAdmin) { setPage('dashboard'); return }
+    loadData()
+  }, [])
+
+  const loadData = async () => {
+    setLoading(true); setError('')
+    try {
+      const [{ data: u, error: uErr }, { data: t, error: tErr }] = await Promise.all([
+        supabase.from('admin_users_view').select('*').order('created_at', { ascending: false }),
+        supabase.from('trades').select('id'),
+      ])
+      if (uErr) throw uErr
+      if (tErr) throw tErr
+      setUsers(u || [])
+      setTrades(t || [])
+    } catch (e) {
+      setError(e.message || 'Failed to load')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const updateStatus = async (id, status) => {
+    setActioning(id)
+    try {
+      const { error } = await supabase.from('profiles').update({ status }).eq('id', id)
+      if (error) throw error
+      setUsers(prev => prev.map(u => u.id === id ? { ...u, status } : u))
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setActioning(null)
+    }
+  }
+
+  const deleteUser = async (id) => {
+    if (!confirm('Delete this user from profiles? (auth.users entry remains.)')) return
+    setActioning(id)
+    try {
+      const { error } = await supabase.from('profiles').delete().eq('id', id)
+      if (error) throw error
+      setUsers(prev => prev.filter(u => u.id !== id))
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setActioning(null)
+    }
+  }
+
+  // Stats
+  const totalUsers    = users.length
+  const pendingUsers  = users.filter(u => u.status === 'pending').length
+  const approvedUsers = users.filter(u => u.status === 'approved').length
+  const totalTrades   = trades.length
+
+  // Filtering
+  const term = search.trim().toLowerCase()
+  const filtered = users.filter(u => {
+    if (filter !== 'all' && (u.status || 'pending') !== filter) return false
+    if (term) {
+      const hay = `${u.first_name || ''} ${u.last_name || ''} ${u.username || ''} ${u.email || ''}`.toLowerCase()
+      if (!hay.includes(term)) return false
+    }
+    return true
+  })
+
+  const formatDate = (d) => {
+    if (!d) return '—'
+    try { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) } catch { return '—' }
+  }
+
+  const initialsOf = (u) => {
+    const name = u.first_name || u.username || u.email || 'U'
+    return String(name).slice(0, 2).toUpperCase()
+  }
+
+  const statusBadge = (status) => {
+    const s = status || 'pending'
+    const cfg = s === 'approved'
+      ? { bg: 'rgba(170,255,160,0.08)', border: 'rgba(170,255,160,0.25)', color: '#aaffa0', label: 'Approved' }
+      : s === 'rejected'
+        ? { bg: 'rgba(255,128,128,0.08)', border: 'rgba(255,128,128,0.25)', color: '#ff8080', label: 'Rejected' }
+        : { bg: 'rgba(255,217,102,0.08)', border: 'rgba(255,217,102,0.25)', color: '#ffd966', label: 'Pending' }
+    return (
+      <span style={{
+        background: cfg.bg, border: `1px solid ${cfg.border}`,
+        color: cfg.color, fontSize: '11px', fontWeight: '600',
+        padding: '3px 10px', borderRadius: '99px', letterSpacing: '0.02em',
+        whiteSpace: 'nowrap',
+      }}>{cfg.label}</span>
+    )
+  }
+
+  const statCard = { background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: '14px', padding: '18px 20px', backdropFilter: 'var(--card-blur, none)', WebkitBackdropFilter: 'var(--card-blur, none)' }
+
+  if (!isAdmin) return null
+
+  return (
+    <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both' }}>
+      {/* Header */}
+      <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '12px' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+            <Shield size={20} color="#aaffa0" />
+            <h1 style={{ fontSize: '28px', fontWeight: '800', letterSpacing: '-1px', color: 'var(--text-hi)' }}>Admin Panel</h1>
+          </div>
+          <div style={{ fontSize: '12px', color: 'var(--text-lo)', letterSpacing: '0.02em' }}>Signed in as {session?.user?.email}</div>
+        </div>
+        <button
+          onClick={loadData}
+          style={{ background: 'transparent', border: '1px solid var(--card-border)', borderRadius: '8px', color: 'var(--text-md)', fontSize: '12px', padding: '7px 14px', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s' }}
+        >Refresh</button>
+      </div>
+
+      {error && (
+        <div style={{ background: 'rgba(255,128,128,0.05)', border: '1px solid rgba(255,128,128,0.15)', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: '#ff8080', marginBottom: '16px' }}>
+          {error}
+        </div>
+      )}
+
+      {/* Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '16px' }} className="stat-grid">
+        {[
+          { label: 'Total Users',      val: totalUsers,    color: '#fff'    },
+          { label: 'Pending Approval', val: pendingUsers,  color: '#ffd966' },
+          { label: 'Approved Users',   val: approvedUsers, color: '#aaffa0' },
+          { label: 'Total Trades',     val: totalTrades,   color: '#fff'    },
+        ].map(s => (
+          <div key={s.label} style={statCard}>
+            <div style={{ ...lbl, marginBottom: '10px', color: '#999' }}>{s.label}</div>
+            <div style={{ fontSize: '24px', fontWeight: '800', letterSpacing: '-1px', color: s.color, lineHeight: 1 }}>
+              {loading ? '—' : s.val.toLocaleString()}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filters + Search */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+          {[
+            { id: 'all',      label: 'All',      n: users.length    },
+            { id: 'pending',  label: 'Pending',  n: pendingUsers    },
+            { id: 'approved', label: 'Approved', n: approvedUsers   },
+            { id: 'rejected', label: 'Rejected', n: users.filter(u => u.status === 'rejected').length },
+          ].map(f => {
+            const active = filter === f.id
+            return (
+              <button
+                key={f.id}
+                onClick={() => setFilter(f.id)}
+                style={{
+                  background: active ? 'var(--text-hi)' : 'transparent',
+                  border: `1px solid ${active ? 'var(--text-hi)' : 'var(--card-border)'}`,
+                  color: active ? 'var(--bg)' : 'var(--text-md)',
+                  fontSize: '12px', fontWeight: active ? '700' : '500',
+                  padding: '6px 14px', borderRadius: '99px',
+                  cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                }}
+              >
+                {f.label}
+                <span style={{ fontSize: '10px', opacity: 0.7 }}>{f.n}</span>
+              </button>
+            )
+          })}
+        </div>
+
+        <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
+          <Search size={13} color="#555" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search by name or email…"
+            style={{ ...inp, paddingLeft: '32px', paddingRight: search ? '32px' : '12px' }}
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: '#666', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', minHeight: 'auto' }}
+            >
+              <X size={12} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Users table */}
+      <div style={{ ...statCard, padding: '0', overflow: 'hidden' }}>
+        {loading ? (
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-lo)', fontSize: '13px' }}>Loading…</div>
+        ) : filtered.length === 0 ? (
+          <div style={{ padding: '48px 24px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+            <Users size={28} color="#333" />
+            <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-hi)' }}>No users found</div>
+            <div style={{ fontSize: '12px', color: 'var(--text-lo)' }}>{search ? 'Try a different search term' : 'No users match this filter'}</div>
+          </div>
+        ) : (
+          <div className="table-scroll">
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '720px' }}>
+              <thead>
+                <tr>
+                  {['User', 'Email', 'Signed Up', 'Status', 'Actions'].map((h, i) => (
+                    <th key={i} style={{
+                      textAlign: 'left', fontSize: '10px', fontWeight: '600',
+                      letterSpacing: '0.1em', textTransform: 'uppercase', color: '#666',
+                      padding: '14px 16px', borderBottom: '1px solid var(--divider)',
+                    }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(u => {
+                  const fullName = [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || '—'
+                  const busy = actioning === u.id
+                  return (
+                    <tr key={u.id} style={{ borderBottom: '1px solid var(--divider)' }}>
+                      <td style={{ padding: '12px 16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div style={{
+                            width: '32px', height: '32px', borderRadius: '50%',
+                            background: '#141414', border: '1px solid #222',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '11px', fontWeight: '700', color: '#aaa',
+                            flexShrink: 0,
+                          }}>{initialsOf(u)}</div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-hi)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fullName}</div>
+                            {u.username && fullName !== u.username && (
+                              <div style={{ fontSize: '11px', color: 'var(--text-lo)', marginTop: '1px' }}>@{u.username}</div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td style={{ padding: '12px 16px', fontSize: '12px', color: 'var(--text-md)', whiteSpace: 'nowrap' }}>{u.email || '—'}</td>
+                      <td style={{ padding: '12px 16px', fontSize: '12px', color: 'var(--text-lo)', whiteSpace: 'nowrap' }}>{formatDate(u.created_at)}</td>
+                      <td style={{ padding: '12px 16px' }}>{statusBadge(u.status)}</td>
+                      <td style={{ padding: '12px 16px' }}>
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                          {u.status !== 'approved' && (
+                            <button
+                              onClick={() => updateStatus(u.id, 'approved')}
+                              disabled={busy}
+                              style={{ background: 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', color: '#aaffa0', borderRadius: '6px', padding: '5px 11px', fontSize: '11px', fontWeight: '600', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', opacity: busy ? 0.6 : 1, transition: 'all 0.15s' }}
+                            >Approve</button>
+                          )}
+                          {u.status !== 'rejected' && (
+                            <button
+                              onClick={() => updateStatus(u.id, 'rejected')}
+                              disabled={busy}
+                              style={{ background: 'rgba(255,128,128,0.06)', border: '1px solid rgba(255,128,128,0.25)', color: '#ff8080', borderRadius: '6px', padding: '5px 11px', fontSize: '11px', fontWeight: '600', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', opacity: busy ? 0.6 : 1, transition: 'all 0.15s' }}
+                            >Reject</button>
+                          )}
+                          <button
+                            onClick={() => deleteUser(u.id)}
+                            disabled={busy}
+                            style={{ background: 'transparent', border: '1px solid #2a2a2a', color: '#666', borderRadius: '6px', padding: '5px 11px', fontSize: '11px', fontWeight: '500', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', opacity: busy ? 0.6 : 1, transition: 'all 0.15s' }}
+                          >Delete</button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── App Shell ────────────────────────────────────────────────
 export default function App() {
   const [session,        setSession]        = useState(null)
@@ -4034,6 +4321,21 @@ export default function App() {
     })
 
     return () => subscription.unsubscribe()
+  }, [])
+
+  // ── Admin access (URL /admin + Ctrl+Shift+A shortcut) ──
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.pathname === '/admin') {
+      setPage('admin')
+    }
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
+        e.preventDefault()
+        setPage('admin')
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
   }, [])
 
   const loadProfile = async (sess) => {
@@ -4247,6 +4549,25 @@ export default function App() {
             Log out
           </button>
         </div>
+
+        {/* Hidden admin link — only visible for the admin email */}
+        {session?.user?.email === ADMIN_EMAIL && (
+          <button
+            onClick={() => setPage('admin')}
+            style={{
+              marginTop: '6px', width: '100%',
+              background: 'transparent', border: 'none',
+              color: page === 'admin' ? '#aaffa0' : '#2a2a2a',
+              fontSize: '9px', letterSpacing: '0.2em', textTransform: 'uppercase',
+              cursor: 'pointer', fontFamily: 'inherit', padding: '4px',
+              transition: 'color 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = '#aaffa0' }}
+            onMouseLeave={e => { e.currentTarget.style.color = page === 'admin' ? '#aaffa0' : '#2a2a2a' }}
+          >
+            · admin ·
+          </button>
+        )}
       </aside>
 
       {/* ── Mobile top header (hidden on desktop via CSS) ── */}
@@ -4285,6 +4606,7 @@ export default function App() {
         {page === 'news'        && <NewsCalendar />}
         {page === 'plan'        && <TradingPlan />}
         {page === 'settings'    && <Settings theme={theme} setTheme={handleSetTheme} session={session} profile={profile} setProfile={setProfile} glassMode={glassMode} setGlassMode={v => { setGlassMode(v); localStorage.setItem('glass_mode', v) }} onLogout={logout} trades={trades} />}
+        {page === 'admin'       && <AdminPanel session={session} setPage={setPage} />}
       </main>
 
       <AddTradeModal
