@@ -637,6 +637,7 @@ const DEFAULT_COUNTRY = COUNTRIES.find(c => c.name === 'United States')
 // ─── Auth Page ────────────────────────────────────────────────
 function AuthPage({ onAuth }) {
   const [tab, setTab]           = useState('signup')
+  const [view, setView]         = useState('auth') // 'auth' | 'forgot'
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [firstName, setFirstName] = useState('')
@@ -646,6 +647,28 @@ function AuthPage({ onAuth }) {
   const [error, setError]       = useState('')
   const [message, setMessage]   = useState('')
   const [loading, setLoading]   = useState(false)
+
+  const goForgot = () => { setView('forgot'); setError(''); setMessage('') }
+  const goAuth   = () => { setView('auth');   setError(''); setMessage('') }
+
+  const submitForgot = async () => {
+    setError('')
+    setMessage('')
+    if (!email.trim()) { setError('Enter your email'); return }
+    setLoading(true)
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: 'https://limitless-journal.vercel.app',
+      })
+      if (error) throw error
+      setMessage('Check your email for a password reset link')
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+  const onForgotKey = (e) => { if (e.key === 'Enter') submitForgot() }
 
   const submit = async () => {
     setError('')
@@ -724,6 +747,59 @@ function AuthPage({ onAuth }) {
 
         {/* Card */}
         <div style={{ ...card, padding: '0', overflow: 'hidden' }}>
+          {view === 'forgot' ? (
+            <div className="auth-form-inner" style={{ padding: '28px 28px 24px' }}>
+              <div style={{ marginBottom: '18px' }}>
+                <div style={{ fontSize: '17px', fontWeight: '700', letterSpacing: '-0.3px', color: '#fff', marginBottom: '6px' }}>Reset Password</div>
+                <div style={{ fontSize: '12px', color: '#777', lineHeight: 1.5 }}>Enter your email and we'll send you a reset link.</div>
+              </div>
+
+              {message && (
+                <div style={{ background: 'rgba(170,255,160,0.05)', border: '1px solid rgba(170,255,160,0.15)', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: '#aaffa0', marginBottom: '18px', lineHeight: 1.5 }}>
+                  {message}
+                </div>
+              )}
+              {error && (
+                <div style={{ background: 'rgba(255,128,128,0.05)', border: '1px solid rgba(255,128,128,0.15)', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: '#ff8080', marginBottom: '18px', lineHeight: 1.5 }}>
+                  {error}
+                </div>
+              )}
+
+              <div className="auth-field" style={{ marginBottom: '18px' }}>
+                <div style={{ ...lbl, marginBottom: '7px', color: '#999' }}>Email</div>
+                <input
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  onKeyDown={onForgotKey}
+                  style={inp}
+                  autoComplete="email"
+                />
+              </div>
+
+              <button
+                style={{ ...btn, width: '100%', padding: '12px', opacity: loading ? 0.6 : 1, marginBottom: '14px' }}
+                onClick={submitForgot}
+                disabled={loading}
+              >
+                {loading ? '...' : 'Send Reset Link'}
+              </button>
+
+              <div style={{ textAlign: 'center' }}>
+                <button
+                  type="button"
+                  onClick={goAuth}
+                  style={{ background: 'transparent', border: 'none', color: '#666', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', padding: '4px 0', letterSpacing: '0.02em', transition: 'color 0.15s' }}
+                  onMouseEnter={e => { e.currentTarget.style.color = '#aaa' }}
+                  onMouseLeave={e => { e.currentTarget.style.color = '#666' }}
+                >
+                  ← Back to Login
+                </button>
+              </div>
+            </div>
+          ) : (
+          <>
           {/* Tabs */}
           <div className="auth-tabs" style={{ display: 'flex', borderBottom: '1px solid #141414' }}>
             <button style={tabStyle(tab === 'login')}  onClick={() => switchTab('login')}>Login</button>
@@ -835,7 +911,7 @@ function AuthPage({ onAuth }) {
             </div>
 
             {/* Password */}
-            <div className="auth-pw" style={{ marginBottom: '22px' }}>
+            <div className="auth-pw" style={{ marginBottom: tab === 'login' ? '8px' : '22px' }}>
               <div style={{ ...lbl, marginBottom: '7px', color: '#999' }}>Password</div>
               <input
                 type="password"
@@ -848,6 +924,20 @@ function AuthPage({ onAuth }) {
               />
             </div>
 
+            {tab === 'login' && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '18px' }}>
+                <button
+                  type="button"
+                  onClick={goForgot}
+                  style={{ background: 'transparent', border: 'none', color: '#666', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', padding: '2px 0', letterSpacing: '0.02em', transition: 'color 0.15s' }}
+                  onMouseEnter={e => { e.currentTarget.style.color = '#aaa' }}
+                  onMouseLeave={e => { e.currentTarget.style.color = '#666' }}
+                >
+                  Forgot Password?
+                </button>
+              </div>
+            )}
+
             <button
               style={{ ...btn, width: '100%', padding: '12px', opacity: loading ? 0.6 : 1 }}
               onClick={submit}
@@ -856,6 +946,8 @@ function AuthPage({ onAuth }) {
               {loading ? '...' : tab === 'login' ? 'Log In' : 'Create Account'}
             </button>
           </div>
+          </>
+          )}
         </div>
       </div>
     </div>
@@ -1024,6 +1116,110 @@ function CalendarHeatmap({ trades, viewDate, onPrev, onNext }) {
 }
 
 // ─── Pending Screen ───────────────────────────────────────────
+// ─── Set New Password (after clicking reset link) ─────────────
+function SetNewPasswordPage({ onDone }) {
+  const [pw1, setPw1]       = useState('')
+  const [pw2, setPw2]       = useState('')
+  const [error, setError]   = useState('')
+  const [message, setMessage] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const submit = async () => {
+    setError(''); setMessage('')
+    if (pw1.length < 6) { setError('Password must be at least 6 characters'); return }
+    if (pw1 !== pw2)    { setError('Passwords do not match'); return }
+    setLoading(true)
+    try {
+      const { error } = await supabase.auth.updateUser({ password: pw1 })
+      if (error) throw error
+      setMessage('Password updated! Redirecting…')
+      setTimeout(() => { onDone?.() }, 1200)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+  const onKey = (e) => { if (e.key === 'Enter') submit() }
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      width: '100vw', height: '100vh',
+      background: '#080808', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+      position: 'relative', overflowY: 'auto',
+    }}>
+      <style dangerouslySetInnerHTML={{ __html: ANIM_CSS }} />
+      <AuroraBackground theme="white" />
+
+      <div className="auth-outer" style={{ position: 'relative', zIndex: 2, width: '380px', margin: '40px auto' }}>
+        {/* Logo */}
+        <div className="auth-logo-block" style={{ textAlign: 'center', marginBottom: '36px' }}>
+          <img className="auth-logo-img" src="/logo2.png" alt="logo" style={{ height: '64px', marginBottom: '14px', display: 'block', margin: '0 auto 14px' }} />
+          <div style={{ fontSize: '22px', fontWeight: '800', letterSpacing: '0.22em', color: '#fff', lineHeight: 1 }}>LIMITLESS</div>
+          <div className="auth-tagline" style={{ fontSize: '9px', color: '#fff', letterSpacing: '0.3em', marginTop: '7px', textTransform: 'uppercase', fontWeight: '600' }}>
+            Private Journal
+          </div>
+        </div>
+
+        {/* Card */}
+        <div style={{ ...card, padding: '0', overflow: 'hidden' }}>
+          <div className="auth-form-inner" style={{ padding: '28px 28px 24px' }}>
+            <div style={{ marginBottom: '18px' }}>
+              <div style={{ fontSize: '17px', fontWeight: '700', letterSpacing: '-0.3px', color: '#fff', marginBottom: '6px' }}>Set New Password</div>
+              <div style={{ fontSize: '12px', color: '#777', lineHeight: 1.5 }}>Enter and confirm your new password.</div>
+            </div>
+
+            {message && (
+              <div style={{ background: 'rgba(170,255,160,0.05)', border: '1px solid rgba(170,255,160,0.15)', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: '#aaffa0', marginBottom: '18px', lineHeight: 1.5 }}>
+                {message}
+              </div>
+            )}
+            {error && (
+              <div style={{ background: 'rgba(255,128,128,0.05)', border: '1px solid rgba(255,128,128,0.15)', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: '#ff8080', marginBottom: '18px', lineHeight: 1.5 }}>
+                {error}
+              </div>
+            )}
+
+            <div className="auth-field" style={{ marginBottom: '14px' }}>
+              <div style={{ ...lbl, marginBottom: '7px', color: '#999' }}>New Password</div>
+              <input
+                type="password"
+                placeholder="••••••••"
+                value={pw1}
+                onChange={e => setPw1(e.target.value)}
+                onKeyDown={onKey}
+                style={inp}
+                autoComplete="new-password"
+              />
+            </div>
+            <div className="auth-field" style={{ marginBottom: '20px' }}>
+              <div style={{ ...lbl, marginBottom: '7px', color: '#999' }}>Confirm Password</div>
+              <input
+                type="password"
+                placeholder="••••••••"
+                value={pw2}
+                onChange={e => setPw2(e.target.value)}
+                onKeyDown={onKey}
+                style={inp}
+                autoComplete="new-password"
+              />
+            </div>
+
+            <button
+              style={{ ...btn, width: '100%', padding: '12px', opacity: loading ? 0.6 : 1 }}
+              onClick={submit}
+              disabled={loading}
+            >
+              {loading ? '...' : 'Update Password'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function PendingScreen({ onLogout }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100vw', height: '100vh', background: '#080808', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif", position: 'relative' }}>
@@ -3799,6 +3995,7 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
 export default function App() {
   const [session,        setSession]        = useState(null)
   const [authLoading,    setAuthLoading]    = useState(true)
+  const [passwordRecovery, setPasswordRecovery] = useState(false)
   const [profileLoading, setProfileLoading] = useState(false)
   const [tradesLoading,  setTradesLoading]  = useState(true)
   const [profile,        setProfile]        = useState(null)
@@ -3821,7 +4018,13 @@ export default function App() {
       }
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setPasswordRecovery(true)
+        setSession(session)
+        setAuthLoading(false)
+        return
+      }
       setSession(session)
       if (!session) {
         setProfile(null)
@@ -3898,6 +4101,17 @@ export default function App() {
         <style dangerouslySetInnerHTML={{ __html: ANIM_CSS }} />
       </div>
     )
+  }
+
+  // ── Password recovery gate (takes priority — comes from email link) ──
+  if (passwordRecovery) {
+    return <SetNewPasswordPage onDone={() => {
+      setPasswordRecovery(false)
+      // Strip recovery hash from URL and navigate to dashboard
+      try { window.history.replaceState(null, '', window.location.pathname) } catch {}
+      if (session) loadProfile(session)
+      setPage('dashboard')
+    }} />
   }
 
   // ── Auth gate ──
