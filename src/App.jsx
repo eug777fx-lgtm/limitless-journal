@@ -4613,6 +4613,7 @@ function AdminPanel({ session, setPage }) {
       <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', borderBottom: '1px solid var(--divider)', overflowX: 'auto' }}>
         {[
           { id: 'overview', label: 'Overview',  icon: BarChart2 },
+          { id: 'users',    label: 'Users',     icon: Users },
           { id: 'waitlist', label: 'Waitlist',  icon: Users, badge: pendingUsers || 0 },
           { id: 'tickets',  label: 'Tickets',   icon: MessageSquare, badge: tickets.filter(t => t.status === 'open').length },
           { id: 'health',   label: 'Health',    icon: Activity },
@@ -4645,113 +4646,216 @@ function AdminPanel({ session, setPage }) {
 
       {tab === 'overview' && <>
 
-      {/* Stats */}
-      <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '10px', marginBottom: '16px' }}>
+      {/* === Top row: 4 stat cards === */}
+      <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px' }}>
         {[
-          { label: 'Total Users',      val: loading ? '—' : totalUsers.toLocaleString(),                                   color: '#fff'    },
-          { label: 'Pending Approval', val: loading ? '—' : pendingUsers.toLocaleString(),                                 color: '#ffd966' },
-          { label: 'Approved Users',   val: loading ? '—' : approvedUsers.toLocaleString(),                                color: '#aaffa0' },
-          { label: 'Total Trades',     val: loading ? '—' : totalTrades.toLocaleString(),                                  color: '#fff'    },
-          { label: 'Trades Today',     val: loading ? '—' : tradesToday.toLocaleString(),                                  color: '#fff'    },
-          { label: 'Total P&L',        val: loading ? '—' : `${totalPnlAll >= 0 ? '+' : '−'}$${Math.abs(Math.round(totalPnlAll)).toLocaleString()}`, color: totalPnlAll >= 0 ? '#aaffa0' : '#ff8080' },
-        ].map(s => (
-          <div key={s.label} style={statCard}>
-            <div style={{ ...lbl, marginBottom: '10px', color: '#999' }}>{s.label}</div>
-            <div style={{ fontSize: '20px', fontWeight: '800', letterSpacing: '-0.5px', color: s.color, lineHeight: 1 }}>
-              {s.val}
+          { label: 'Total Users',      val: totalUsers,    Icon: Users,         color: '#fff',    iconColor: '#aaa',    accent: 'rgba(255,255,255,0.06)' },
+          { label: 'Pending Approval', val: pendingUsers,  Icon: Bell,          color: '#ffd966', iconColor: '#ffd966', accent: 'rgba(255,217,102,0.10)', highlight: pendingUsers > 0 },
+          { label: 'Approved Users',   val: approvedUsers, Icon: Check,         color: '#aaffa0', iconColor: '#aaffa0', accent: 'rgba(170,255,160,0.08)' },
+          { label: 'Total Trades',     val: totalTrades,   Icon: BarChart2,     color: '#fff',    iconColor: '#aaa',    accent: 'rgba(255,255,255,0.06)' },
+        ].map(s => {
+          const Icon = s.Icon
+          return (
+            <div key={s.label} style={{ ...statCard, padding: '20px', position: 'relative', borderColor: s.highlight ? 'rgba(255,217,102,0.30)' : 'var(--card-border)', boxShadow: s.highlight ? '0 0 0 1px rgba(255,217,102,0.15) inset' : 'none' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: s.accent, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon size={16} color={s.iconColor} />
+                </div>
+              </div>
+              <div style={{ fontSize: '26px', fontWeight: '800', letterSpacing: '-1px', color: s.color, lineHeight: 1, marginBottom: '6px' }}>
+                {loading ? '—' : s.val.toLocaleString()}
+              </div>
+              <div style={{ ...lbl, color: '#777' }}>{s.label}</div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
-      {/* Charts + Activity feed */}
-      <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: '12px', marginBottom: '16px' }} className="chart-grid">
-        {/* Signups bar chart */}
+      {/* === Second row: Recent Signups + Quick Stats === */}
+      <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: '12px', marginBottom: '20px' }} className="chart-grid">
+        {/* Recent Signups */}
         <div style={statCard}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <div style={{ ...lbl, color: '#999' }}>Signups · Last 7 Days</div>
-            <div style={{ fontSize: '11px', color: '#666' }}>{signupChart.reduce((s, d) => s + d.count, 0)} total</div>
+            <div style={{ ...lbl, color: '#888' }}>Recent Signups</div>
+            <div style={{ fontSize: '11px', color: '#555' }}>Last 5</div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px', height: '140px' }}>
-            {signupChart.map((d, i) => {
-              const h = Math.round((d.count / maxSignupCount) * 100)
-              return (
-                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', minWidth: 0 }}>
-                  <div style={{ flex: 1, width: '100%', display: 'flex', alignItems: 'flex-end' }}>
-                    <div style={{
-                      width: '100%',
-                      height: `${h}%`,
-                      minHeight: d.count > 0 ? '4px' : '2px',
-                      background: d.count > 0 ? 'linear-gradient(180deg, #aaffa0 0%, #00cc66 100%)' : '#1a1a1a',
-                      borderRadius: '4px 4px 0 0',
-                      transition: 'height 0.5s ease',
-                    }} />
-                  </div>
-                  <div style={{ fontSize: '10px', color: '#666' }}>{d.day}</div>
-                  <div style={{ fontSize: '11px', fontWeight: '700', color: d.count > 0 ? '#aaffa0' : '#444' }}>{d.count}</div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Activity Feed */}
-        <div style={statCard}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-            <div style={{ ...lbl, color: '#999' }}>Recent Activity</div>
-            <div style={{ fontSize: '10px', color: '#666' }}>auto-refresh</div>
-          </div>
-          {activity.length === 0 ? (
-            <div style={{ fontSize: '12px', color: 'var(--text-lo)', padding: '12px 0' }}>No activity yet</div>
+          {users.length === 0 ? (
+            <div style={{ padding: '24px 0', textAlign: 'center', fontSize: '12px', color: 'var(--text-lo)' }}>No users yet</div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {activity.map((a, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                  <div style={{
-                    width: '6px', height: '6px', borderRadius: '50%', flexShrink: 0, marginTop: '6px',
-                    background: a.type === 'signup' ? '#ffd966' : '#aaffa0',
-                    boxShadow: `0 0 6px ${a.type === 'signup' ? 'rgba(255,217,102,0.5)' : 'rgba(170,255,160,0.5)'}`,
-                  }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: '12px', color: 'var(--text-hi)', lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.text}</div>
-                    <div style={{ fontSize: '10px', color: '#666', marginTop: '2px' }}>{relativeTime(a.ts)}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              {users.slice(0, 5).map(u => {
+                const fullName = [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || u.email || '—'
+                const busy = actioning === u.id
+                const isPending = (u.status || 'pending') === 'pending'
+                return (
+                  <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 0', borderBottom: '1px solid #141414' }}>
+                    <div style={{ width: '34px', height: '34px', borderRadius: '50%', background: '#141414', border: '1px solid #222', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', color: '#aaa', flexShrink: 0 }}>{initialsOf(u)}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-hi)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fullName}</div>
+                      <div style={{ fontSize: '11px', color: '#666', marginTop: '1px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.email || '—'}</div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                      {statusBadge(u.status)}
+                      <div style={{ fontSize: '10px', color: '#555', minWidth: '60px', textAlign: 'right' }}>{relativeTime(u.created_at)}</div>
+                      {isPending && (
+                        <button
+                          onClick={() => updateStatus(u.id, 'approved')}
+                          disabled={busy}
+                          style={{ background: 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', color: '#aaffa0', borderRadius: '6px', padding: '5px 11px', fontSize: '11px', fontWeight: '700', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', opacity: busy ? 0.6 : 1 }}
+                        >Approve</button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
+
+        {/* Quick Stats */}
+        <div style={statCard}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+            <Activity size={14} color="#aaffa0" />
+            <div style={{ ...lbl, color: '#888' }}>Quick Stats</div>
+          </div>
+          {(() => {
+            const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7)
+            const newSignupsWeek = users.filter(u => u.created_at && new Date(u.created_at) >= weekAgo).length
+            const openTickets = tickets.filter(t => t.status === 'open').length
+            const lastSignup = users[0]?.created_at
+            const rows = [
+              { label: 'Trades logged today',  val: tradesToday.toLocaleString(),                color: '#fff' },
+              { label: 'New signups this week', val: newSignupsWeek.toLocaleString(),             color: newSignupsWeek > 0 ? '#aaffa0' : '#fff' },
+              { label: 'Open support tickets', val: openTickets.toLocaleString(),                color: openTickets > 0 ? '#ff8080' : '#fff' },
+              { label: 'Last signup',           val: lastSignup ? relativeTime(lastSignup) : '—', color: '#fff' },
+            ]
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {rows.map((r, i) => (
+                  <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderTop: i === 0 ? 'none' : '1px solid #141414' }}>
+                    <div style={{ fontSize: '12px', color: 'var(--text-md)' }}>{r.label}</div>
+                    <div style={{ fontSize: '15px', fontWeight: '700', color: r.color, letterSpacing: '-0.3px' }}>{r.val}</div>
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
+        </div>
       </div>
 
-      {/* Announcement banner editor */}
-      <div style={{ ...statCard, marginBottom: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
-          <Megaphone size={16} color={announcement.active ? '#aaffa0' : '#666'} />
-          <div style={{ ...lbl, color: '#999' }}>Announcement Banner</div>
-          {announcement.active && (
-            <span style={{ fontSize: '10px', fontWeight: '700', color: '#aaffa0', letterSpacing: '0.06em', background: 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', borderRadius: '99px', padding: '2px 8px' }}>LIVE</span>
-          )}
+      {/* === Third row: Feature Flags 2x2 === */}
+      <div style={{ marginBottom: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+          <Flag size={14} color="#aaffa0" />
+          <div style={{ ...lbl, color: '#888' }}>Feature Flags</div>
+          <span style={{ fontSize: '10px', color: '#555' }}>applied to all users</span>
+          {flagsSaved && <span style={{ fontSize: '11px', color: '#aaffa0', marginLeft: 'auto' }}>✓ Saved</span>}
         </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }} className="chart-grid">
+          {[
+            { key: 'monthlyGoalTracker', label: 'Monthly Goal Tracker',   desc: 'Dashboard widget for income progress', Icon: Target       },
+            { key: 'aiChecklist',        label: 'AI Checklist Generation', desc: 'Generate checklist from rules',        Icon: Sparkles     },
+            { key: 'newsCalendar',       label: 'News Calendar',           desc: 'Economic events page + nav entry',     Icon: CalendarDays },
+            { key: 'feedSection',        label: 'Recent Trades Feed',      desc: 'Recent trades on the dashboard',       Icon: BookOpen     },
+          ].map(f => {
+            const on = !!flags[f.key]
+            const Icon = f.Icon
+            return (
+              <button
+                key={f.key}
+                onClick={() => !flagsSaving && toggleFlag(f.key)}
+                disabled={flagsSaving}
+                style={{
+                  background: 'var(--card-bg)',
+                  border: `1px solid ${on ? 'rgba(170,255,160,0.30)' : 'var(--card-border)'}`,
+                  borderRadius: '14px',
+                  padding: '18px',
+                  cursor: flagsSaving ? 'wait' : 'pointer',
+                  fontFamily: 'inherit',
+                  textAlign: 'left',
+                  display: 'flex', alignItems: 'center', gap: '14px',
+                  transition: 'all 0.15s',
+                  opacity: flagsSaving ? 0.6 : 1,
+                  boxShadow: on ? '0 0 0 1px rgba(170,255,160,0.10) inset, 0 0 18px rgba(170,255,160,0.08)' : 'none',
+                  minHeight: 'auto',
+                }}
+              >
+                <div style={{
+                  width: '38px', height: '38px', borderRadius: '10px', flexShrink: 0,
+                  background: on ? 'rgba(170,255,160,0.10)' : '#141414',
+                  border: `1px solid ${on ? 'rgba(170,255,160,0.25)' : '#222'}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Icon size={16} color={on ? '#aaffa0' : '#777'} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-hi)', marginBottom: '3px' }}>{f.label}</div>
+                  <div style={{ fontSize: '11px', color: '#666', lineHeight: 1.4 }}>{f.desc}</div>
+                </div>
+                <div className={`toggle-track ${on ? 'on' : ''}`} style={{ flexShrink: 0, pointerEvents: 'none' }}>
+                  <div className="toggle-knob" />
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* === Announcement banner with preview === */}
+      <div style={statCard}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Megaphone size={14} color={announcement.active ? '#aaffa0' : '#666'} />
+            <div style={{ ...lbl, color: '#888' }}>Announcement Banner</div>
+            {announcement.active && (
+              <span style={{ fontSize: '10px', fontWeight: '700', color: '#aaffa0', letterSpacing: '0.06em', background: 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', borderRadius: '99px', padding: '2px 8px' }}>LIVE</span>
+            )}
+          </div>
+          <div className={`toggle-track ${announcement.active ? 'on' : ''}`} onClick={() => !annSaving && saveAnnouncement(!announcement.active)} style={{ flexShrink: 0, opacity: annSaving ? 0.5 : 1 }}>
+            <div className="toggle-knob" />
+          </div>
+        </div>
+
         <input
           value={annDraft}
           onChange={e => setAnnDraft(e.target.value)}
           placeholder="🔥 New feature: CSV import now available!"
-          style={{ ...inp, marginBottom: '10px' }}
+          style={{ ...inp, marginBottom: '14px' }}
         />
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+
+        {/* Live preview */}
+        <div style={{ marginBottom: '14px' }}>
+          <div style={{ fontSize: '10px', fontWeight: '600', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#555', marginBottom: '8px' }}>Preview</div>
+          <div style={{
+            background: 'linear-gradient(90deg, rgba(170,255,160,0.10), rgba(170,255,160,0.04))',
+            border: '1px solid rgba(170,255,160,0.20)',
+            borderRadius: '8px',
+            color: '#aaffa0', fontSize: '13px', fontWeight: '500',
+            padding: '12px 18px', textAlign: 'center', letterSpacing: '0.01em',
+            opacity: annDraft.trim() ? 1 : 0.4,
+          }}>
+            {annDraft.trim() || 'Banner preview will appear here'}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+          <div style={{ fontSize: '11px', color: '#555' }}>
+            {announcement.active ? 'Visible to all users right now.' : 'Currently hidden.'}
+          </div>
           <button
-            onClick={() => saveAnnouncement(true)}
+            onClick={() => saveAnnouncement(announcement.active)}
             disabled={annSaving || !annDraft.trim()}
-            style={{ background: '#fff', color: '#000', border: 'none', borderRadius: '99px', padding: '8px 18px', fontSize: '12px', fontWeight: '600', cursor: annSaving ? 'wait' : 'pointer', fontFamily: 'inherit', opacity: annSaving || !annDraft.trim() ? 0.5 : 1 }}
-          >Save & Show</button>
-          <button
-            onClick={() => saveAnnouncement(false)}
-            disabled={annSaving}
-            style={{ background: 'transparent', border: '1px solid var(--card-border)', color: 'var(--text-md)', borderRadius: '99px', padding: '8px 16px', fontSize: '12px', fontWeight: '500', cursor: annSaving ? 'wait' : 'pointer', fontFamily: 'inherit' }}
-          >Hide Banner</button>
-          {annSaved && <span style={{ fontSize: '12px', color: '#aaffa0' }}>✓ Saved</span>}
+            style={{ background: '#fff', color: '#000', border: 'none', borderRadius: '99px', padding: '8px 20px', fontSize: '12px', fontWeight: '700', cursor: annSaving ? 'wait' : 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px', opacity: annSaving || !annDraft.trim() ? 0.5 : 1 }}
+          >
+            <Save size={12} /> {annSaved ? 'Saved' : 'Save'}
+          </button>
         </div>
       </div>
+
+      </>}
+
+      {/* ── Users tab (full management view) ── */}
+      {tab === 'users' && <>
 
       {/* Invite Links */}
       <div style={{ ...statCard, marginBottom: '16px' }}>
@@ -5030,35 +5134,6 @@ function AdminPanel({ session, setPage }) {
             </table>
           </div>
         )}
-      </div>
-
-      {/* Feature flags */}
-      <div style={{ ...statCard, marginTop: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
-          <Flag size={16} color="#aaffa0" />
-          <div style={{ ...lbl, color: '#999' }}>Feature Flags</div>
-          <span style={{ fontSize: '10px', color: '#666' }}>applied to all users</span>
-          {flagsSaved && <span style={{ fontSize: '11px', color: '#aaffa0', marginLeft: 'auto' }}>✓ Saved</span>}
-        </div>
-        {[
-          { key: 'monthlyGoalTracker', label: 'Monthly Goal Tracker',   desc: 'Dashboard widget for income goal progress' },
-          { key: 'aiChecklist',        label: 'AI Checklist Generation', desc: 'Generate Checklist from Rules button' },
-          { key: 'newsCalendar',       label: 'News Calendar',           desc: 'Economic events page + sidebar entry' },
-          { key: 'feedSection',        label: 'Recent Trades Feed',      desc: 'Recent trades section on Dashboard' },
-        ].map(f => {
-          const on = !!flags[f.key]
-          return (
-            <div key={f.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: '1px solid #141414' }}>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-hi)' }}>{f.label}</div>
-                <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>{f.desc}</div>
-              </div>
-              <div className={`toggle-track ${on ? 'on' : ''}`} onClick={() => !flagsSaving && toggleFlag(f.key)} style={{ flexShrink: 0, opacity: flagsSaving ? 0.5 : 1 }}>
-                <div className="toggle-knob" />
-              </div>
-            </div>
-          )
-        })}
       </div>
 
       </>}
