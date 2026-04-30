@@ -10,6 +10,7 @@ import {
   Lightbulb, Check, BarChart2, Plus, CalendarDays, Layers, Target,
   Pencil, Trash2, GripVertical, Sparkles, Loader2, Shield, Users, Search, X,
   Bell, Megaphone, Link2, Download, ChevronDown, RefreshCw,
+  Mail, Ban, Flag, Activity, MessageSquare, Save,
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 
@@ -1267,6 +1268,28 @@ function SetNewPasswordPage({ onDone }) {
   )
 }
 
+function BannedScreen({ onLogout }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100vw', height: '100vh', background: '#080808', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif", position: 'relative' }}>
+      <style dangerouslySetInnerHTML={{ __html: ANIM_CSS }} />
+      <AuroraBackground theme="white" />
+      <div style={{ position: 'relative', zIndex: 2, textAlign: 'center', padding: '40px', maxWidth: '420px' }}>
+        <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'rgba(255,128,128,0.06)', border: '1px solid rgba(255,128,128,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+          <Ban size={26} color="#ff8080" />
+        </div>
+        <div style={{ fontSize: '22px', fontWeight: '800', letterSpacing: '-0.5px', color: '#fff', marginBottom: '10px' }}>Account Suspended</div>
+        <div style={{ fontSize: '13px', color: '#888', lineHeight: 1.6, marginBottom: '24px' }}>
+          Your account has been suspended. Contact support if you believe this is a mistake.
+        </div>
+        <button
+          onClick={onLogout}
+          style={{ background: 'transparent', border: '1px solid #2a2a2a', color: '#888', borderRadius: '99px', padding: '10px 24px', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.04em' }}
+        >Log Out</button>
+      </div>
+    </div>
+  )
+}
+
 function PendingScreen({ onLogout }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100vw', height: '100vh', background: '#080808', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif", position: 'relative' }}>
@@ -1716,7 +1739,7 @@ function GoalTrackerWidget({ monthPnl, monthlyGoal }) {
 }
 
 // ─── Dashboard ────────────────────────────────────────────────
-function Dashboard({ trades, onAddTrade, loading, profile }) {
+function Dashboard({ trades, onAddTrade, loading, profile, flags = {} }) {
   const [calViewDate,  setCalViewDate]  = useState(() => new Date())
   const [chartVisible, setChartVisible] = useState(false)
 
@@ -1851,7 +1874,7 @@ function Dashboard({ trades, onAddTrade, loading, profile }) {
       </div>
 
       {/* Monthly Goal Tracker */}
-      {goalEnabled && monthlyGoal > 0 && (
+      {flags.monthlyGoalTracker !== false && goalEnabled && monthlyGoal > 0 && (
         <GoalTrackerWidget monthPnl={monthPnl} monthlyGoal={monthlyGoal} />
       )}
 
@@ -1912,6 +1935,7 @@ function Dashboard({ trades, onAddTrade, loading, profile }) {
           </div>
         </div>
 
+        {flags.feedSection !== false && (
         <div style={card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <div style={{ ...lbl, color: '#999' }}>Recent Trades</div>
@@ -1944,6 +1968,7 @@ function Dashboard({ trades, onAddTrade, loading, profile }) {
             </table>
           )}
         </div>
+        )}
       </div>
 
       <PerformanceAnalytics trades={trades} />
@@ -3357,7 +3382,7 @@ function NewsCalendar() {
 }
 
 // ─── Trading Plan ─────────────────────────────────────────────
-function TradingPlan() {
+function TradingPlan({ flags = {} }) {
   const today    = new Date().toISOString().slice(0, 10)
   const CK       = `checklist_${today}`     // daily check state (by item id)
   const IK       = 'checklist_items'        // persistent item list
@@ -3700,6 +3725,7 @@ function TradingPlan() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <button style={btn} onClick={saveRules}>{rulesSaved ? '✓ Rules Saved' : 'Save Rules'}</button>
 
+          {flags.aiChecklist !== false && (
           <button
             onClick={generateFromRules}
             disabled={generating}
@@ -3719,6 +3745,7 @@ function TradingPlan() {
               ? <><Loader2 size={14} className="spin" /> Generating…</>
               : <><Sparkles size={14} /> Generate Checklist from Rules</>}
           </button>
+          )}
 
           {generateMsg && (
             <div style={{
@@ -3742,6 +3769,30 @@ function TradingPlan() {
 
 // ─── Settings ─────────────────────────────────────────────────
 function Settings({ theme, setTheme, session, profile, setProfile, glassMode, setGlassMode, onLogout, trades = [] }) {
+  // Support ticket
+  const [ticketSubj, setTicketSubj] = useState('')
+  const [ticketBody, setTicketBody] = useState('')
+  const [ticketState, setTicketState] = useState(null) // null | 'sending' | 'sent' | { error: string }
+  const submitTicket = async () => {
+    if (!ticketSubj.trim() || !ticketBody.trim()) return
+    setTicketState('sending')
+    try {
+      const { error } = await supabase.from('support_tickets').insert({
+        user_id: session.user.id,
+        email:   session.user.email,
+        subject: ticketSubj.trim(),
+        message: ticketBody.trim(),
+        status:  'open',
+      })
+      if (error) throw error
+      setTicketSubj(''); setTicketBody('')
+      setTicketState('sent')
+      setTimeout(() => setTicketState(null), 3000)
+    } catch (e) {
+      setTicketState({ error: e.message })
+    }
+  }
+
   const [localFirstName, setLocalFirstName] = useState(profile?.first_name   || '')
   const [localLastName,  setLocalLastName]  = useState(profile?.last_name    || '')
   const [localPhone,     setLocalPhone]     = useState(profile?.phone        || '')
@@ -4004,6 +4055,45 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
         )}
       </div>
 
+      {/* ── Support ── */}
+      <div style={sectionCard}>
+        <div style={sectionTitle}>Support</div>
+        <div style={{ height: '1px', background: '#1a1a1a', marginBottom: '20px' }} />
+
+        <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-hi)', marginBottom: '4px' }}>Contact Support</div>
+        <div style={{ fontSize: '12px', color: '#666', marginBottom: '14px' }}>Submit a ticket — we'll reply by email.</div>
+
+        <div style={{ marginBottom: '12px' }}>
+          <div style={{ ...lbl, marginBottom: '7px' }}>Subject</div>
+          <input value={ticketSubj} onChange={e => setTicketSubj(e.target.value)} placeholder="Brief description…" style={inp} />
+        </div>
+        <div style={{ marginBottom: '14px' }}>
+          <div style={{ ...lbl, marginBottom: '7px' }}>Message</div>
+          <textarea value={ticketBody} onChange={e => setTicketBody(e.target.value)} placeholder="Tell us what's going on. Include any details or steps to reproduce." style={{ ...inp, minHeight: '110px', resize: 'vertical', lineHeight: 1.6 }} />
+        </div>
+
+        {ticketState === 'sent' && (
+          <div style={{ background: 'rgba(170,255,160,0.05)', border: '1px solid rgba(170,255,160,0.20)', color: '#aaffa0', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', marginBottom: '14px' }}>
+            ✓ Ticket submitted — we'll be in touch
+          </div>
+        )}
+        {ticketState && typeof ticketState === 'object' && ticketState.error && (
+          <div style={{ background: 'rgba(255,128,128,0.05)', border: '1px solid rgba(255,128,128,0.20)', color: '#ff8080', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', marginBottom: '14px' }}>
+            {ticketState.error}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button
+            onClick={submitTicket}
+            disabled={ticketState === 'sending' || !ticketSubj.trim() || !ticketBody.trim()}
+            style={{ background: '#fff', color: '#000', border: 'none', borderRadius: '99px', padding: '10px 22px', fontSize: '13px', fontWeight: '600', cursor: ticketState === 'sending' ? 'wait' : 'pointer', fontFamily: 'inherit', minWidth: '130px', opacity: (ticketState === 'sending' || !ticketSubj.trim() || !ticketBody.trim()) ? 0.5 : 1 }}
+          >
+            {ticketState === 'sending' ? 'Sending…' : 'Submit Ticket'}
+          </button>
+        </div>
+      </div>
+
       {/* ── Account ── */}
       <div style={{ ...sectionCard, marginBottom: 0 }}>
         <div style={sectionTitle}>Account</div>
@@ -4062,13 +4152,18 @@ const makeInviteCode = () => {
 }
 
 function AdminPanel({ session, setPage }) {
+  const [tab,          setTab]          = useState('overview') // 'overview' | 'waitlist' | 'tickets' | 'health'
   const [users,        setUsers]        = useState([])
   const [trades,       setTrades]       = useState([])
   const [invites,      setInvites]      = useState([])
+  const [tickets,      setTickets]      = useState([])
   const [announcement, setAnnouncement] = useState({ text: '', active: false })
   const [annDraft,     setAnnDraft]     = useState('')
   const [annSaving,    setAnnSaving]    = useState(false)
   const [annSaved,     setAnnSaved]     = useState(false)
+  const [flags,        setFlags]        = useState({ monthlyGoalTracker: true, aiChecklist: true, newsCalendar: true, feedSection: true })
+  const [flagsSaving,  setFlagsSaving]  = useState(false)
+  const [flagsSaved,   setFlagsSaved]   = useState(false)
   const [loading,      setLoading]      = useState(true)
   const [filter,       setFilter]       = useState('all')
   const [search,       setSearch]       = useState('')
@@ -4077,6 +4172,25 @@ function AdminPanel({ session, setPage }) {
   const [pendingOpen,  setPendingOpen]  = useState(false)
   const [resetMsg,     setResetMsg]     = useState(null) // { id, text }
   const [error,        setError]        = useState('')
+
+  // Multi-select & email modal
+  const [selected,    setSelected]    = useState(new Set())
+  const [emailOpen,   setEmailOpen]   = useState(false)
+  const [emailSubj,   setEmailSubj]   = useState('')
+  const [emailBody,   setEmailBody]   = useState('')
+  const [emailSending, setEmailSending] = useState(false)
+  const [emailResult, setEmailResult] = useState(null)
+
+  // Note editing
+  const [noteEditId,    setNoteEditId]    = useState(null)
+  const [noteDraft,     setNoteDraft]     = useState('')
+
+  // Waitlist sort
+  const [waitSort, setWaitSort] = useState('date') // 'date' | 'name'
+
+  // App health
+  const [healthCheckedAt, setHealthCheckedAt] = useState(null)
+  const [healthOk,        setHealthOk]        = useState(null)
 
   const isAdmin = session?.user?.email === ADMIN_EMAIL
 
@@ -4089,29 +4203,39 @@ function AdminPanel({ session, setPage }) {
 
   const loadData = async () => {
     setError('')
+    const startedAt = Date.now()
     try {
-      const [usersRes, tradesRes, invitesRes, settingsRes] = await Promise.all([
+      const [usersRes, tradesRes, invitesRes, settingsRes, ticketsRes] = await Promise.all([
         supabase.from('admin_users_view').select('*').order('created_at', { ascending: false }),
         supabase.from('trades').select('id, user_id, pnl, trade_date, created_at'),
         supabase.from('invites').select('*').order('created_at', { ascending: false }),
         supabase.from('app_settings').select('*').eq('id', 1).maybeSingle(),
+        supabase.from('support_tickets').select('*').order('created_at', { ascending: false }),
       ])
       if (usersRes.error)  throw usersRes.error
       if (tradesRes.error) throw tradesRes.error
       setUsers(usersRes.data || [])
       setTrades(tradesRes.data || [])
-      // Invites + settings are optional (tables may not exist yet)
-      if (!invitesRes.error)  setInvites(invitesRes.data || [])
+      if (!invitesRes.error) setInvites(invitesRes.data || [])
+      if (!ticketsRes.error) setTickets(ticketsRes.data || [])
       if (!settingsRes.error && settingsRes.data) {
         const ann = { text: settingsRes.data.announcement_text || '', active: !!settingsRes.data.announcement_active }
         setAnnouncement(ann)
         setAnnDraft(prev => prev || ann.text)
+        if (settingsRes.data.feature_flags && typeof settingsRes.data.feature_flags === 'object') {
+          setFlags(prev => ({ ...prev, ...settingsRes.data.feature_flags }))
+        }
       }
+      setHealthOk(true)
+      setHealthCheckedAt(new Date())
     } catch (e) {
+      setHealthOk(false)
+      setHealthCheckedAt(new Date())
       setError(e.message || 'Failed to load')
     } finally {
       setLoading(false)
     }
+    void startedAt
   }
 
   const updateStatus = async (id, status) => {
@@ -4192,6 +4316,105 @@ function AdminPanel({ session, setPage }) {
       setTimeout(() => setAnnSaved(false), 2000)
     } catch (e) { setError(e.message) }
     finally { setAnnSaving(false) }
+  }
+
+  // ── Feature flags ──
+  const saveFlags = async (next) => {
+    setFlagsSaving(true)
+    try {
+      const { error } = await supabase.from('app_settings').upsert({ id: 1, feature_flags: next }, { onConflict: 'id' })
+      if (error) throw error
+      setFlags(next)
+      setFlagsSaved(true)
+      setTimeout(() => setFlagsSaved(false), 2000)
+    } catch (e) { setError(e.message) }
+    finally { setFlagsSaving(false) }
+  }
+  const toggleFlag = (key) => saveFlags({ ...flags, [key]: !flags[key] })
+
+  // ── User notes ──
+  const startEditNote = (u) => { setNoteEditId(u.id); setNoteDraft(u.notes || '') }
+  const cancelEditNote = () => { setNoteEditId(null); setNoteDraft('') }
+  const saveNote = async (id) => {
+    try {
+      const { error } = await supabase.from('profiles').update({ notes: noteDraft || null }).eq('id', id)
+      if (error) throw error
+      setUsers(prev => prev.map(u => u.id === id ? { ...u, notes: noteDraft || null } : u))
+      setNoteEditId(null)
+      setNoteDraft('')
+    } catch (e) { setError(e.message) }
+  }
+
+  // ── Multi-select + email ──
+  const toggleSelect = (id) => {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+  const selectAll = (ids) => setSelected(new Set(ids))
+  const clearSelected = () => setSelected(new Set())
+
+  const sendEmail = async () => {
+    if (selected.size === 0 || !emailSubj.trim() || !emailBody.trim()) return
+    const recipients = users.filter(u => selected.has(u.id) && u.email).map(u => u.email)
+    if (recipients.length === 0) { setError('No selected users have email addresses'); return }
+    setEmailSending(true)
+    setEmailResult(null)
+    try {
+      const res = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: recipients, subject: emailSubj.trim(), message: emailBody.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
+      setEmailResult({ ok: true, text: `Sent ${data.sent}/${data.total}${data.failed?.length ? ` · ${data.failed.length} failed` : ''}` })
+      if (data.sent > 0 && (!data.failed || data.failed.length === 0)) {
+        setTimeout(() => { setEmailOpen(false); setEmailSubj(''); setEmailBody(''); setEmailResult(null); clearSelected() }, 1500)
+      }
+    } catch (e) {
+      setEmailResult({ ok: false, text: e.message })
+    } finally {
+      setEmailSending(false)
+    }
+  }
+
+  // ── Bulk actions ──
+  const bulkApprove = async () => {
+    const ids = users.filter(u => (u.status || 'pending') === 'pending').map(u => u.id)
+    if (ids.length === 0) return
+    if (!confirm(`Approve all ${ids.length} pending users?`)) return
+    try {
+      const { error } = await supabase.from('profiles').update({ status: 'approved' }).in('id', ids)
+      if (error) throw error
+      setUsers(prev => prev.map(u => ids.includes(u.id) ? { ...u, status: 'approved' } : u))
+    } catch (e) { setError(e.message) }
+  }
+
+  // ── Tickets ──
+  const updateTicketStatus = async (id, status) => {
+    try {
+      const { error } = await supabase.from('support_tickets').update({ status, updated_at: new Date().toISOString() }).eq('id', id)
+      if (error) throw error
+      setTickets(prev => prev.map(t => t.id === id ? { ...t, status } : t))
+    } catch (e) { setError(e.message) }
+  }
+  const replyTicket = async (ticket) => {
+    const reply = prompt(`Reply to ${ticket.email}:`)
+    if (!reply || !reply.trim()) return
+    try {
+      const res = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: ticket.email, subject: `Re: ${ticket.subject}`, message: reply.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
+      await supabase.from('support_tickets').update({ admin_reply: reply.trim(), status: 'in_progress', updated_at: new Date().toISOString() }).eq('id', ticket.id)
+      setTickets(prev => prev.map(t => t.id === ticket.id ? { ...t, admin_reply: reply.trim(), status: 'in_progress' } : t))
+    } catch (e) { setError(e.message) }
   }
 
   // ── CSV export ──
@@ -4285,7 +4508,9 @@ function AdminPanel({ session, setPage }) {
       ? { bg: 'rgba(170,255,160,0.08)', border: 'rgba(170,255,160,0.25)', color: '#aaffa0', label: 'Approved' }
       : s === 'rejected'
         ? { bg: 'rgba(255,128,128,0.08)', border: 'rgba(255,128,128,0.25)', color: '#ff8080', label: 'Rejected' }
-        : { bg: 'rgba(255,217,102,0.08)', border: 'rgba(255,217,102,0.25)', color: '#ffd966', label: 'Pending' }
+        : s === 'banned'
+          ? { bg: 'rgba(80,80,80,0.15)', border: 'rgba(180,180,180,0.25)', color: '#bbb', label: 'Banned' }
+          : { bg: 'rgba(255,217,102,0.08)', border: 'rgba(255,217,102,0.25)', color: '#ffd966', label: 'Pending' }
     return (
       <span style={{
         background: cfg.bg, border: `1px solid ${cfg.border}`,
@@ -4383,6 +4608,42 @@ function AdminPanel({ session, setPage }) {
           {error}
         </div>
       )}
+
+      {/* Tab strip */}
+      <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', borderBottom: '1px solid var(--divider)', overflowX: 'auto' }}>
+        {[
+          { id: 'overview', label: 'Overview',  icon: BarChart2 },
+          { id: 'waitlist', label: 'Waitlist',  icon: Users, badge: pendingUsers || 0 },
+          { id: 'tickets',  label: 'Tickets',   icon: MessageSquare, badge: tickets.filter(t => t.status === 'open').length },
+          { id: 'health',   label: 'Health',    icon: Activity },
+        ].map(t => {
+          const active = tab === t.id
+          const Icon = t.icon
+          return (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              style={{
+                background: 'transparent', border: 'none', borderBottom: active ? '2px solid #aaffa0' : '2px solid transparent',
+                color: active ? 'var(--text-hi)' : 'var(--text-md)',
+                fontSize: '13px', fontWeight: active ? '700' : '500',
+                padding: '10px 14px', cursor: 'pointer', fontFamily: 'inherit',
+                display: 'flex', alignItems: 'center', gap: '8px',
+                transition: 'all 0.15s', whiteSpace: 'nowrap',
+                marginBottom: '-1px',
+              }}
+            >
+              <Icon size={14} />
+              {t.label}
+              {t.badge > 0 && (
+                <span style={{ background: '#ffd966', color: '#000', fontSize: '10px', fontWeight: '700', minWidth: '18px', height: '16px', padding: '0 5px', borderRadius: '99px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{t.badge}</span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {tab === 'overview' && <>
 
       {/* Stats */}
       <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '10px', marginBottom: '16px' }}>
@@ -4545,6 +4806,7 @@ function AdminPanel({ session, setPage }) {
             { id: 'pending',  label: 'Pending',  n: pendingUsers    },
             { id: 'approved', label: 'Approved', n: approvedUsers   },
             { id: 'rejected', label: 'Rejected', n: users.filter(u => u.status === 'rejected').length },
+            { id: 'banned',   label: 'Banned',   n: users.filter(u => u.status === 'banned').length   },
           ].map(f => {
             const active = filter === f.id
             return (
@@ -4584,6 +4846,14 @@ function AdminPanel({ session, setPage }) {
             </button>
           )}
         </div>
+        {selected.size > 0 && (
+          <button
+            onClick={() => { setEmailOpen(true); setEmailResult(null) }}
+            style={{ background: 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', color: '#aaffa0', borderRadius: '99px', padding: '7px 14px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Mail size={13} /> Email {selected.size} {selected.size === 1 ? 'User' : 'Users'}
+          </button>
+        )}
         <button
           onClick={exportCSV}
           style={{ background: 'transparent', border: '1px solid var(--card-border)', color: 'var(--text-md)', borderRadius: '99px', padding: '7px 14px', fontSize: '12px', fontWeight: '500', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px' }}
@@ -4607,6 +4877,14 @@ function AdminPanel({ session, setPage }) {
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '760px' }}>
               <thead>
                 <tr>
+                  <th style={{ padding: '14px 8px 14px 16px', borderBottom: '1px solid var(--divider)', width: '24px' }}>
+                    <input
+                      type="checkbox"
+                      checked={filtered.length > 0 && filtered.every(u => selected.has(u.id))}
+                      onChange={e => e.target.checked ? selectAll(filtered.map(u => u.id)) : clearSelected()}
+                      style={{ cursor: 'pointer', width: '14px', height: '14px', accentColor: '#aaffa0' }}
+                    />
+                  </th>
                   {['', 'User', 'Email', 'Signed Up', 'Status', 'Actions'].map((h, i) => (
                     <th key={i} style={{
                       textAlign: 'left', fontSize: '10px', fontWeight: '600',
@@ -4639,6 +4917,14 @@ function AdminPanel({ session, setPage }) {
                         className="trade-row"
                         style={{ borderBottom: '1px solid var(--divider)', cursor: 'pointer' }}
                       >
+                        <td style={{ padding: '12px 8px 12px 16px' }} onClick={e => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selected.has(u.id)}
+                            onChange={() => toggleSelect(u.id)}
+                            style={{ cursor: 'pointer', width: '14px', height: '14px', accentColor: '#aaffa0' }}
+                          />
+                        </td>
                         <td style={{ padding: '12px 8px 12px 16px' }}>
                           <ChevronDown size={14} color="#555" style={{ transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
                         </td>
@@ -4661,8 +4947,13 @@ function AdminPanel({ session, setPage }) {
                             {u.status !== 'approved' && (
                               <button onClick={() => updateStatus(u.id, 'approved')} disabled={busy} style={{ background: 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', color: '#aaffa0', borderRadius: '6px', padding: '5px 11px', fontSize: '11px', fontWeight: '600', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', opacity: busy ? 0.6 : 1 }}>Approve</button>
                             )}
-                            {u.status !== 'rejected' && (
+                            {u.status !== 'rejected' && u.status !== 'banned' && (
                               <button onClick={() => updateStatus(u.id, 'rejected')} disabled={busy} style={{ background: 'rgba(255,128,128,0.06)', border: '1px solid rgba(255,128,128,0.25)', color: '#ff8080', borderRadius: '6px', padding: '5px 11px', fontSize: '11px', fontWeight: '600', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', opacity: busy ? 0.6 : 1 }}>Reject</button>
+                            )}
+                            {u.status === 'banned' ? (
+                              <button onClick={() => updateStatus(u.id, 'approved')} disabled={busy} style={{ background: 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', color: '#aaffa0', borderRadius: '6px', padding: '5px 11px', fontSize: '11px', fontWeight: '600', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', opacity: busy ? 0.6 : 1 }}>Unban</button>
+                            ) : (
+                              <button onClick={() => { if (confirm('Ban this user? They will be locked out until unbanned.')) updateStatus(u.id, 'banned') }} disabled={busy} style={{ background: 'rgba(80,80,80,0.15)', border: '1px solid rgba(180,180,180,0.20)', color: '#bbb', borderRadius: '6px', padding: '5px 11px', fontSize: '11px', fontWeight: '600', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', opacity: busy ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: '4px' }}><Ban size={11} /> Ban</button>
                             )}
                             <button onClick={() => deleteUser(u.id)} disabled={busy} style={{ background: 'transparent', border: '1px solid #2a2a2a', color: '#666', borderRadius: '6px', padding: '5px 11px', fontSize: '11px', fontWeight: '500', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', opacity: busy ? 0.6 : 1 }}>Delete</button>
                           </div>
@@ -4670,7 +4961,7 @@ function AdminPanel({ session, setPage }) {
                       </tr>
                       {isExpanded && (
                         <tr style={{ background: 'rgba(255,255,255,0.015)' }}>
-                          <td colSpan={6} style={{ padding: '20px 24px', borderBottom: '1px solid var(--divider)' }}>
+                          <td colSpan={7} style={{ padding: '20px 24px', borderBottom: '1px solid var(--divider)' }}>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '16px' }}>
                               {[
                                 { l: 'Trades',     v: tradeCount },
@@ -4689,6 +4980,27 @@ function AdminPanel({ session, setPage }) {
                               <div><span style={{ color: '#666' }}>Market focus: </span><span style={{ color: 'var(--text-md)' }}>{u.market_focus || '—'}</span></div>
                               <div><span style={{ color: '#666' }}>Monthly goal: </span><span style={{ color: 'var(--text-md)' }}>{u.monthly_goal ? `$${Number(u.monthly_goal).toLocaleString()}` : '—'}</span></div>
                               <div><span style={{ color: '#666' }}>User ID: </span><span style={{ color: 'var(--text-lo)', fontFamily: 'monospace', fontSize: '11px' }}>{u.id}</span></div>
+                            </div>
+
+                            {/* Notes */}
+                            <div style={{ marginBottom: '14px' }}>
+                              <div style={{ ...lbl, marginBottom: '7px' }}>Private Notes</div>
+                              {noteEditId === u.id ? (
+                                <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
+                                  <textarea
+                                    value={noteDraft}
+                                    onChange={e => setNoteDraft(e.target.value)}
+                                    placeholder="Carlos — futures trader, referred by Maria…"
+                                    style={{ ...inp, flex: 1, minHeight: '60px', resize: 'vertical', fontSize: '12px' }}
+                                  />
+                                  <button onClick={() => saveNote(u.id)} style={{ background: '#fff', color: '#000', border: 'none', borderRadius: '6px', padding: '6px 12px', fontSize: '11px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit', minHeight: 'auto' }}>Save</button>
+                                  <button onClick={cancelEditNote} style={{ background: 'transparent', border: '1px solid #2a2a2a', color: '#666', borderRadius: '6px', padding: '6px 10px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', minHeight: 'auto' }}>Cancel</button>
+                                </div>
+                              ) : (
+                                <button onClick={() => startEditNote(u)} style={{ background: 'transparent', border: '1px dashed #1f1f1f', borderRadius: '6px', padding: '8px 12px', fontSize: '12px', color: u.notes ? 'var(--text-md)' : '#555', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', width: '100%', minHeight: 'auto', whiteSpace: 'pre-wrap' }}>
+                                  {u.notes ? `📝 ${u.notes}` : '+ Add private note about this user'}
+                                </button>
+                              )}
                             </div>
                             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                               <button
@@ -4719,6 +5031,243 @@ function AdminPanel({ session, setPage }) {
           </div>
         )}
       </div>
+
+      {/* Feature flags */}
+      <div style={{ ...statCard, marginTop: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+          <Flag size={16} color="#aaffa0" />
+          <div style={{ ...lbl, color: '#999' }}>Feature Flags</div>
+          <span style={{ fontSize: '10px', color: '#666' }}>applied to all users</span>
+          {flagsSaved && <span style={{ fontSize: '11px', color: '#aaffa0', marginLeft: 'auto' }}>✓ Saved</span>}
+        </div>
+        {[
+          { key: 'monthlyGoalTracker', label: 'Monthly Goal Tracker',   desc: 'Dashboard widget for income goal progress' },
+          { key: 'aiChecklist',        label: 'AI Checklist Generation', desc: 'Generate Checklist from Rules button' },
+          { key: 'newsCalendar',       label: 'News Calendar',           desc: 'Economic events page + sidebar entry' },
+          { key: 'feedSection',        label: 'Recent Trades Feed',      desc: 'Recent trades section on Dashboard' },
+        ].map(f => {
+          const on = !!flags[f.key]
+          return (
+            <div key={f.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: '1px solid #141414' }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-hi)' }}>{f.label}</div>
+                <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>{f.desc}</div>
+              </div>
+              <div className={`toggle-track ${on ? 'on' : ''}`} onClick={() => !flagsSaving && toggleFlag(f.key)} style={{ flexShrink: 0, opacity: flagsSaving ? 0.5 : 1 }}>
+                <div className="toggle-knob" />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      </>}
+
+      {/* ── Waitlist tab ── */}
+      {tab === 'waitlist' && (() => {
+        const pendingAll = users.filter(u => (u.status || 'pending') === 'pending')
+        const sorted = [...pendingAll].sort((a, b) => {
+          if (waitSort === 'name') {
+            const an = (a.first_name || a.username || a.email || '').toLowerCase()
+            const bn = (b.first_name || b.username || b.email || '').toLowerCase()
+            return an.localeCompare(bn)
+          }
+          return new Date(b.created_at || 0) - new Date(a.created_at || 0)
+        })
+        return (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-hi)' }}>{pendingAll.length} awaiting approval</div>
+                <select
+                  value={waitSort}
+                  onChange={e => setWaitSort(e.target.value)}
+                  style={{ ...inp, width: 'auto', padding: '6px 10px', fontSize: '12px', cursor: 'pointer' }}
+                >
+                  <option value="date">Sort: Signup date</option>
+                  <option value="name">Sort: Name</option>
+                </select>
+              </div>
+              <button
+                onClick={bulkApprove}
+                disabled={pendingAll.length === 0}
+                style={{ background: pendingAll.length === 0 ? 'transparent' : 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', color: pendingAll.length === 0 ? '#444' : '#aaffa0', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: '600', cursor: pendingAll.length === 0 ? 'not-allowed' : 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <Check size={13} /> Approve All Pending
+              </button>
+            </div>
+
+            <div style={{ ...statCard, padding: '0', overflow: 'hidden' }}>
+              {sorted.length === 0 ? (
+                <div style={{ padding: '48px 24px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                  <Check size={28} color="#aaffa0" />
+                  <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-hi)' }}>No pending users</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-lo)' }}>The waitlist is clear</div>
+                </div>
+              ) : sorted.map(u => {
+                const fullName = [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || '—'
+                const busy = actioning === u.id
+                const isEditingNote = noteEditId === u.id
+                return (
+                  <div key={u.id} style={{ padding: '14px 18px', borderBottom: '1px solid var(--divider)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ width: '34px', height: '34px', borderRadius: '50%', background: '#141414', border: '1px solid #222', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', color: '#aaa', flexShrink: 0 }}>{initialsOf(u)}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-hi)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fullName}</div>
+                        <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>{u.email || '—'} · signed up {relativeTime(u.created_at)}</div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                        <button onClick={() => updateStatus(u.id, 'approved')} disabled={busy} style={{ background: 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', color: '#aaffa0', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: '600', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', opacity: busy ? 0.6 : 1 }}>Approve</button>
+                        <button onClick={() => updateStatus(u.id, 'rejected')} disabled={busy} style={{ background: 'rgba(255,128,128,0.06)', border: '1px solid rgba(255,128,128,0.25)', color: '#ff8080', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: '600', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', opacity: busy ? 0.6 : 1 }}>Reject</button>
+                      </div>
+                    </div>
+
+                    {/* Notes */}
+                    <div style={{ marginTop: '10px', paddingLeft: '46px' }}>
+                      {isEditingNote ? (
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
+                          <textarea
+                            value={noteDraft}
+                            onChange={e => setNoteDraft(e.target.value)}
+                            placeholder="Private notes (futures trader, referred by Maria, …)"
+                            style={{ ...inp, flex: 1, minHeight: '60px', resize: 'vertical', fontSize: '12px' }}
+                          />
+                          <button onClick={() => saveNote(u.id)} style={{ background: '#fff', color: '#000', border: 'none', borderRadius: '6px', padding: '6px 12px', fontSize: '11px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit', minHeight: 'auto' }}>Save</button>
+                          <button onClick={cancelEditNote} style={{ background: 'transparent', border: '1px solid #2a2a2a', color: '#666', borderRadius: '6px', padding: '6px 10px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', minHeight: 'auto' }}>Cancel</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => startEditNote(u)} style={{ background: 'transparent', border: '1px dashed #1f1f1f', borderRadius: '6px', padding: '6px 10px', fontSize: '11px', color: u.notes ? 'var(--text-md)' : '#555', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', width: '100%', minHeight: 'auto', whiteSpace: 'pre-wrap' }}>
+                          {u.notes ? `📝 ${u.notes}` : '+ Add private note'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        )
+      })()}
+
+      {/* ── Tickets tab ── */}
+      {tab === 'tickets' && (
+        <div style={{ ...statCard, padding: '0', overflow: 'hidden' }}>
+          {tickets.length === 0 ? (
+            <div style={{ padding: '48px 24px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+              <MessageSquare size={28} color="#333" />
+              <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-hi)' }}>No support tickets</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-lo)' }}>Submitted tickets from users will show up here</div>
+            </div>
+          ) : tickets.map(t => {
+            const statusCfg = t.status === 'resolved' ? { c: '#aaffa0', label: 'Resolved' }
+              : t.status === 'in_progress' ? { c: '#ffd966', label: 'In Progress' }
+              : { c: '#ff8080', label: 'Open' }
+            return (
+              <div key={t.id} style={{ padding: '16px 18px', borderBottom: '1px solid var(--divider)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px', gap: '10px', flexWrap: 'wrap' }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-hi)', marginBottom: '2px' }}>{t.subject}</div>
+                    <div style={{ fontSize: '11px', color: '#666' }}>{t.email} · {relativeTime(t.created_at)}</div>
+                  </div>
+                  <span style={{ fontSize: '11px', fontWeight: '600', color: statusCfg.c, background: 'rgba(255,255,255,0.03)', border: `1px solid ${statusCfg.c}33`, borderRadius: '99px', padding: '3px 10px', whiteSpace: 'nowrap' }}>{statusCfg.label}</span>
+                </div>
+                <div style={{ fontSize: '13px', color: 'var(--text-md)', lineHeight: 1.5, marginBottom: '10px', whiteSpace: 'pre-wrap' }}>{t.message}</div>
+                {t.admin_reply && (
+                  <div style={{ background: 'rgba(170,255,160,0.04)', border: '1px solid rgba(170,255,160,0.15)', borderRadius: '8px', padding: '10px 12px', marginBottom: '10px', fontSize: '12px', color: 'var(--text-md)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                    <div style={{ fontSize: '10px', fontWeight: '700', color: '#aaffa0', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '4px' }}>Your reply</div>
+                    {t.admin_reply}
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  <button onClick={() => replyTicket(t)} style={{ background: 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', color: '#aaffa0', borderRadius: '6px', padding: '5px 11px', fontSize: '11px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit', minHeight: 'auto', display: 'flex', alignItems: 'center', gap: '5px' }}><Mail size={11} /> Reply</button>
+                  {['open', 'in_progress', 'resolved'].filter(s => s !== t.status).map(s => (
+                    <button key={s} onClick={() => updateTicketStatus(t.id, s)} style={{ background: 'transparent', border: '1px solid #2a2a2a', color: 'var(--text-md)', borderRadius: '6px', padding: '5px 11px', fontSize: '11px', fontWeight: '500', cursor: 'pointer', fontFamily: 'inherit', minHeight: 'auto', textTransform: 'capitalize' }}>Mark {s.replace('_', ' ')}</button>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* ── Health tab ── */}
+      {tab === 'health' && (() => {
+        const dbSizeApprox = users.length + trades.length + invites.length + tickets.length
+        const lastSignup = users[0]?.created_at
+        const today = new Date(); today.setHours(0,0,0,0)
+        const tradesTodayCount = trades.filter(t => new Date(t.created_at || t.trade_date || 0) >= today).length
+        const ticketsOpen = tickets.filter(t => t.status === 'open').length
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+            <div style={statCard}>
+              <div style={{ ...lbl, color: '#999', marginBottom: '14px' }}>Connection</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: healthOk ? '#aaffa0' : '#ff8080', boxShadow: `0 0 8px ${healthOk ? 'rgba(170,255,160,0.6)' : 'rgba(255,128,128,0.6)'}` }} />
+                <div style={{ fontSize: '14px', fontWeight: '700', color: healthOk ? '#aaffa0' : '#ff8080' }}>
+                  {healthOk === null ? 'Checking…' : healthOk ? 'Supabase Connected' : 'Connection error'}
+                </div>
+              </div>
+              <div style={{ fontSize: '11px', color: '#666' }}>Last checked {healthCheckedAt ? relativeTime(healthCheckedAt) : '—'}</div>
+            </div>
+            <div style={statCard}>
+              <div style={{ ...lbl, color: '#999', marginBottom: '14px' }}>Records</div>
+              <div style={{ fontSize: '24px', fontWeight: '800', color: 'var(--text-hi)', marginBottom: '4px' }}>{dbSizeApprox.toLocaleString()}</div>
+              <div style={{ fontSize: '11px', color: '#666' }}>{users.length} users · {trades.length} trades · {invites.length} invites · {tickets.length} tickets</div>
+            </div>
+            <div style={statCard}>
+              <div style={{ ...lbl, color: '#999', marginBottom: '14px' }}>Trades Today</div>
+              <div style={{ fontSize: '24px', fontWeight: '800', color: 'var(--text-hi)', marginBottom: '4px' }}>{tradesTodayCount}</div>
+              <div style={{ fontSize: '11px', color: '#666' }}>Logged since midnight</div>
+            </div>
+            <div style={statCard}>
+              <div style={{ ...lbl, color: '#999', marginBottom: '14px' }}>Open Tickets</div>
+              <div style={{ fontSize: '24px', fontWeight: '800', color: ticketsOpen > 0 ? '#ff8080' : 'var(--text-hi)', marginBottom: '4px' }}>{ticketsOpen}</div>
+              <div style={{ fontSize: '11px', color: '#666' }}>Last signup {lastSignup ? relativeTime(lastSignup) : '—'}</div>
+            </div>
+            <div style={{ ...statCard, gridColumn: '1 / -1' }}>
+              <div style={{ ...lbl, color: '#999', marginBottom: '8px' }}>Notes</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-lo)', lineHeight: 1.6 }}>
+                Database size, backup history and request rate metrics are not exposed by the Supabase client SDK — view them in the Supabase Dashboard → Project Settings → Usage.
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ── Email compose modal ── */}
+      {emailOpen && createPortal(
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => !emailSending && setEmailOpen(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ width: '90%', maxWidth: '560px', background: '#0d0d0d', border: '1px solid #1f1f1f', borderRadius: '16px', padding: '28px', boxShadow: '0 32px 100px rgba(0,0,0,0.9)', animation: 'modalIn 0.2s ease both' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div>
+                <div style={{ fontSize: '17px', fontWeight: '800', letterSpacing: '-0.3px', color: '#fff' }}>Email {selected.size} {selected.size === 1 ? 'User' : 'Users'}</div>
+                <div style={{ fontSize: '11px', color: '#666', marginTop: '3px' }}>Sent via Resend from your verified domain</div>
+              </div>
+              <button onClick={() => !emailSending && setEmailOpen(false)} style={{ background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: '4px', minHeight: 'auto' }}>✕</button>
+            </div>
+            <div style={{ marginBottom: '12px' }}>
+              <div style={{ ...lbl, marginBottom: '7px' }}>Subject</div>
+              <input value={emailSubj} onChange={e => setEmailSubj(e.target.value)} placeholder="Important update from LIMITLESS…" style={inp} />
+            </div>
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ ...lbl, marginBottom: '7px' }}>Message</div>
+              <textarea value={emailBody} onChange={e => setEmailBody(e.target.value)} placeholder="Write your message — line breaks are preserved." style={{ ...inp, minHeight: '160px', resize: 'vertical', lineHeight: 1.6 }} />
+            </div>
+            {emailResult && (
+              <div style={{ background: emailResult.ok ? 'rgba(170,255,160,0.06)' : 'rgba(255,128,128,0.06)', border: `1px solid ${emailResult.ok ? 'rgba(170,255,160,0.25)' : 'rgba(255,128,128,0.25)'}`, color: emailResult.ok ? '#aaffa0' : '#ff8080', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', marginBottom: '14px' }}>
+                {emailResult.text}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button onClick={() => setEmailOpen(false)} disabled={emailSending} style={{ background: 'transparent', border: '1px solid #2a2a2a', color: 'var(--text-md)', borderRadius: '99px', padding: '9px 18px', fontSize: '12px', cursor: emailSending ? 'wait' : 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+              <button onClick={sendEmail} disabled={emailSending || !emailSubj.trim() || !emailBody.trim()} style={{ background: '#fff', color: '#000', border: 'none', borderRadius: '99px', padding: '9px 22px', fontSize: '12px', fontWeight: '700', cursor: emailSending ? 'wait' : 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px', opacity: (emailSending || !emailSubj.trim() || !emailBody.trim()) ? 0.5 : 1 }}>
+                {emailSending ? <><Loader2 size={12} className="spin" /> Sending…</> : <><Mail size={12} /> Send</>}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }
@@ -4729,6 +5278,7 @@ export default function App() {
   const [authLoading,    setAuthLoading]    = useState(true)
   const [passwordRecovery, setPasswordRecovery] = useState(false)
   const [announcement, setAnnouncement] = useState(null) // { text, active }
+  const [featureFlags, setFeatureFlags] = useState({ monthlyGoalTracker: true, aiChecklist: true, newsCalendar: true, feedSection: true })
   const [profileLoading, setProfileLoading] = useState(false)
   const [tradesLoading,  setTradesLoading]  = useState(true)
   const [profile,        setProfile]        = useState(null)
@@ -4792,6 +5342,9 @@ export default function App() {
         const { data, error } = await supabase.from('app_settings').select('*').eq('id', 1).maybeSingle()
         if (cancelled || error || !data) return
         setAnnouncement({ text: data.announcement_text || '', active: !!data.announcement_active })
+        if (data.feature_flags && typeof data.feature_flags === 'object') {
+          setFeatureFlags(prev => ({ ...prev, ...data.feature_flags }))
+        }
       } catch {}
     }
     load()
@@ -4864,7 +5417,7 @@ export default function App() {
     { id: 'dashboard', Icon: LayoutDashboard, label: 'Dashboard'    },
     { id: 'trades',    Icon: BookOpen,        label: 'Trade Log'    },
     { id: 'plan',      Icon: ClipboardList,   label: 'Trading Plan' },
-    { id: 'news',      Icon: CalendarDays,    label: 'News'         },
+    ...(featureFlags.newsCalendar ? [{ id: 'news', Icon: CalendarDays, label: 'News' }] : []),
     { id: 'settings',  Icon: Settings2,       label: 'Settings'     },
   ]
 
@@ -4905,6 +5458,11 @@ export default function App() {
         <style dangerouslySetInnerHTML={{ __html: ANIM_CSS }} />
       </div>
     )
+  }
+
+  // ── Banned gate (admin can still access via email match) ──
+  if (profile.status === 'banned' && session?.user?.email !== ADMIN_EMAIL) {
+    return <BannedScreen onLogout={logout} />
   }
 
   // ── Approval gate ──
@@ -5079,7 +5637,7 @@ export default function App() {
             {announcement.text}
           </div>
         )}
-        {page === 'dashboard'   && <Dashboard trades={trades} onAddTrade={goAddTrade} loading={tradesLoading} profile={profile} />}
+        {page === 'dashboard'   && <Dashboard trades={trades} onAddTrade={goAddTrade} loading={tradesLoading} profile={profile} flags={featureFlags} />}
         {page === 'trades'      && (
           <Trades
             trades={trades}
@@ -5091,8 +5649,8 @@ export default function App() {
             loading={tradesLoading}
           />
         )}
-        {page === 'news'        && <NewsCalendar />}
-        {page === 'plan'        && <TradingPlan />}
+        {page === 'news' && featureFlags.newsCalendar && <NewsCalendar />}
+        {page === 'plan'        && <TradingPlan flags={featureFlags} />}
         {page === 'settings'    && <Settings theme={theme} setTheme={handleSetTheme} session={session} profile={profile} setProfile={setProfile} glassMode={glassMode} setGlassMode={v => { setGlassMode(v); localStorage.setItem('glass_mode', v) }} onLogout={logout} trades={trades} />}
         {page === 'admin'       && <AdminPanel session={session} setPage={setPage} />}
       </main>
