@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import { createPortal } from 'react-dom'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -9,6 +9,7 @@ import {
   LayoutDashboard, BookOpen, ClipboardList, Settings2,
   Lightbulb, Check, BarChart2, Plus, CalendarDays, Layers, Target,
   Pencil, Trash2, GripVertical, Sparkles, Loader2, Shield, Users, Search, X,
+  Bell, Megaphone, Link2, Download, ChevronDown, RefreshCw,
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 
@@ -647,6 +648,22 @@ function AuthPage({ onAuth }) {
   const [error, setError]       = useState('')
   const [message, setMessage]   = useState('')
   const [loading, setLoading]   = useState(false)
+  const [inviteCode, setInviteCode] = useState(null)
+  const [inviteValid, setInviteValid] = useState(null) // null | true | false
+
+  // Detect ?invite=XXX in URL and validate it
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const code = new URLSearchParams(window.location.search).get('invite')
+    if (!code) return
+    setInviteCode(code)
+    ;(async () => {
+      try {
+        const { data } = await supabase.from('invites').select('code,used_at').eq('code', code).maybeSingle()
+        setInviteValid(!!data && !data.used_at)
+      } catch { setInviteValid(false) }
+    })()
+  }, [])
 
   const goForgot = () => { setView('forgot'); setError(''); setMessage('') }
   const goAuth   = () => { setView('auth');   setError(''); setMessage('') }
@@ -680,18 +697,33 @@ function AuthPage({ onAuth }) {
         if (error) throw error
         onAuth(data.session)
       } else {
+        // Re-validate invite at submit time (anti-stale)
+        let autoApprove = false
+        if (inviteCode) {
+          const { data: inv } = await supabase.from('invites').select('code,used_at').eq('code', inviteCode).maybeSingle()
+          autoApprove = !!inv && !inv.used_at
+        }
         const { data, error } = await supabase.auth.signUp({ email, password })
         if (error) throw error
         const phone = phoneNum ? `${country.code} ${phoneNum}` : null
         if (data.session) {
+          const userId = data.session.user.id
           await supabase.from('profiles').upsert({
-            id: data.session.user.id,
+            id: userId,
             first_name: firstName || null,
             last_name:  lastName  || null,
             phone:      phone,
+            ...(autoApprove ? { status: 'approved' } : {}),
           }, { onConflict: 'id' })
+          if (autoApprove) {
+            await supabase.from('invites').update({ used_at: new Date().toISOString(), used_by: userId }).eq('code', inviteCode).is('used_at', null)
+          }
           onAuth(data.session)
         } else {
+          // Email confirm required — store invite for later application on first login
+          if (autoApprove) {
+            try { localStorage.setItem('pending_invite', inviteCode) } catch {}
+          }
           setMessage('Account created — check your email to confirm, then log in.')
           setTab('login')
         }
@@ -816,6 +848,21 @@ function AuthPage({ onAuth }) {
             {error && (
               <div style={{ background: 'rgba(255,128,128,0.05)', border: '1px solid rgba(255,128,128,0.15)', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: '#ff8080', marginBottom: '18px', lineHeight: 1.5 }}>
                 {error}
+              </div>
+            )}
+
+            {/* Invite indicator (signup) */}
+            {tab === 'signup' && inviteCode && inviteValid !== null && (
+              <div style={{
+                background: inviteValid ? 'rgba(170,255,160,0.05)' : 'rgba(255,217,102,0.05)',
+                border: `1px solid ${inviteValid ? 'rgba(170,255,160,0.20)' : 'rgba(255,217,102,0.20)'}`,
+                borderRadius: '8px', padding: '10px 14px', marginBottom: '14px',
+                fontSize: '12px', color: inviteValid ? '#aaffa0' : '#ffd966',
+                lineHeight: 1.5,
+              }}>
+                {inviteValid
+                  ? `🎟️ Invite code ${inviteCode} — auto-approved on signup`
+                  : `Invite code ${inviteCode} is invalid or already used`}
               </div>
             )}
 
@@ -3994,33 +4041,72 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
 // ─── Admin Panel ──────────────────────────────────────────────
 const ADMIN_EMAIL = 'eug777fx@gmail.com'
 
+const relativeTime = (date) => {
+  if (!date) return ''
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return ''
+  const diff = Math.floor((Date.now() - d.getTime()) / 1000)
+  if (diff < 30)        return 'just now'
+  if (diff < 60)        return `${diff}s ago`
+  if (diff < 3600)      return `${Math.floor(diff / 60)} min${Math.floor(diff / 60) !== 1 ? 's' : ''} ago`
+  if (diff < 86400)     return `${Math.floor(diff / 3600)} hour${Math.floor(diff / 3600) !== 1 ? 's' : ''} ago`
+  if (diff < 86400 * 7) return `${Math.floor(diff / 86400)} day${Math.floor(diff / 86400) !== 1 ? 's' : ''} ago`
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+const makeInviteCode = () => {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+  let s = ''
+  for (let i = 0; i < 8; i++) s += chars[Math.floor(Math.random() * chars.length)]
+  return s
+}
+
 function AdminPanel({ session, setPage }) {
-  const [users,     setUsers]     = useState([])
-  const [trades,    setTrades]    = useState([])
-  const [loading,   setLoading]   = useState(true)
-  const [filter,    setFilter]    = useState('all') // 'all' | 'pending' | 'approved' | 'rejected'
-  const [search,    setSearch]    = useState('')
-  const [actioning, setActioning] = useState(null) // user id currently being updated
-  const [error,     setError]     = useState('')
+  const [users,        setUsers]        = useState([])
+  const [trades,       setTrades]       = useState([])
+  const [invites,      setInvites]      = useState([])
+  const [announcement, setAnnouncement] = useState({ text: '', active: false })
+  const [annDraft,     setAnnDraft]     = useState('')
+  const [annSaving,    setAnnSaving]    = useState(false)
+  const [annSaved,     setAnnSaved]     = useState(false)
+  const [loading,      setLoading]      = useState(true)
+  const [filter,       setFilter]       = useState('all')
+  const [search,       setSearch]       = useState('')
+  const [actioning,    setActioning]    = useState(null)
+  const [expandedId,   setExpandedId]   = useState(null)
+  const [pendingOpen,  setPendingOpen]  = useState(false)
+  const [resetMsg,     setResetMsg]     = useState(null) // { id, text }
+  const [error,        setError]        = useState('')
 
   const isAdmin = session?.user?.email === ADMIN_EMAIL
 
   useEffect(() => {
     if (!isAdmin) { setPage('dashboard'); return }
     loadData()
+    const t = setInterval(loadData, 30_000) // auto-refresh every 30s
+    return () => clearInterval(t)
   }, [])
 
   const loadData = async () => {
-    setLoading(true); setError('')
+    setError('')
     try {
-      const [{ data: u, error: uErr }, { data: t, error: tErr }] = await Promise.all([
+      const [usersRes, tradesRes, invitesRes, settingsRes] = await Promise.all([
         supabase.from('admin_users_view').select('*').order('created_at', { ascending: false }),
-        supabase.from('trades').select('id'),
+        supabase.from('trades').select('id, user_id, pnl, trade_date, created_at'),
+        supabase.from('invites').select('*').order('created_at', { ascending: false }),
+        supabase.from('app_settings').select('*').eq('id', 1).maybeSingle(),
       ])
-      if (uErr) throw uErr
-      if (tErr) throw tErr
-      setUsers(u || [])
-      setTrades(t || [])
+      if (usersRes.error)  throw usersRes.error
+      if (tradesRes.error) throw tradesRes.error
+      setUsers(usersRes.data || [])
+      setTrades(tradesRes.data || [])
+      // Invites + settings are optional (tables may not exist yet)
+      if (!invitesRes.error)  setInvites(invitesRes.data || [])
+      if (!settingsRes.error && settingsRes.data) {
+        const ann = { text: settingsRes.data.announcement_text || '', active: !!settingsRes.data.announcement_active }
+        setAnnouncement(ann)
+        setAnnDraft(prev => prev || ann.text)
+      }
     } catch (e) {
       setError(e.message || 'Failed to load')
     } finally {
@@ -4055,11 +4141,122 @@ function AdminPanel({ session, setPage }) {
     }
   }
 
-  // Stats
+  const sendPasswordReset = async (email, id) => {
+    if (!email) return
+    setActioning(id)
+    setResetMsg(null)
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: 'https://limitless-journal.vercel.app',
+      })
+      if (error) throw error
+      setResetMsg({ id, text: `Reset email sent to ${email}` })
+      setTimeout(() => setResetMsg(null), 4000)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setActioning(null)
+    }
+  }
+
+  // ── Invites ──
+  const generateInvite = async () => {
+    const code = makeInviteCode()
+    try {
+      const { data, error } = await supabase.from('invites').insert({ code, created_by: session.user.id }).select().single()
+      if (error) throw error
+      setInvites(prev => [data, ...prev])
+    } catch (e) { setError(e.message) }
+  }
+  const deleteInvite = async (code) => {
+    try {
+      const { error } = await supabase.from('invites').delete().eq('code', code)
+      if (error) throw error
+      setInvites(prev => prev.filter(i => i.code !== code))
+    } catch (e) { setError(e.message) }
+  }
+  const copyInvite = async (code) => {
+    const url = `${window.location.origin}/?invite=${code}`
+    try { await navigator.clipboard.writeText(url) } catch {}
+  }
+
+  // ── Announcement ──
+  const saveAnnouncement = async (active) => {
+    setAnnSaving(true)
+    try {
+      const next = { announcement_text: annDraft.trim(), announcement_active: active }
+      const { error } = await supabase.from('app_settings').upsert({ id: 1, ...next }, { onConflict: 'id' })
+      if (error) throw error
+      setAnnouncement({ text: next.announcement_text, active })
+      setAnnSaved(true)
+      setTimeout(() => setAnnSaved(false), 2000)
+    } catch (e) { setError(e.message) }
+    finally { setAnnSaving(false) }
+  }
+
+  // ── CSV export ──
+  const exportCSV = () => {
+    const tradesByUser = new Map()
+    trades.forEach(t => { tradesByUser.set(t.user_id, (tradesByUser.get(t.user_id) || 0) + 1) })
+    const csvEsc = (v) => {
+      const s = v == null ? '' : String(v)
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+    }
+    const headers = ['name', 'email', 'status', 'signup_date', 'trade_count']
+    const rows = users.map(u => {
+      const name = [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || ''
+      return [name, u.email || '', u.status || 'pending', u.created_at || '', tradesByUser.get(u.id) || 0]
+    })
+    const csv = [headers, ...rows].map(r => r.map(csvEsc).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `limitless-users-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  // ── Stats ──
   const totalUsers    = users.length
   const pendingUsers  = users.filter(u => u.status === 'pending').length
   const approvedUsers = users.filter(u => u.status === 'approved').length
   const totalTrades   = trades.length
+  const totalPnlAll   = trades.reduce((s, t) => s + (Number(t.pnl) || 0), 0)
+  const todayKey      = new Date().toISOString().slice(0, 10)
+  const tradesToday   = trades.filter(t => (t.trade_date || '').slice(0, 10) === todayKey).length
+
+  // 7-day signup chart
+  const signupChart = (() => {
+    const days = []
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i); d.setHours(0, 0, 0, 0)
+      const key = d.toISOString().slice(0, 10)
+      const count = users.filter(u => (u.created_at || '').slice(0, 10) === key).length
+      days.push({ day: d.toLocaleDateString('en-US', { weekday: 'short' }), count })
+    }
+    return days
+  })()
+
+  // Activity feed (signups + trades)
+  const userById = new Map(users.map(u => [u.id, u]))
+  const activity = [
+    ...users.map(u => ({
+      type: 'signup',
+      ts: u.created_at,
+      text: `New signup: ${[u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || u.email || 'User'}`,
+    })),
+    ...trades.map(t => {
+      const u = userById.get(t.user_id)
+      const name = u ? ([u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || u.email || 'User') : 'Unknown'
+      return { type: 'trade', ts: t.created_at || t.trade_date, text: `Trade logged by ${name}` }
+    }),
+  ]
+    .filter(a => a.ts)
+    .sort((a, b) => new Date(b.ts) - new Date(a.ts))
+    .slice(0, 10)
 
   // Filtering
   const term = search.trim().toLowerCase()
@@ -4103,6 +4300,9 @@ function AdminPanel({ session, setPage }) {
 
   if (!isAdmin) return null
 
+  const pendingList = users.filter(u => u.status === 'pending')
+  const maxSignupCount = Math.max(1, ...signupChart.map(d => d.count))
+
   return (
     <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both' }}>
       {/* Header */}
@@ -4114,10 +4314,68 @@ function AdminPanel({ session, setPage }) {
           </div>
           <div style={{ fontSize: '12px', color: 'var(--text-lo)', letterSpacing: '0.02em' }}>Signed in as {session?.user?.email}</div>
         </div>
-        <button
-          onClick={loadData}
-          style={{ background: 'transparent', border: '1px solid var(--card-border)', borderRadius: '8px', color: 'var(--text-md)', fontSize: '12px', padding: '7px 14px', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s' }}
-        >Refresh</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative' }}>
+          {/* Pending notification badge */}
+          <button
+            onClick={() => setPendingOpen(o => !o)}
+            style={{
+              background: 'transparent', border: '1px solid var(--card-border)',
+              borderRadius: '8px', color: 'var(--text-md)', fontSize: '12px',
+              padding: '7px 12px', cursor: 'pointer', fontFamily: 'inherit',
+              display: 'flex', alignItems: 'center', gap: '6px', position: 'relative',
+            }}
+          >
+            <Bell size={14} />
+            {pendingUsers > 0 && (
+              <span style={{
+                position: 'absolute', top: '-4px', right: '-4px',
+                background: '#ffd966', color: '#000',
+                fontSize: '10px', fontWeight: '700',
+                minWidth: '18px', height: '18px', padding: '0 5px',
+                borderRadius: '99px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>{pendingUsers}</span>
+            )}
+          </button>
+          {/* Quick approve dropdown */}
+          {pendingOpen && (
+            <div style={{
+              position: 'absolute', top: 'calc(100% + 6px)', right: 0,
+              width: '280px', maxHeight: '340px', overflowY: 'auto',
+              background: '#0d0d0d', border: '1px solid #1f1f1f',
+              borderRadius: '12px', padding: '8px', zIndex: 50,
+              boxShadow: '0 12px 36px rgba(0,0,0,0.6)',
+            }}>
+              <div style={{ fontSize: '10px', fontWeight: '600', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#666', padding: '8px 10px 6px' }}>
+                Pending Approvals
+              </div>
+              {pendingList.length === 0 ? (
+                <div style={{ padding: '14px 10px', fontSize: '12px', color: '#666' }}>No pending users</div>
+              ) : pendingList.map(u => {
+                const name = [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || u.email
+                const busy = actioning === u.id
+                return (
+                  <div key={u.id} style={{ padding: '8px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', borderRadius: '6px' }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: '12px', fontWeight: '600', color: '#ddd', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
+                      <div style={{ fontSize: '10px', color: '#666', marginTop: '1px' }}>{relativeTime(u.created_at)}</div>
+                    </div>
+                    <button
+                      onClick={() => updateStatus(u.id, 'approved')}
+                      disabled={busy}
+                      style={{ background: 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', color: '#aaffa0', borderRadius: '6px', padding: '4px 10px', fontSize: '10px', fontWeight: '700', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', opacity: busy ? 0.6 : 1 }}
+                    >Approve</button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+          <button
+            onClick={loadData}
+            style={{ background: 'transparent', border: '1px solid var(--card-border)', borderRadius: '8px', color: 'var(--text-md)', fontSize: '12px', padding: '7px 12px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <RefreshCw size={13} /> Refresh
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -4127,23 +4385,159 @@ function AdminPanel({ session, setPage }) {
       )}
 
       {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '16px' }} className="stat-grid">
+      <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '10px', marginBottom: '16px' }}>
         {[
-          { label: 'Total Users',      val: totalUsers,    color: '#fff'    },
-          { label: 'Pending Approval', val: pendingUsers,  color: '#ffd966' },
-          { label: 'Approved Users',   val: approvedUsers, color: '#aaffa0' },
-          { label: 'Total Trades',     val: totalTrades,   color: '#fff'    },
+          { label: 'Total Users',      val: loading ? '—' : totalUsers.toLocaleString(),                                   color: '#fff'    },
+          { label: 'Pending Approval', val: loading ? '—' : pendingUsers.toLocaleString(),                                 color: '#ffd966' },
+          { label: 'Approved Users',   val: loading ? '—' : approvedUsers.toLocaleString(),                                color: '#aaffa0' },
+          { label: 'Total Trades',     val: loading ? '—' : totalTrades.toLocaleString(),                                  color: '#fff'    },
+          { label: 'Trades Today',     val: loading ? '—' : tradesToday.toLocaleString(),                                  color: '#fff'    },
+          { label: 'Total P&L',        val: loading ? '—' : `${totalPnlAll >= 0 ? '+' : '−'}$${Math.abs(Math.round(totalPnlAll)).toLocaleString()}`, color: totalPnlAll >= 0 ? '#aaffa0' : '#ff8080' },
         ].map(s => (
           <div key={s.label} style={statCard}>
             <div style={{ ...lbl, marginBottom: '10px', color: '#999' }}>{s.label}</div>
-            <div style={{ fontSize: '24px', fontWeight: '800', letterSpacing: '-1px', color: s.color, lineHeight: 1 }}>
-              {loading ? '—' : s.val.toLocaleString()}
+            <div style={{ fontSize: '20px', fontWeight: '800', letterSpacing: '-0.5px', color: s.color, lineHeight: 1 }}>
+              {s.val}
             </div>
           </div>
         ))}
       </div>
 
-      {/* Filters + Search */}
+      {/* Charts + Activity feed */}
+      <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: '12px', marginBottom: '16px' }} className="chart-grid">
+        {/* Signups bar chart */}
+        <div style={statCard}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <div style={{ ...lbl, color: '#999' }}>Signups · Last 7 Days</div>
+            <div style={{ fontSize: '11px', color: '#666' }}>{signupChart.reduce((s, d) => s + d.count, 0)} total</div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px', height: '140px' }}>
+            {signupChart.map((d, i) => {
+              const h = Math.round((d.count / maxSignupCount) * 100)
+              return (
+                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+                  <div style={{ flex: 1, width: '100%', display: 'flex', alignItems: 'flex-end' }}>
+                    <div style={{
+                      width: '100%',
+                      height: `${h}%`,
+                      minHeight: d.count > 0 ? '4px' : '2px',
+                      background: d.count > 0 ? 'linear-gradient(180deg, #aaffa0 0%, #00cc66 100%)' : '#1a1a1a',
+                      borderRadius: '4px 4px 0 0',
+                      transition: 'height 0.5s ease',
+                    }} />
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#666' }}>{d.day}</div>
+                  <div style={{ fontSize: '11px', fontWeight: '700', color: d.count > 0 ? '#aaffa0' : '#444' }}>{d.count}</div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Activity Feed */}
+        <div style={statCard}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+            <div style={{ ...lbl, color: '#999' }}>Recent Activity</div>
+            <div style={{ fontSize: '10px', color: '#666' }}>auto-refresh</div>
+          </div>
+          {activity.length === 0 ? (
+            <div style={{ fontSize: '12px', color: 'var(--text-lo)', padding: '12px 0' }}>No activity yet</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {activity.map((a, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                  <div style={{
+                    width: '6px', height: '6px', borderRadius: '50%', flexShrink: 0, marginTop: '6px',
+                    background: a.type === 'signup' ? '#ffd966' : '#aaffa0',
+                    boxShadow: `0 0 6px ${a.type === 'signup' ? 'rgba(255,217,102,0.5)' : 'rgba(170,255,160,0.5)'}`,
+                  }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '12px', color: 'var(--text-hi)', lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.text}</div>
+                    <div style={{ fontSize: '10px', color: '#666', marginTop: '2px' }}>{relativeTime(a.ts)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Announcement banner editor */}
+      <div style={{ ...statCard, marginBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+          <Megaphone size={16} color={announcement.active ? '#aaffa0' : '#666'} />
+          <div style={{ ...lbl, color: '#999' }}>Announcement Banner</div>
+          {announcement.active && (
+            <span style={{ fontSize: '10px', fontWeight: '700', color: '#aaffa0', letterSpacing: '0.06em', background: 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', borderRadius: '99px', padding: '2px 8px' }}>LIVE</span>
+          )}
+        </div>
+        <input
+          value={annDraft}
+          onChange={e => setAnnDraft(e.target.value)}
+          placeholder="🔥 New feature: CSV import now available!"
+          style={{ ...inp, marginBottom: '10px' }}
+        />
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <button
+            onClick={() => saveAnnouncement(true)}
+            disabled={annSaving || !annDraft.trim()}
+            style={{ background: '#fff', color: '#000', border: 'none', borderRadius: '99px', padding: '8px 18px', fontSize: '12px', fontWeight: '600', cursor: annSaving ? 'wait' : 'pointer', fontFamily: 'inherit', opacity: annSaving || !annDraft.trim() ? 0.5 : 1 }}
+          >Save & Show</button>
+          <button
+            onClick={() => saveAnnouncement(false)}
+            disabled={annSaving}
+            style={{ background: 'transparent', border: '1px solid var(--card-border)', color: 'var(--text-md)', borderRadius: '99px', padding: '8px 16px', fontSize: '12px', fontWeight: '500', cursor: annSaving ? 'wait' : 'pointer', fontFamily: 'inherit' }}
+          >Hide Banner</button>
+          {annSaved && <span style={{ fontSize: '12px', color: '#aaffa0' }}>✓ Saved</span>}
+        </div>
+      </div>
+
+      {/* Invite Links */}
+      <div style={{ ...statCard, marginBottom: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Link2 size={16} color="#aaffa0" />
+            <div style={{ ...lbl, color: '#999' }}>Invite Links</div>
+            <span style={{ fontSize: '10px', color: '#666' }}>auto-approve on signup</span>
+          </div>
+          <button
+            onClick={generateInvite}
+            style={{ background: 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', color: '#aaffa0', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Plus size={13} /> Generate Invite Link
+          </button>
+        </div>
+        {invites.length === 0 ? (
+          <div style={{ fontSize: '12px', color: 'var(--text-lo)' }}>No invite links yet — click Generate to create one.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {invites.slice(0, 8).map(inv => {
+              const used = !!inv.used_at
+              const usedByUser = inv.used_by ? userById.get(inv.used_by) : null
+              return (
+                <div key={inv.code} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', background: '#080808', border: '1px solid #1a1a1a', borderRadius: '8px' }}>
+                  <code style={{ fontSize: '12px', fontWeight: '700', color: used ? '#666' : '#aaffa0', fontFamily: 'monospace', letterSpacing: '0.05em', flexShrink: 0 }}>{inv.code}</code>
+                  <div style={{ flex: 1, minWidth: 0, fontSize: '11px', color: '#666', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {used ? `used by ${usedByUser ? (usedByUser.email || usedByUser.username) : 'unknown'} · ${relativeTime(inv.used_at)}` : `created ${relativeTime(inv.created_at)}`}
+                  </div>
+                  {!used && (
+                    <button
+                      onClick={() => copyInvite(inv.code)}
+                      style={{ background: 'transparent', border: '1px solid #2a2a2a', color: 'var(--text-md)', borderRadius: '6px', padding: '4px 10px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', minHeight: 'auto' }}
+                    >Copy</button>
+                  )}
+                  <button
+                    onClick={() => deleteInvite(inv.code)}
+                    style={{ background: 'transparent', border: 'none', color: '#555', padding: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', minHeight: 'auto' }}
+                  ><X size={12} /></button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Filters + Search + Export */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
           {[
@@ -4173,7 +4567,6 @@ function AdminPanel({ session, setPage }) {
             )
           })}
         </div>
-
         <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
           <Search size={13} color="#555" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
           <input
@@ -4191,6 +4584,12 @@ function AdminPanel({ session, setPage }) {
             </button>
           )}
         </div>
+        <button
+          onClick={exportCSV}
+          style={{ background: 'transparent', border: '1px solid var(--card-border)', color: 'var(--text-md)', borderRadius: '99px', padding: '7px 14px', fontSize: '12px', fontWeight: '500', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px' }}
+        >
+          <Download size={13} /> Export CSV
+        </button>
       </div>
 
       {/* Users table */}
@@ -4205,14 +4604,15 @@ function AdminPanel({ session, setPage }) {
           </div>
         ) : (
           <div className="table-scroll">
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '720px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '760px' }}>
               <thead>
                 <tr>
-                  {['User', 'Email', 'Signed Up', 'Status', 'Actions'].map((h, i) => (
+                  {['', 'User', 'Email', 'Signed Up', 'Status', 'Actions'].map((h, i) => (
                     <th key={i} style={{
                       textAlign: 'left', fontSize: '10px', fontWeight: '600',
                       letterSpacing: '0.1em', textTransform: 'uppercase', color: '#666',
                       padding: '14px 16px', borderBottom: '1px solid var(--divider)',
+                      width: i === 0 ? '24px' : undefined,
                     }}>{h}</th>
                   ))}
                 </tr>
@@ -4221,52 +4621,97 @@ function AdminPanel({ session, setPage }) {
                 {filtered.map(u => {
                   const fullName = [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || '—'
                   const busy = actioning === u.id
+                  const isExpanded = expandedId === u.id
+                  // Per-user stats
+                  const userTrades = trades.filter(t => t.user_id === u.id)
+                  const tradeCount = userTrades.length
+                  const wins  = userTrades.filter(t => (Number(t.pnl) || 0) > 0).length
+                  const winRate = tradeCount > 0 ? Math.round((wins / tradeCount) * 100) : 0
+                  const userPnl = userTrades.reduce((s, t) => s + (Number(t.pnl) || 0), 0)
+                  const lastTradeDate = userTrades.reduce((acc, t) => {
+                    const d = t.trade_date || t.created_at
+                    return !acc || (d && new Date(d) > new Date(acc)) ? d : acc
+                  }, null)
                   return (
-                    <tr key={u.id} style={{ borderBottom: '1px solid var(--divider)' }}>
-                      <td style={{ padding: '12px 16px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <div style={{
-                            width: '32px', height: '32px', borderRadius: '50%',
-                            background: '#141414', border: '1px solid #222',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '11px', fontWeight: '700', color: '#aaa',
-                            flexShrink: 0,
-                          }}>{initialsOf(u)}</div>
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-hi)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fullName}</div>
-                            {u.username && fullName !== u.username && (
-                              <div style={{ fontSize: '11px', color: 'var(--text-lo)', marginTop: '1px' }}>@{u.username}</div>
-                            )}
+                    <Fragment key={u.id}>
+                      <tr
+                        onClick={() => setExpandedId(isExpanded ? null : u.id)}
+                        className="trade-row"
+                        style={{ borderBottom: '1px solid var(--divider)', cursor: 'pointer' }}
+                      >
+                        <td style={{ padding: '12px 8px 12px 16px' }}>
+                          <ChevronDown size={14} color="#555" style={{ transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
+                        </td>
+                        <td style={{ padding: '12px 16px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#141414', border: '1px solid #222', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', color: '#aaa', flexShrink: 0 }}>{initialsOf(u)}</div>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-hi)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fullName}</div>
+                              {u.username && fullName !== u.username && (
+                                <div style={{ fontSize: '11px', color: 'var(--text-lo)', marginTop: '1px' }}>@{u.username}</div>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td style={{ padding: '12px 16px', fontSize: '12px', color: 'var(--text-md)', whiteSpace: 'nowrap' }}>{u.email || '—'}</td>
-                      <td style={{ padding: '12px 16px', fontSize: '12px', color: 'var(--text-lo)', whiteSpace: 'nowrap' }}>{formatDate(u.created_at)}</td>
-                      <td style={{ padding: '12px 16px' }}>{statusBadge(u.status)}</td>
-                      <td style={{ padding: '12px 16px' }}>
-                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                          {u.status !== 'approved' && (
-                            <button
-                              onClick={() => updateStatus(u.id, 'approved')}
-                              disabled={busy}
-                              style={{ background: 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', color: '#aaffa0', borderRadius: '6px', padding: '5px 11px', fontSize: '11px', fontWeight: '600', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', opacity: busy ? 0.6 : 1, transition: 'all 0.15s' }}
-                            >Approve</button>
-                          )}
-                          {u.status !== 'rejected' && (
-                            <button
-                              onClick={() => updateStatus(u.id, 'rejected')}
-                              disabled={busy}
-                              style={{ background: 'rgba(255,128,128,0.06)', border: '1px solid rgba(255,128,128,0.25)', color: '#ff8080', borderRadius: '6px', padding: '5px 11px', fontSize: '11px', fontWeight: '600', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', opacity: busy ? 0.6 : 1, transition: 'all 0.15s' }}
-                            >Reject</button>
-                          )}
-                          <button
-                            onClick={() => deleteUser(u.id)}
-                            disabled={busy}
-                            style={{ background: 'transparent', border: '1px solid #2a2a2a', color: '#666', borderRadius: '6px', padding: '5px 11px', fontSize: '11px', fontWeight: '500', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', opacity: busy ? 0.6 : 1, transition: 'all 0.15s' }}
-                          >Delete</button>
-                        </div>
-                      </td>
-                    </tr>
+                        </td>
+                        <td style={{ padding: '12px 16px', fontSize: '12px', color: 'var(--text-md)', whiteSpace: 'nowrap' }}>{u.email || '—'}</td>
+                        <td style={{ padding: '12px 16px', fontSize: '12px', color: 'var(--text-lo)', whiteSpace: 'nowrap' }}>{formatDate(u.created_at)}</td>
+                        <td style={{ padding: '12px 16px' }}>{statusBadge(u.status)}</td>
+                        <td style={{ padding: '12px 16px' }} onClick={e => e.stopPropagation()}>
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            {u.status !== 'approved' && (
+                              <button onClick={() => updateStatus(u.id, 'approved')} disabled={busy} style={{ background: 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', color: '#aaffa0', borderRadius: '6px', padding: '5px 11px', fontSize: '11px', fontWeight: '600', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', opacity: busy ? 0.6 : 1 }}>Approve</button>
+                            )}
+                            {u.status !== 'rejected' && (
+                              <button onClick={() => updateStatus(u.id, 'rejected')} disabled={busy} style={{ background: 'rgba(255,128,128,0.06)', border: '1px solid rgba(255,128,128,0.25)', color: '#ff8080', borderRadius: '6px', padding: '5px 11px', fontSize: '11px', fontWeight: '600', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', opacity: busy ? 0.6 : 1 }}>Reject</button>
+                            )}
+                            <button onClick={() => deleteUser(u.id)} disabled={busy} style={{ background: 'transparent', border: '1px solid #2a2a2a', color: '#666', borderRadius: '6px', padding: '5px 11px', fontSize: '11px', fontWeight: '500', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', opacity: busy ? 0.6 : 1 }}>Delete</button>
+                          </div>
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr style={{ background: 'rgba(255,255,255,0.015)' }}>
+                          <td colSpan={6} style={{ padding: '20px 24px', borderBottom: '1px solid var(--divider)' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '16px' }}>
+                              {[
+                                { l: 'Trades',     v: tradeCount },
+                                { l: 'Win Rate',   v: tradeCount > 0 ? `${winRate}%` : '—' },
+                                { l: 'Total P&L',  v: tradeCount > 0 ? `${userPnl >= 0 ? '+' : '−'}$${Math.abs(Math.round(userPnl)).toLocaleString()}` : '—', c: userPnl >= 0 ? '#aaffa0' : '#ff8080' },
+                                { l: 'Last Trade', v: lastTradeDate ? formatDate(lastTradeDate) : 'Never' },
+                              ].map(s => (
+                                <div key={s.l} style={{ background: '#080808', border: '1px solid #1a1a1a', borderRadius: '10px', padding: '12px 14px' }}>
+                                  <div style={{ fontSize: '10px', color: '#666', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '6px' }}>{s.l}</div>
+                                  <div style={{ fontSize: '15px', fontWeight: '700', color: s.c || 'var(--text-hi)' }}>{s.v}</div>
+                                </div>
+                              ))}
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '14px', fontSize: '12px' }}>
+                              <div><span style={{ color: '#666' }}>Phone: </span><span style={{ color: 'var(--text-md)' }}>{u.phone || '—'}</span></div>
+                              <div><span style={{ color: '#666' }}>Market focus: </span><span style={{ color: 'var(--text-md)' }}>{u.market_focus || '—'}</span></div>
+                              <div><span style={{ color: '#666' }}>Monthly goal: </span><span style={{ color: 'var(--text-md)' }}>{u.monthly_goal ? `$${Number(u.monthly_goal).toLocaleString()}` : '—'}</span></div>
+                              <div><span style={{ color: '#666' }}>User ID: </span><span style={{ color: 'var(--text-lo)', fontFamily: 'monospace', fontSize: '11px' }}>{u.id}</span></div>
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                              <button
+                                onClick={() => sendPasswordReset(u.email, u.id)}
+                                disabled={busy}
+                                style={{ background: 'transparent', border: '1px solid var(--card-border)', color: 'var(--text-md)', borderRadius: '8px', padding: '6px 14px', fontSize: '12px', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', opacity: busy ? 0.6 : 1 }}
+                              >Send Password Reset</button>
+                              {['approved', 'pending', 'rejected'].filter(s => s !== (u.status || 'pending')).map(s => (
+                                <button
+                                  key={s}
+                                  onClick={() => updateStatus(u.id, s)}
+                                  disabled={busy}
+                                  style={{ background: 'transparent', border: '1px solid var(--card-border)', color: 'var(--text-md)', borderRadius: '8px', padding: '6px 14px', fontSize: '12px', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', textTransform: 'capitalize' }}
+                                >Set {s}</button>
+                              ))}
+                              {resetMsg?.id === u.id && (
+                                <span style={{ fontSize: '12px', color: '#aaffa0', alignSelf: 'center' }}>{resetMsg.text}</span>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   )
                 })}
               </tbody>
@@ -4283,6 +4728,7 @@ export default function App() {
   const [session,        setSession]        = useState(null)
   const [authLoading,    setAuthLoading]    = useState(true)
   const [passwordRecovery, setPasswordRecovery] = useState(false)
+  const [announcement, setAnnouncement] = useState(null) // { text, active }
   const [profileLoading, setProfileLoading] = useState(false)
   const [tradesLoading,  setTradesLoading]  = useState(true)
   const [profile,        setProfile]        = useState(null)
@@ -4338,17 +4784,48 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  // ── App-wide announcement banner ──
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const { data, error } = await supabase.from('app_settings').select('*').eq('id', 1).maybeSingle()
+        if (cancelled || error || !data) return
+        setAnnouncement({ text: data.announcement_text || '', active: !!data.announcement_active })
+      } catch {}
+    }
+    load()
+    const t = setInterval(load, 60_000)
+    return () => { cancelled = true; clearInterval(t) }
+  }, [])
+
   const loadProfile = async (sess) => {
     setProfileLoading(true)
-    const { data } = await supabase.from('profiles').select('*').eq('id', sess.user.id).single()
-    if (data) {
-      setProfile(data)
-      if (data.theme)      setTheme(data.theme)
-      if (data.color_mode) setColorMode(data.color_mode)
-    } else {
+    // Apply any pending invite stored from email-confirm signup
+    let pendingInvite = null
+    try { pendingInvite = localStorage.getItem('pending_invite') } catch {}
+
+    let { data } = await supabase.from('profiles').select('*').eq('id', sess.user.id).single()
+    if (!data) {
       const { data: created } = await supabase.from('profiles').upsert({ id: sess.user.id }, { onConflict: 'id' }).select().single()
-      setProfile(created || { id: sess.user.id, username: '', market_focus: '', theme: 'white' })
+      data = created || { id: sess.user.id, username: '', market_focus: '', theme: 'white' }
     }
+
+    if (pendingInvite && data && data.status !== 'approved') {
+      try {
+        const { data: inv } = await supabase.from('invites').select('code,used_at').eq('code', pendingInvite).maybeSingle()
+        if (inv && !inv.used_at) {
+          await supabase.from('profiles').update({ status: 'approved' }).eq('id', sess.user.id)
+          await supabase.from('invites').update({ used_at: new Date().toISOString(), used_by: sess.user.id }).eq('code', pendingInvite).is('used_at', null)
+          data = { ...data, status: 'approved' }
+        }
+      } catch {}
+      try { localStorage.removeItem('pending_invite') } catch {}
+    }
+
+    setProfile(data)
+    if (data.theme)      setTheme(data.theme)
+    if (data.color_mode) setColorMode(data.color_mode)
     setProfileLoading(false)
   }
 
@@ -4591,6 +5068,17 @@ export default function App() {
 
       {/* ── Main content ── */}
       <main style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1, minWidth: 0 }}>
+        {announcement?.active && announcement.text && (
+          <div style={{
+            background: 'linear-gradient(90deg, rgba(170,255,160,0.10), rgba(170,255,160,0.04))',
+            borderBottom: '1px solid rgba(170,255,160,0.2)',
+            color: '#aaffa0', fontSize: '13px', fontWeight: '500',
+            padding: '10px 24px', textAlign: 'center',
+            letterSpacing: '0.01em', flexShrink: 0,
+          }}>
+            {announcement.text}
+          </div>
+        )}
         {page === 'dashboard'   && <Dashboard trades={trades} onAddTrade={goAddTrade} loading={tradesLoading} profile={profile} />}
         {page === 'trades'      && (
           <Trades
