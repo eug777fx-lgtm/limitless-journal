@@ -2131,7 +2131,7 @@ async function uploadImages(files, userId) {
 }
 
 // ─── Trade Detail Modal ───────────────────────────────────────
-function TradeDetailModal({ trade, onClose, onSave }) {
+function TradeDetailModal({ trade, onClose, onSave, demoMode = false }) {
   const [form, setForm] = useState({
     symbol:          trade.symbol          || '',
     dir:             trade.direction       || 'Long',
@@ -2159,6 +2159,7 @@ function TradeDetailModal({ trade, onClose, onSave }) {
   const divider = <div style={{ height: '1px', background: '#141414', margin: '18px 0' }} />
 
   const save = async () => {
+    if (demoMode) { alert('Demo mode is active — saving is disabled.'); return }
     setSaving(true)
     const chart_url = chartUrls.length === 0 ? null
       : chartUrls.length === 1 ? chartUrls[0]
@@ -2361,8 +2362,13 @@ function TradeDetailModal({ trade, onClose, onSave }) {
         </div>
 
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button style={{ ...btn, flex: 1, opacity: saving ? 0.6 : 1 }} onClick={save} disabled={saving}>
-            {saving ? 'Saving…' : 'Save Changes'}
+          <button
+            style={{ ...btn, flex: 1, opacity: saving || demoMode ? 0.5 : 1, cursor: demoMode ? 'not-allowed' : 'pointer' }}
+            onClick={save}
+            disabled={saving || demoMode}
+            title={demoMode ? 'Demo mode active — saving disabled' : ''}
+          >
+            {saving ? 'Saving…' : demoMode ? 'Demo mode active' : 'Save Changes'}
           </button>
           <button style={{ ...btn, background: 'transparent', color: '#888', border: '1px solid #1c1c1c' }} onClick={onClose}>Cancel</button>
         </div>
@@ -2750,7 +2756,7 @@ function AddTradeModal({ open, onClose, session, onTradeAdded }) {
 }
 
 // ─── Trade Log ────────────────────────────────────────────────
-function Trades({ trades, session, onTradeAdded, onTradeDeleted, onTradeUpdated, onAddTrade, loading }) {
+function Trades({ trades, session, onTradeAdded, onTradeDeleted, onTradeUpdated, onAddTrade, loading, demoMode = false }) {
   if (loading) return <TradesSkeleton />
   const [selectedTrade, setSelectedTrade] = useState(null)
   const [csvPreview, setCsvPreview]     = useState(null)
@@ -2814,6 +2820,7 @@ function Trades({ trades, session, onTradeAdded, onTradeDeleted, onTradeUpdated,
   }
 
   const deleteTrade = async (id) => {
+    if (demoMode) { alert('Demo mode is active — deleting is disabled.'); return }
     await supabase.from('trades').delete().eq('id', id)
     onTradeDeleted(id)
   }
@@ -2967,6 +2974,7 @@ function Trades({ trades, session, onTradeAdded, onTradeDeleted, onTradeUpdated,
           trade={selectedTrade}
           onClose={() => setSelectedTrade(null)}
           onSave={updated => { onTradeUpdated(updated); setSelectedTrade(null) }}
+          demoMode={demoMode}
         />
       )}
     </div>
@@ -3037,6 +3045,40 @@ const NEWS_FALLBACK = (() => {
 })()
 
 const NEWS_CACHE_TTL = 60 * 60 * 1000 // 1 hour
+
+// ─── Demo Mode ────────────────────────────────────────────────
+const DEMO_PROFILE = {
+  username:     'demo_trader',
+  first_name:   'Alex',
+  last_name:    'Rivera',
+  market_focus: 'Futures · Forex',
+  theme:        'blue',
+  status:       'approved',
+  monthly_goal: 5000,
+}
+
+const DEMO_TRADES = [
+  { id:'d1',  symbol:'NQ',      direction:'Long',  pnl:350, rr:2.1,  session:'New York', trade_date:'2026-01-07', emotional_state:'Focused',      trade_rating:'A Setup',  entry_reason:'BOS on 15m, clean liquidity sweep below prev low',     did_correctly:'Waited for confirmation, respected my stop',     did_wrong:'',                                                       followed_plan:'YES',       notes:'' },
+  { id:'d2',  symbol:'NQ',      direction:'Short', pnl:-175, rr:-1,  session:'New York', trade_date:'2026-01-08', emotional_state:'Anxious',      trade_rating:'C Setup',  entry_reason:'Entered early, no confirmation',                       did_correctly:'',                                                did_wrong:'Entered early, news spike stopped me out',                followed_plan:'NO',        notes:'Mistake — need more patience' },
+  { id:'d3',  symbol:'XAUUSD',  direction:'Long',  pnl:414, rr:2.8,  session:'London',   trade_date:'2026-01-09', emotional_state:'Patient',      trade_rating:'A+ Setup', entry_reason:'4H FVG fill, London session, clean entry',             did_correctly:'Waited for London open, perfect entry',           did_wrong:'',                                                       followed_plan:'YES',       notes:'' },
+  { id:'d4',  symbol:'NQ',      direction:'Short', pnl:350, rr:2.1,  session:'New York', trade_date:'2026-01-10', emotional_state:'Confident',    trade_rating:'A Setup',  entry_reason:'iFVG inversion, NY open, HTF bearish bias',            did_correctly:'Trusted the setup',                               did_wrong:'',                                                       followed_plan:'YES',       notes:'' },
+  { id:'d5',  symbol:'EUR/USD', direction:'Short', pnl:-230, rr:-1,  session:'London',   trade_date:'2026-01-13', emotional_state:'FOMO',         trade_rating:'C Setup',  entry_reason:'CPI news trade',                                       did_correctly:'',                                                did_wrong:'Traded news volatility — should have avoided',           followed_plan:'NO',        notes:'News mistake' },
+  { id:'d6',  symbol:'NQ',      direction:'Long',  pnl:350, rr:2.0,  session:'New York', trade_date:'2026-01-14', emotional_state:'Focused',      trade_rating:'A Setup',  entry_reason:'Liquidity sweep, 1m iFVG, 9:45 AM entry',              did_correctly:'Waited for sweep confirmation',                   did_wrong:'',                                                       followed_plan:'YES',       notes:'' },
+  { id:'d7',  symbol:'XAUUSD',  direction:'Short', pnl:-180, rr:-1,  session:'London',   trade_date:'2026-01-15', emotional_state:'Impatient',    trade_rating:'B Setup',  entry_reason:'HTF resistance',                                       did_correctly:'Good entry location',                             did_wrong:'Moved SL to BE too early',                               followed_plan:'PARTIALLY', notes:'' },
+  { id:'d8',  symbol:'NQ',      direction:'Short', pnl:350, rr:2.1,  session:'New York', trade_date:'2026-01-16', emotional_state:'Confident',    trade_rating:'A Setup',  entry_reason:'Clean structure break, NY killzone',                   did_correctly:'Perfect execution',                               did_wrong:'',                                                       followed_plan:'YES',       notes:'' },
+  { id:'d9',  symbol:'GBP/USD', direction:'Long',  pnl:-280, rr:-1,  session:'London',   trade_date:'2026-01-17', emotional_state:'Revenge',      trade_rating:'C Setup',  entry_reason:'Fought the trend',                                     did_correctly:'',                                                did_wrong:'Overleveraged, fought trend — mistake',                  followed_plan:'NO',        notes:'Revenge trade after loss' },
+  { id:'d10', symbol:'NQ',      direction:'Long',  pnl:350, rr:2.0,  session:'New York', trade_date:'2026-01-20', emotional_state:'Focused',      trade_rating:'A Setup',  entry_reason:'Post holiday gap fill, strong momentum',               did_correctly:'Good read on market',                             did_wrong:'',                                                       followed_plan:'YES',       notes:'' },
+  { id:'d11', symbol:'XAUUSD',  direction:'Long',  pnl:648, rr:3.2,  session:'London',   trade_date:'2026-01-21', emotional_state:'Patient',      trade_rating:'A+ Setup', entry_reason:'HTF bullish, 4H FVG respected perfectly',              did_correctly:'Held through pullback, trusted HTF',              did_wrong:'',                                                       followed_plan:'YES',       notes:'Best trade of the month' },
+  { id:'d12', symbol:'NQ',      direction:'Short', pnl:-175, rr:-1,  session:'New York', trade_date:'2026-01-22', emotional_state:'Tired',        trade_rating:'C Setup',  entry_reason:'Choppy market no clear structure',                     did_correctly:'',                                                did_wrong:'Should have sat out — no setup',                         followed_plan:'NO',        notes:'' },
+  { id:'d13', symbol:'EUR/USD', direction:'Short', pnl:480, rr:2.5,  session:'London',   trade_date:'2026-01-23', emotional_state:'Focused',      trade_rating:'A Setup',  entry_reason:'London BOS, clean 15m iFVG, textbook',                 did_correctly:'Waited for London session, perfect model',        did_wrong:'',                                                       followed_plan:'YES',       notes:'' },
+  { id:'d14', symbol:'NQ',      direction:'Long',  pnl:350, rr:2.0,  session:'New York', trade_date:'2026-01-24', emotional_state:'Confident',    trade_rating:'A Setup',  entry_reason:'Demand zone + sweep, NY session',                      did_correctly:'Clean execution',                                 did_wrong:'',                                                       followed_plan:'YES',       notes:'' },
+  { id:'d15', symbol:'XAUUSD',  direction:'Short', pnl:-252, rr:-1,  session:'New York', trade_date:'2026-01-27', emotional_state:'Overconfident',trade_rating:'C Setup',  entry_reason:'Against HTF bias',                                     did_correctly:'',                                                did_wrong:'Traded against HTF bias — undisciplined',                followed_plan:'NO',        notes:'Did not follow plan at all' },
+  { id:'d16', symbol:'NQ',      direction:'Short', pnl:350, rr:2.1,  session:'New York', trade_date:'2026-01-28', emotional_state:'Focused',      trade_rating:'A Setup',  entry_reason:'Distribution phase clear, clean model',                did_correctly:'Trusted the process',                             did_wrong:'',                                                       followed_plan:'YES',       notes:'' },
+  { id:'d17', symbol:'GBP/USD', direction:'Short', pnl:-260, rr:-1,  session:'London',   trade_date:'2026-01-29', emotional_state:'FOMO',         trade_rating:'C Setup',  entry_reason:'News spike entry',                                     did_correctly:'',                                                did_wrong:'Did not check news calendar',                            followed_plan:'NO',        notes:'Same news mistake' },
+  { id:'d18', symbol:'NQ',      direction:'Long',  pnl:350, rr:2.0,  session:'New York', trade_date:'2026-01-30', emotional_state:'Patient',      trade_rating:'A Setup',  entry_reason:'Accumulation sweep, 10 AM entry, strong',              did_correctly:'Perfect patience, waited for sweep',              did_wrong:'',                                                       followed_plan:'YES',       notes:'' },
+  { id:'d19', symbol:'XAUUSD',  direction:'Long',  pnl:756, rr:3.8,  session:'London',   trade_date:'2026-01-31', emotional_state:'Focused',      trade_rating:'A+ Setup', entry_reason:'Monthly close liquidity, massive run',                 did_correctly:'Held full position, no early exit',               did_wrong:'',                                                       followed_plan:'YES',       notes:'Monthly close play — beautiful' },
+  { id:'d20', symbol:'NQ',      direction:'Short', pnl:-175, rr:-1,  session:'New York', trade_date:'2026-02-03', emotional_state:'Impatient',    trade_rating:'C Setup',  entry_reason:'Early entry again',                                    did_correctly:'',                                                did_wrong:'Early entry again — recurring mistake',                  followed_plan:'NO',        notes:'Need to work on patience' },
+]
 
 // Get the Monday of a week containing the given date (or today)
 const getMonday = (d = new Date()) => {
@@ -3768,7 +3810,7 @@ function TradingPlan({ flags = {} }) {
 
 
 // ─── Settings ─────────────────────────────────────────────────
-function Settings({ theme, setTheme, session, profile, setProfile, glassMode, setGlassMode, onLogout, trades = [] }) {
+function Settings({ theme, setTheme, session, profile, setProfile, glassMode, setGlassMode, onLogout, trades = [], demoMode = false, setDemoMode = () => {} }) {
   // Support ticket
   const [ticketSubj, setTicketSubj] = useState('')
   const [ticketBody, setTicketBody] = useState('')
@@ -3882,6 +3924,33 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
     <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both' }}>
       <div style={{ marginBottom: '28px' }}>
         <h1 style={{ fontSize: '28px', fontWeight: '800', letterSpacing: '-1px', color: 'var(--text-hi)' }}>Settings</h1>
+      </div>
+
+      {/* ── Content Mode ── */}
+      <div style={sectionCard}>
+        <div style={sectionTitle}>Content Mode</div>
+        <div style={{ height: '1px', background: '#1a1a1a', marginBottom: '20px' }} />
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: demoMode ? 'rgba(255,217,102,0.10)' : '#141414', border: `1px solid ${demoMode ? 'rgba(255,217,102,0.25)' : '#222'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.2s' }}>
+              <Sparkles size={16} color={demoMode ? '#ffd966' : '#888'} />
+            </div>
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-hi)', marginBottom: '2px' }}>Demo Mode</div>
+              <div style={{ fontSize: '12px', color: '#666', lineHeight: 1.4 }}>Show sample data instead of your real journal — useful for screenshots, walkthroughs, or trying features.</div>
+            </div>
+          </div>
+          <div className={`toggle-track ${demoMode ? 'on' : ''}`} onClick={() => setDemoMode(!demoMode)} style={{ flexShrink: 0 }}>
+            <div className="toggle-knob" />
+          </div>
+        </div>
+
+        {demoMode && (
+          <div style={{ marginTop: '14px', background: 'rgba(255,217,102,0.05)', border: '1px solid rgba(255,217,102,0.20)', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: '#ffd966', lineHeight: 1.5 }}>
+            Showing 20 sample trades for <strong>Alex Rivera</strong>. Adding, editing, and deleting trades is disabled. Toggle off to return to your real data — nothing has been changed.
+          </div>
+        )}
       </div>
 
       {/* ── Journal Theme ── */}
@@ -5354,6 +5423,13 @@ export default function App() {
   const [passwordRecovery, setPasswordRecovery] = useState(false)
   const [announcement, setAnnouncement] = useState(null) // { text, active }
   const [featureFlags, setFeatureFlags] = useState({ monthlyGoalTracker: true, aiChecklist: true, newsCalendar: true, feedSection: true })
+  const [demoMode,            setDemoModeRaw]        = useState(() => localStorage.getItem('demo_mode') === 'true')
+  const [demoBannerDismissed, setDemoBannerDismissed] = useState(false)
+  const setDemoMode = (v) => {
+    setDemoModeRaw(v)
+    try { localStorage.setItem('demo_mode', v ? 'true' : 'false') } catch {}
+    if (v) setDemoBannerDismissed(false) // re-show banner each time it's turned on
+  }
   const [profileLoading, setProfileLoading] = useState(false)
   const [tradesLoading,  setTradesLoading]  = useState(true)
   const [profile,        setProfile]        = useState(null)
@@ -5486,7 +5562,10 @@ export default function App() {
     await supabase.auth.signOut()
   }
 
-  const goAddTrade = () => setShowAddTrade(true)
+  const goAddTrade = () => {
+    if (demoMode) { alert('Demo mode is active — adding trades is disabled.'); return }
+    setShowAddTrade(true)
+  }
 
   const nav = [
     { id: 'dashboard', Icon: LayoutDashboard, label: 'Dashboard'    },
@@ -5497,8 +5576,11 @@ export default function App() {
   ]
 
   // Sidebar user card values
-  const displayName  = profile?.username      || session?.user?.email?.split('@')[0] || 'User'
-  const marketFocus  = profile?.market_focus  || 'Trader'
+  // Effective profile + trades — swapped for demo data when demo mode is on
+  const displayProfile = demoMode ? { ...profile, ...DEMO_PROFILE } : profile
+  const effectiveTrades = demoMode ? DEMO_TRADES : trades
+  const displayName  = displayProfile?.username      || session?.user?.email?.split('@')[0] || 'User'
+  const marketFocus  = displayProfile?.market_focus  || 'Trader'
   const initials     = displayName.slice(0, 2).toUpperCase()
 
   // ── Loading ──
@@ -5701,6 +5783,25 @@ export default function App() {
 
       {/* ── Main content ── */}
       <main style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1, minWidth: 0 }}>
+        {demoMode && !demoBannerDismissed && (
+          <div style={{
+            background: 'linear-gradient(90deg, rgba(255,217,102,0.14), rgba(255,217,102,0.06))',
+            borderBottom: '1px solid rgba(255,217,102,0.25)',
+            color: '#ffd966', fontSize: '13px', fontWeight: '600',
+            padding: '10px 24px', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', gap: '12px', flexShrink: 0,
+            letterSpacing: '0.01em',
+          }}>
+            <span>⚠️ Demo Mode Active — This is sample data for demonstration purposes</span>
+            <button
+              onClick={() => setDemoBannerDismissed(true)}
+              style={{ background: 'transparent', border: 'none', color: '#ffd966', cursor: 'pointer', padding: '2px 6px', minHeight: 'auto', fontSize: '14px', lineHeight: 1, opacity: 0.7 }}
+              onMouseEnter={e => { e.currentTarget.style.opacity = '1' }}
+              onMouseLeave={e => { e.currentTarget.style.opacity = '0.7' }}
+              title="Dismiss"
+            >✕</button>
+          </div>
+        )}
         {announcement?.active && announcement.text && (
           <div style={{
             background: 'linear-gradient(90deg, rgba(170,255,160,0.10), rgba(170,255,160,0.04))',
@@ -5712,21 +5813,22 @@ export default function App() {
             {announcement.text}
           </div>
         )}
-        {page === 'dashboard'   && <Dashboard trades={trades} onAddTrade={goAddTrade} loading={tradesLoading} profile={profile} flags={featureFlags} />}
+        {page === 'dashboard'   && <Dashboard trades={effectiveTrades} onAddTrade={goAddTrade} loading={demoMode ? false : tradesLoading} profile={displayProfile} flags={featureFlags} />}
         {page === 'trades'      && (
           <Trades
-            trades={trades}
+            trades={effectiveTrades}
             session={session}
             onTradeAdded={t => setTrades(prev => [t, ...prev])}
             onTradeDeleted={id => setTrades(prev => prev.filter(t => t.id !== id))}
             onTradeUpdated={updated => setTrades(prev => prev.map(t => t.id === updated.id ? updated : t))}
             onAddTrade={goAddTrade}
-            loading={tradesLoading}
+            loading={demoMode ? false : tradesLoading}
+            demoMode={demoMode}
           />
         )}
         {page === 'news' && featureFlags.newsCalendar && <NewsCalendar />}
         {page === 'plan'        && <TradingPlan flags={featureFlags} />}
-        {page === 'settings'    && <Settings theme={theme} setTheme={handleSetTheme} session={session} profile={profile} setProfile={setProfile} glassMode={glassMode} setGlassMode={v => { setGlassMode(v); localStorage.setItem('glass_mode', v) }} onLogout={logout} trades={trades} />}
+        {page === 'settings'    && <Settings theme={theme} setTheme={handleSetTheme} session={session} profile={profile} setProfile={setProfile} glassMode={glassMode} setGlassMode={v => { setGlassMode(v); localStorage.setItem('glass_mode', v) }} onLogout={logout} trades={effectiveTrades} demoMode={demoMode} setDemoMode={setDemoMode} />}
         {page === 'admin'       && <AdminPanel session={session} setPage={setPage} />}
       </main>
 
