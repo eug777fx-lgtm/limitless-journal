@@ -2159,7 +2159,7 @@ function TradeDetailModal({ trade, onClose, onSave, demoMode = false }) {
   const divider = <div style={{ height: '1px', background: '#141414', margin: '18px 0' }} />
 
   const save = async () => {
-    if (demoMode) { alert('Demo mode is active — saving is disabled.'); return }
+    if (demoMode) { onClose(); return } // silently close in demo mode, no DB write
     setSaving(true)
     const chart_url = chartUrls.length === 0 ? null
       : chartUrls.length === 1 ? chartUrls[0]
@@ -2362,13 +2362,8 @@ function TradeDetailModal({ trade, onClose, onSave, demoMode = false }) {
         </div>
 
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            style={{ ...btn, flex: 1, opacity: saving || demoMode ? 0.5 : 1, cursor: demoMode ? 'not-allowed' : 'pointer' }}
-            onClick={save}
-            disabled={saving || demoMode}
-            title={demoMode ? 'Demo mode active — saving disabled' : ''}
-          >
-            {saving ? 'Saving…' : demoMode ? 'Demo mode active' : 'Save Changes'}
+          <button style={{ ...btn, flex: 1, opacity: saving ? 0.6 : 1 }} onClick={save} disabled={saving}>
+            {saving ? 'Saving…' : 'Save Changes'}
           </button>
           <button style={{ ...btn, background: 'transparent', color: '#888', border: '1px solid #1c1c1c' }} onClick={onClose}>Cancel</button>
         </div>
@@ -2820,7 +2815,7 @@ function Trades({ trades, session, onTradeAdded, onTradeDeleted, onTradeUpdated,
   }
 
   const deleteTrade = async (id) => {
-    if (demoMode) { alert('Demo mode is active — deleting is disabled.'); return }
+    if (demoMode) return // silently ignore in demo mode
     await supabase.from('trades').delete().eq('id', id)
     onTradeDeleted(id)
   }
@@ -3048,7 +3043,7 @@ const NEWS_CACHE_TTL = 60 * 60 * 1000 // 1 hour
 
 // ─── Demo Mode ────────────────────────────────────────────────
 const DEMO_PROFILE = {
-  username:     'demo_trader',
+  username:     'alex_trades',
   first_name:   'Alex',
   last_name:    'Rivera',
   market_focus: 'Futures · Forex',
@@ -3058,26 +3053,93 @@ const DEMO_PROFILE = {
 }
 
 const DEMO_TRADES = [
-  { id:'d1',  symbol:'NQ',      direction:'Long',  pnl:350, rr:2.1,  session:'New York', trade_date:'2026-01-07', emotional_state:'Focused',      trade_rating:'A Setup',  entry_reason:'BOS on 15m, clean liquidity sweep below prev low',     did_correctly:'Waited for confirmation, respected my stop',     did_wrong:'',                                                       followed_plan:'YES',       notes:'' },
-  { id:'d2',  symbol:'NQ',      direction:'Short', pnl:-175, rr:-1,  session:'New York', trade_date:'2026-01-08', emotional_state:'Anxious',      trade_rating:'C Setup',  entry_reason:'Entered early, no confirmation',                       did_correctly:'',                                                did_wrong:'Entered early, news spike stopped me out',                followed_plan:'NO',        notes:'Mistake — need more patience' },
-  { id:'d3',  symbol:'XAUUSD',  direction:'Long',  pnl:414, rr:2.8,  session:'London',   trade_date:'2026-01-09', emotional_state:'Patient',      trade_rating:'A+ Setup', entry_reason:'4H FVG fill, London session, clean entry',             did_correctly:'Waited for London open, perfect entry',           did_wrong:'',                                                       followed_plan:'YES',       notes:'' },
-  { id:'d4',  symbol:'NQ',      direction:'Short', pnl:350, rr:2.1,  session:'New York', trade_date:'2026-01-10', emotional_state:'Confident',    trade_rating:'A Setup',  entry_reason:'iFVG inversion, NY open, HTF bearish bias',            did_correctly:'Trusted the setup',                               did_wrong:'',                                                       followed_plan:'YES',       notes:'' },
-  { id:'d5',  symbol:'EUR/USD', direction:'Short', pnl:-230, rr:-1,  session:'London',   trade_date:'2026-01-13', emotional_state:'FOMO',         trade_rating:'C Setup',  entry_reason:'CPI news trade',                                       did_correctly:'',                                                did_wrong:'Traded news volatility — should have avoided',           followed_plan:'NO',        notes:'News mistake' },
-  { id:'d6',  symbol:'NQ',      direction:'Long',  pnl:350, rr:2.0,  session:'New York', trade_date:'2026-01-14', emotional_state:'Focused',      trade_rating:'A Setup',  entry_reason:'Liquidity sweep, 1m iFVG, 9:45 AM entry',              did_correctly:'Waited for sweep confirmation',                   did_wrong:'',                                                       followed_plan:'YES',       notes:'' },
-  { id:'d7',  symbol:'XAUUSD',  direction:'Short', pnl:-180, rr:-1,  session:'London',   trade_date:'2026-01-15', emotional_state:'Impatient',    trade_rating:'B Setup',  entry_reason:'HTF resistance',                                       did_correctly:'Good entry location',                             did_wrong:'Moved SL to BE too early',                               followed_plan:'PARTIALLY', notes:'' },
-  { id:'d8',  symbol:'NQ',      direction:'Short', pnl:350, rr:2.1,  session:'New York', trade_date:'2026-01-16', emotional_state:'Confident',    trade_rating:'A Setup',  entry_reason:'Clean structure break, NY killzone',                   did_correctly:'Perfect execution',                               did_wrong:'',                                                       followed_plan:'YES',       notes:'' },
-  { id:'d9',  symbol:'GBP/USD', direction:'Long',  pnl:-280, rr:-1,  session:'London',   trade_date:'2026-01-17', emotional_state:'Revenge',      trade_rating:'C Setup',  entry_reason:'Fought the trend',                                     did_correctly:'',                                                did_wrong:'Overleveraged, fought trend — mistake',                  followed_plan:'NO',        notes:'Revenge trade after loss' },
-  { id:'d10', symbol:'NQ',      direction:'Long',  pnl:350, rr:2.0,  session:'New York', trade_date:'2026-01-20', emotional_state:'Focused',      trade_rating:'A Setup',  entry_reason:'Post holiday gap fill, strong momentum',               did_correctly:'Good read on market',                             did_wrong:'',                                                       followed_plan:'YES',       notes:'' },
-  { id:'d11', symbol:'XAUUSD',  direction:'Long',  pnl:648, rr:3.2,  session:'London',   trade_date:'2026-01-21', emotional_state:'Patient',      trade_rating:'A+ Setup', entry_reason:'HTF bullish, 4H FVG respected perfectly',              did_correctly:'Held through pullback, trusted HTF',              did_wrong:'',                                                       followed_plan:'YES',       notes:'Best trade of the month' },
-  { id:'d12', symbol:'NQ',      direction:'Short', pnl:-175, rr:-1,  session:'New York', trade_date:'2026-01-22', emotional_state:'Tired',        trade_rating:'C Setup',  entry_reason:'Choppy market no clear structure',                     did_correctly:'',                                                did_wrong:'Should have sat out — no setup',                         followed_plan:'NO',        notes:'' },
-  { id:'d13', symbol:'EUR/USD', direction:'Short', pnl:480, rr:2.5,  session:'London',   trade_date:'2026-01-23', emotional_state:'Focused',      trade_rating:'A Setup',  entry_reason:'London BOS, clean 15m iFVG, textbook',                 did_correctly:'Waited for London session, perfect model',        did_wrong:'',                                                       followed_plan:'YES',       notes:'' },
-  { id:'d14', symbol:'NQ',      direction:'Long',  pnl:350, rr:2.0,  session:'New York', trade_date:'2026-01-24', emotional_state:'Confident',    trade_rating:'A Setup',  entry_reason:'Demand zone + sweep, NY session',                      did_correctly:'Clean execution',                                 did_wrong:'',                                                       followed_plan:'YES',       notes:'' },
-  { id:'d15', symbol:'XAUUSD',  direction:'Short', pnl:-252, rr:-1,  session:'New York', trade_date:'2026-01-27', emotional_state:'Overconfident',trade_rating:'C Setup',  entry_reason:'Against HTF bias',                                     did_correctly:'',                                                did_wrong:'Traded against HTF bias — undisciplined',                followed_plan:'NO',        notes:'Did not follow plan at all' },
-  { id:'d16', symbol:'NQ',      direction:'Short', pnl:350, rr:2.1,  session:'New York', trade_date:'2026-01-28', emotional_state:'Focused',      trade_rating:'A Setup',  entry_reason:'Distribution phase clear, clean model',                did_correctly:'Trusted the process',                             did_wrong:'',                                                       followed_plan:'YES',       notes:'' },
-  { id:'d17', symbol:'GBP/USD', direction:'Short', pnl:-260, rr:-1,  session:'London',   trade_date:'2026-01-29', emotional_state:'FOMO',         trade_rating:'C Setup',  entry_reason:'News spike entry',                                     did_correctly:'',                                                did_wrong:'Did not check news calendar',                            followed_plan:'NO',        notes:'Same news mistake' },
-  { id:'d18', symbol:'NQ',      direction:'Long',  pnl:350, rr:2.0,  session:'New York', trade_date:'2026-01-30', emotional_state:'Patient',      trade_rating:'A Setup',  entry_reason:'Accumulation sweep, 10 AM entry, strong',              did_correctly:'Perfect patience, waited for sweep',              did_wrong:'',                                                       followed_plan:'YES',       notes:'' },
-  { id:'d19', symbol:'XAUUSD',  direction:'Long',  pnl:756, rr:3.8,  session:'London',   trade_date:'2026-01-31', emotional_state:'Focused',      trade_rating:'A+ Setup', entry_reason:'Monthly close liquidity, massive run',                 did_correctly:'Held full position, no early exit',               did_wrong:'',                                                       followed_plan:'YES',       notes:'Monthly close play — beautiful' },
-  { id:'d20', symbol:'NQ',      direction:'Short', pnl:-175, rr:-1,  session:'New York', trade_date:'2026-02-03', emotional_state:'Impatient',    trade_rating:'C Setup',  entry_reason:'Early entry again',                                    did_correctly:'',                                                did_wrong:'Early entry again — recurring mistake',                  followed_plan:'NO',        notes:'Need to work on patience' },
+  // ─── JANUARY: strong start, building confidence (12W/7L/1BE, ~+$3,140) ───
+  { id:'dx01', symbol:'NQ',      direction:'Long',  pnl:350,  rr:2.0, session:'New York', trade_date:'2026-01-02', emotional_state:'Focused',     trade_rating:'A Setup',  entry_reason:'NY open BOS, 5m FVG entry, HTF bullish bias',           did_correctly:'Waited for confirmation, sized properly',     did_wrong:'',                                                  followed_plan:'YES',       notes:'Strong start to the year' },
+  { id:'dx02', symbol:'NQ',      direction:'Long',  pnl:280,  rr:1.8, session:'New York', trade_date:'2026-01-05', emotional_state:'Patient',     trade_rating:'A Setup',  entry_reason:'Liquidity sweep below prev day low, clean reversal',    did_correctly:'Patient on the sweep before pulling trigger',  did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx03', symbol:'XAUUSD',  direction:'Long',  pnl:510,  rr:2.6, session:'London',   trade_date:'2026-01-06', emotional_state:'Focused',     trade_rating:'A+ Setup', entry_reason:'4H FVG fill, London session, strong push',              did_correctly:'Trusted HTF bias, held to TP',                 did_wrong:'',                                                  followed_plan:'YES',       notes:'Textbook 4H FVG' },
+  { id:'dx04', symbol:'NQ',      direction:'Short', pnl:-185, rr:-1,  session:'New York', trade_date:'2026-01-07', emotional_state:'Anxious',     trade_rating:'B Setup',  entry_reason:'Caught a sweep but no clear BOS',                       did_correctly:'',                                              did_wrong:'Should have waited for cleaner structure break',   followed_plan:'PARTIALLY', notes:'' },
+  { id:'dx05', symbol:'ES',      direction:'Long',  pnl:-210, rr:-1,  session:'New York', trade_date:'2026-01-08', emotional_state:'Anxious',     trade_rating:'B Setup',  entry_reason:'Pullback into demand, weak confirmation',               did_correctly:'',                                              did_wrong:'Sized too aggressively for B setup',                followed_plan:'PARTIALLY', notes:'' },
+  { id:'dx06', symbol:'NQ',      direction:'Long',  pnl:340,  rr:2.0, session:'New York', trade_date:'2026-01-09', emotional_state:'Focused',     trade_rating:'A Setup',  entry_reason:'10am NY killzone, premium array entry on retracement',  did_correctly:'Stuck to the plan, took partials',             did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx07', symbol:'XAUUSD',  direction:'Long',  pnl:380,  rr:2.2, session:'London',   trade_date:'2026-01-12', emotional_state:'Patient',     trade_rating:'A Setup',  entry_reason:'London FVG, clean SMT confirmation vs DXY',             did_correctly:'Patience on entry',                            did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx08', symbol:'NQ',      direction:'Short', pnl:310,  rr:1.9, session:'New York', trade_date:'2026-01-13', emotional_state:'Focused',     trade_rating:'A Setup',  entry_reason:'iFVG inversion, distribution phase clear',              did_correctly:'Sized properly, no FOMO',                      did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx09', symbol:'EUR/USD', direction:'Short', pnl:-205, rr:-1,  session:'London',   trade_date:'2026-01-14', emotional_state:'Impatient',   trade_rating:'B Setup',  entry_reason:'Tried to short into support',                            did_correctly:'',                                              did_wrong:'Fought structure — entered at a poor level',        followed_plan:'NO',        notes:'Reminder: respect the structure' },
+  { id:'dx10', symbol:'NQ',      direction:'Long',  pnl:400,  rr:2.3, session:'New York', trade_date:'2026-01-15', emotional_state:'Confident',   trade_rating:'A Setup',  entry_reason:'Daily bias bullish, NY sweep + reclaim',                did_correctly:'Trusted the daily bias',                       did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx11', symbol:'ES',      direction:'Short', pnl:-170, rr:-1,  session:'New York', trade_date:'2026-01-16', emotional_state:'Anxious',     trade_rating:'C Setup',  entry_reason:'Late entry into a move that already happened',          did_correctly:'',                                              did_wrong:'Chased — should have waited for next setup',        followed_plan:'NO',        notes:'' },
+  { id:'dx12', symbol:'NQ',      direction:'Long',  pnl:470,  rr:2.5, session:'New York', trade_date:'2026-01-20', emotional_state:'Focused',     trade_rating:'A Setup',  entry_reason:'Open drive setup, FVG hold, premium TP',                did_correctly:'Held for full target',                         did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx13', symbol:'XAUUSD',  direction:'Short', pnl:-250, rr:-1,  session:'London',   trade_date:'2026-01-21', emotional_state:'Tired',       trade_rating:'B Setup',  entry_reason:'HTF resistance but momentum already faded',             did_correctly:'',                                              did_wrong:'Sized up to recover — wrong call',                  followed_plan:'PARTIALLY', notes:'Lesson: don\'t trade tired' },
+  { id:'dx14', symbol:'NQ',      direction:'Long',  pnl:-200, rr:-1,  session:'New York', trade_date:'2026-01-22', emotional_state:'Tired',       trade_rating:'C Setup',  entry_reason:'Forced a trade after a slow morning',                   did_correctly:'',                                              did_wrong:'Should have skipped — no setup',                    followed_plan:'NO',        notes:'No trade is a trade' },
+  { id:'dx15', symbol:'NQ',      direction:'Short', pnl:0,    rr:0,   session:'New York', trade_date:'2026-01-23', emotional_state:'Focused',     trade_rating:'B Setup',  entry_reason:'Sweep entry, but momentum stalled near entry',          did_correctly:'Took breakeven instead of holding for hope',   did_wrong:'',                                                  followed_plan:'YES',       notes:'BE — managed risk well' },
+  { id:'dx16', symbol:'ES',      direction:'Long',  pnl:230,  rr:1.5, session:'New York', trade_date:'2026-01-26', emotional_state:'Patient',     trade_rating:'A Setup',  entry_reason:'Trend continuation, pullback to OB',                    did_correctly:'Pulled the trigger on confluence',             did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx17', symbol:'GBP/USD', direction:'Long',  pnl:-225, rr:-1,  session:'London',   trade_date:'2026-01-27', emotional_state:'Anxious',     trade_rating:'B Setup',  entry_reason:'Counter-trend pullback hopes',                          did_correctly:'',                                              did_wrong:'Counter-trend without strong reversal signal',      followed_plan:'PARTIALLY', notes:'' },
+  { id:'dx18', symbol:'NQ',      direction:'Long',  pnl:510,  rr:2.7, session:'New York', trade_date:'2026-01-28', emotional_state:'Confident',   trade_rating:'A+ Setup', entry_reason:'Daily liquidity sweep + reclaim, killzone entry',       did_correctly:'Solid execution, full size',                   did_wrong:'',                                                  followed_plan:'YES',       notes:'Best execution of the month' },
+  { id:'dx19', symbol:'NQ',      direction:'Short', pnl:325,  rr:1.9, session:'New York', trade_date:'2026-01-29', emotional_state:'Focused',     trade_rating:'A Setup',  entry_reason:'EQH sweep, distribution clear, FVG entry',              did_correctly:'Patience on entry, partials at midpoint',      did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx20', symbol:'XAUUSD',  direction:'Long',  pnl:480,  rr:2.5, session:'London',   trade_date:'2026-01-30', emotional_state:'Patient',     trade_rating:'A+ Setup', entry_reason:'Monthly close liquidity, 4H FVG support held',          did_correctly:'Held through retracement',                     did_wrong:'',                                                  followed_plan:'YES',       notes:'Closed January strong' },
+
+  // ─── FEBRUARY: dip + revenge trades (9W/13L, ~-$1,795) ───
+  { id:'dx21', symbol:'NQ',      direction:'Long',  pnl:250,  rr:1.5, session:'New York', trade_date:'2026-02-02', emotional_state:'Focused',     trade_rating:'A Setup',  entry_reason:'NY BOS continuation off Jan close',                     did_correctly:'Followed the plan',                            did_wrong:'',                                                  followed_plan:'YES',       notes:'Started Feb fine' },
+  { id:'dx22', symbol:'ES',      direction:'Long',  pnl:280,  rr:1.7, session:'New York', trade_date:'2026-02-03', emotional_state:'Patient',     trade_rating:'A Setup',  entry_reason:'OB retest with volume',                                  did_correctly:'Took confluence trade',                        did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx23', symbol:'NQ',      direction:'Long',  pnl:250,  rr:1.6, session:'New York', trade_date:'2026-02-04', emotional_state:'Confident',   trade_rating:'A Setup',  entry_reason:'Bull continuation, FVG entry',                          did_correctly:'Clean execution',                              did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx24', symbol:'XAUUSD',  direction:'Long',  pnl:-310, rr:-1,  session:'London',   trade_date:'2026-02-05', emotional_state:'Overconfident',trade_rating:'B Setup', entry_reason:'Got greedy after a good week, oversized',                did_correctly:'',                                              did_wrong:'Position size 2x normal — bad risk',                followed_plan:'NO',        notes:'Confidence got ahead of discipline' },
+  { id:'dx25', symbol:'EUR/USD', direction:'Short', pnl:-250, rr:-1,  session:'London',   trade_date:'2026-02-06', emotional_state:'FOMO',        trade_rating:'C Setup',  entry_reason:'NFP news spike short',                                  did_correctly:'',                                              did_wrong:'Traded the news instead of skipping',               followed_plan:'NO',        notes:'News-time mistake' },
+  { id:'dx26', symbol:'NQ',      direction:'Short', pnl:290,  rr:1.8, session:'New York', trade_date:'2026-02-09', emotional_state:'Focused',     trade_rating:'A Setup',  entry_reason:'Distribution complete, iFVG short',                     did_correctly:'Recovered briefly',                            did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx27', symbol:'NQ',      direction:'Long',  pnl:180,  rr:1.2, session:'New York', trade_date:'2026-02-09', emotional_state:'Patient',     trade_rating:'B Setup',  entry_reason:'Late session continuation',                              did_correctly:'Took partial early',                           did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx28', symbol:'NQ',      direction:'Long',  pnl:-195, rr:-1,  session:'New York', trade_date:'2026-02-10', emotional_state:'Anxious',     trade_rating:'B Setup',  entry_reason:'Weak setup but pulled the trigger',                     did_correctly:'',                                              did_wrong:'Should have skipped',                              followed_plan:'NO',        notes:'Loss streak begins' },
+  { id:'dx29', symbol:'NQ',      direction:'Long',  pnl:-450, rr:-1,  session:'New York', trade_date:'2026-02-11', emotional_state:'Revenge',     trade_rating:'C Setup',  entry_reason:'Wanted yesterday\'s loss back',                          did_correctly:'',                                              did_wrong:'Revenge trade, oversized',                          followed_plan:'NO',        notes:'Worst kind of trade' },
+  { id:'dx30', symbol:'NQ',      direction:'Short', pnl:-520, rr:-1,  session:'New York', trade_date:'2026-02-12', emotional_state:'Revenge',     trade_rating:'C Setup',  entry_reason:'Tried to flip and recover everything',                  did_correctly:'',                                              did_wrong:'Doubled down — disaster',                          followed_plan:'NO',        notes:'Should have stopped trading' },
+  { id:'dx31', symbol:'ES',      direction:'Short', pnl:-460, rr:-1,  session:'New York', trade_date:'2026-02-13', emotional_state:'Anxious',     trade_rating:'C Setup',  entry_reason:'Bad Friday, no setup, forced a trade',                  did_correctly:'',                                              did_wrong:'Trading from a place of fear',                      followed_plan:'NO',        notes:'-$2.4k week — brutal' },
+  { id:'dx32', symbol:'NQ',      direction:'Long',  pnl:-260, rr:-1,  session:'New York', trade_date:'2026-02-13', emotional_state:'Revenge',     trade_rating:'C Setup',  entry_reason:'One more try to fix the week',                          did_correctly:'',                                              did_wrong:'Forced revenge entry on Friday',                    followed_plan:'NO',        notes:'Step away. Rest weekend.' },
+  { id:'dx33', symbol:'NQ',      direction:'Long',  pnl:-380, rr:-1,  session:'New York', trade_date:'2026-02-17', emotional_state:'FOMO',        trade_rating:'C Setup',  entry_reason:'Chased after sitting out Monday',                       did_correctly:'',                                              did_wrong:'Couldn\'t stay disciplined',                        followed_plan:'NO',        notes:'5th consecutive loss' },
+  { id:'dx34', symbol:'NQ',      direction:'Long',  pnl:260,  rr:1.7, session:'New York', trade_date:'2026-02-18', emotional_state:'Disciplined', trade_rating:'A Setup',  entry_reason:'Smaller size, A setup only',                            did_correctly:'Came back patient and small',                  did_wrong:'',                                                  followed_plan:'YES',       notes:'Breaking the streak' },
+  { id:'dx35', symbol:'XAUUSD',  direction:'Long',  pnl:-200, rr:-1,  session:'London',   trade_date:'2026-02-19', emotional_state:'Impatient',   trade_rating:'B Setup',  entry_reason:'Tried to catch a falling knife',                        did_correctly:'',                                              did_wrong:'Mid-move entry against momentum',                  followed_plan:'PARTIALLY', notes:'' },
+  { id:'dx36', symbol:'ES',      direction:'Long',  pnl:220,  rr:1.4, session:'New York', trade_date:'2026-02-20', emotional_state:'Patient',     trade_rating:'A Setup',  entry_reason:'OB hold, slow continuation',                            did_correctly:'Trusted the level',                            did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx37', symbol:'NQ',      direction:'Short', pnl:-280, rr:-1,  session:'New York', trade_date:'2026-02-20', emotional_state:'FOMO',        trade_rating:'C Setup',  entry_reason:'Tried to short into a strong bid',                      did_correctly:'',                                              did_wrong:'Counter-trend short with no signal',                followed_plan:'NO',        notes:'' },
+  { id:'dx38', symbol:'NQ',      direction:'Short', pnl:280,  rr:1.7, session:'New York', trade_date:'2026-02-23', emotional_state:'Focused',     trade_rating:'A Setup',  entry_reason:'NY killzone, distribution leg',                          did_correctly:'Stuck to the plan',                            did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx39', symbol:'NQ',      direction:'Long',  pnl:-180, rr:-1,  session:'New York', trade_date:'2026-02-24', emotional_state:'Anxious',     trade_rating:'B Setup',  entry_reason:'Choppy market, weak structure',                          did_correctly:'',                                              did_wrong:'Should have been patient',                         followed_plan:'PARTIALLY', notes:'' },
+  { id:'dx40', symbol:'GBP/USD', direction:'Short', pnl:-320, rr:-1,  session:'London',   trade_date:'2026-02-25', emotional_state:'FOMO',        trade_rating:'C Setup',  entry_reason:'BoE rate news short',                                    did_correctly:'',                                              did_wrong:'Same news mistake again',                          followed_plan:'NO',        notes:'Recurring news pattern' },
+  { id:'dx41', symbol:'NQ',      direction:'Long',  pnl:250,  rr:1.5, session:'New York', trade_date:'2026-02-26', emotional_state:'Focused',     trade_rating:'A Setup',  entry_reason:'Clean BOS at 9:30 open',                                did_correctly:'Followed the model',                           did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx42', symbol:'XAUUSD',  direction:'Long',  pnl:-250, rr:-1,  session:'London',   trade_date:'2026-02-27', emotional_state:'Anxious',     trade_rating:'B Setup',  entry_reason:'Tried to end the month with a winner',                  did_correctly:'',                                              did_wrong:'Forced trade on month-end',                        followed_plan:'NO',        notes:'Closed Feb at -$1.8k. Hard month.' },
+
+  // ─── MARCH: recovery & discipline (13W/7L, ~+$2,565) ───
+  { id:'dx43', symbol:'NQ',      direction:'Long',  pnl:280,  rr:1.7, session:'New York', trade_date:'2026-03-02', emotional_state:'Patient',     trade_rating:'A Setup',  entry_reason:'Slowing down, A-only setups',                            did_correctly:'Cut size in half post-Feb',                    did_wrong:'',                                                  followed_plan:'YES',       notes:'New approach: quality over quantity' },
+  { id:'dx44', symbol:'NQ',      direction:'Short', pnl:320,  rr:1.9, session:'New York', trade_date:'2026-03-03', emotional_state:'Focused',     trade_rating:'A Setup',  entry_reason:'iFVG short, distribution clear',                        did_correctly:'Patience on entry',                            did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx45', symbol:'XAUUSD',  direction:'Long',  pnl:290,  rr:1.7, session:'London',   trade_date:'2026-03-04', emotional_state:'Patient',     trade_rating:'A Setup',  entry_reason:'4H FVG hold, London open',                              did_correctly:'Trusted the level',                            did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx46', symbol:'NQ',      direction:'Long',  pnl:-195, rr:-1,  session:'New York', trade_date:'2026-03-05', emotional_state:'Anxious',     trade_rating:'B Setup',  entry_reason:'Choppy NY open',                                         did_correctly:'',                                              did_wrong:'Should have skipped',                              followed_plan:'PARTIALLY', notes:'' },
+  { id:'dx47', symbol:'ES',      direction:'Long',  pnl:-200, rr:-1,  session:'New York', trade_date:'2026-03-06', emotional_state:'Anxious',     trade_rating:'B Setup',  entry_reason:'NFP day pullback',                                       did_correctly:'',                                              did_wrong:'Traded around news again',                         followed_plan:'NO',        notes:'Skip news days' },
+  { id:'dx48', symbol:'NQ',      direction:'Long',  pnl:340,  rr:2.0, session:'New York', trade_date:'2026-03-09', emotional_state:'Patient',     trade_rating:'A Setup',  entry_reason:'Premium array entry on the retracement',                did_correctly:'Followed the plan exactly',                    did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx49', symbol:'EUR/USD', direction:'Short', pnl:-180, rr:-1,  session:'London',   trade_date:'2026-03-10', emotional_state:'Impatient',   trade_rating:'B Setup',  entry_reason:'Early entry pre-confirmation',                           did_correctly:'',                                              did_wrong:'Jumped the gun',                                    followed_plan:'PARTIALLY', notes:'' },
+  { id:'dx50', symbol:'NQ',      direction:'Long',  pnl:280,  rr:1.7, session:'New York', trade_date:'2026-03-11', emotional_state:'Focused',     trade_rating:'A Setup',  entry_reason:'Sweep + reclaim, NY killzone',                          did_correctly:'Clean execution',                              did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx51', symbol:'XAUUSD',  direction:'Short', pnl:350,  rr:2.1, session:'London',   trade_date:'2026-03-12', emotional_state:'Patient',     trade_rating:'A+ Setup', entry_reason:'4H supply, lower-tf BOS, perfect',                       did_correctly:'Held to TP',                                   did_wrong:'',                                                  followed_plan:'YES',       notes:'Beautiful HTF setup' },
+  { id:'dx52', symbol:'NQ',      direction:'Long',  pnl:260,  rr:1.6, session:'New York', trade_date:'2026-03-13', emotional_state:'Disciplined', trade_rating:'A Setup',  entry_reason:'Friday A setup only rule',                              did_correctly:'A only on Fridays — paying off',               did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx53', symbol:'NQ',      direction:'Short', pnl:-210, rr:-1,  session:'New York', trade_date:'2026-03-16', emotional_state:'Anxious',     trade_rating:'B Setup',  entry_reason:'Fed week jitters',                                       did_correctly:'',                                              did_wrong:'Should size down on FOMC week',                    followed_plan:'PARTIALLY', notes:'' },
+  { id:'dx54', symbol:'ES',      direction:'Long',  pnl:245,  rr:1.5, session:'New York', trade_date:'2026-03-17', emotional_state:'Focused',     trade_rating:'A Setup',  entry_reason:'Pre-FOMC continuation, took partial before',            did_correctly:'Took partial pre-news',                        did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx55', symbol:'NQ',      direction:'Long',  pnl:300,  rr:1.8, session:'New York', trade_date:'2026-03-18', emotional_state:'Patient',     trade_rating:'A Setup',  entry_reason:'Post-FOMC clean continuation',                           did_correctly:'Waited for the dust to settle',                did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx56', symbol:'GBP/USD', direction:'Long',  pnl:-180, rr:-1,  session:'London',   trade_date:'2026-03-19', emotional_state:'Tired',       trade_rating:'B Setup',  entry_reason:'Forced a London setup',                                  did_correctly:'',                                              did_wrong:'Tired = no trade',                                  followed_plan:'NO',        notes:'' },
+  { id:'dx57', symbol:'NQ',      direction:'Short', pnl:275,  rr:1.7, session:'New York', trade_date:'2026-03-20', emotional_state:'Focused',     trade_rating:'A Setup',  entry_reason:'Distribution + sweep + iFVG',                            did_correctly:'Trusted the model',                            did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx58', symbol:'XAUUSD',  direction:'Long',  pnl:290,  rr:1.7, session:'London',   trade_date:'2026-03-23', emotional_state:'Disciplined', trade_rating:'A Setup',  entry_reason:'4H FVG retest, clean entry',                            did_correctly:'Stuck to the plan',                            did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx59', symbol:'NQ',      direction:'Long',  pnl:-190, rr:-1,  session:'New York', trade_date:'2026-03-24', emotional_state:'Anxious',     trade_rating:'B Setup',  entry_reason:'Choppy session forced entry',                            did_correctly:'',                                              did_wrong:'Did not respect the chop',                         followed_plan:'PARTIALLY', notes:'' },
+  { id:'dx60', symbol:'NQ',      direction:'Short', pnl:320,  rr:1.9, session:'New York', trade_date:'2026-03-25', emotional_state:'Patient',     trade_rating:'A Setup',  entry_reason:'EQH sweep, clean reversal',                              did_correctly:'Patience paid off',                            did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx61', symbol:'ES',      direction:'Long',  pnl:-210, rr:-1,  session:'New York', trade_date:'2026-03-26', emotional_state:'Anxious',     trade_rating:'B Setup',  entry_reason:'Pulled trigger early',                                   did_correctly:'',                                              did_wrong:'Premature entry without confirmation',              followed_plan:'PARTIALLY', notes:'' },
+  { id:'dx62', symbol:'XAUUSD',  direction:'Long',  pnl:380,  rr:2.2, session:'London',   trade_date:'2026-03-27', emotional_state:'Disciplined', trade_rating:'A+ Setup', entry_reason:'Quarterly close liquidity, 4H FVG support',             did_correctly:'Held through the noise',                       did_wrong:'',                                                  followed_plan:'YES',       notes:'Great way to close March' },
+
+  // ─── APRIL: best month, full discipline (13W/5L, ~+$4,205) ───
+  { id:'dx63', symbol:'NQ',      direction:'Long',  pnl:320,  rr:1.9, session:'New York', trade_date:'2026-04-01', emotional_state:'Focused',     trade_rating:'A Setup',  entry_reason:'New month, NY BOS continuation',                        did_correctly:'Started the month sharp',                      did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx64', symbol:'XAUUSD',  direction:'Long',  pnl:480,  rr:2.5, session:'London',   trade_date:'2026-04-02', emotional_state:'Patient',     trade_rating:'A+ Setup', entry_reason:'4H FVG + SMT, perfect London entry',                    did_correctly:'Held to TP, trusted setup',                    did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx65', symbol:'NQ',      direction:'Long',  pnl:350,  rr:2.0, session:'New York', trade_date:'2026-04-03', emotional_state:'Focused',     trade_rating:'A Setup',  entry_reason:'NFP rebound off premium',                                did_correctly:'Solid execution',                              did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx66', symbol:'ES',      direction:'Short', pnl:-180, rr:-1,  session:'New York', trade_date:'2026-04-06', emotional_state:'Anxious',     trade_rating:'B Setup',  entry_reason:'Tried to short into demand',                            did_correctly:'',                                              did_wrong:'Counter-trend without strong reversal',             followed_plan:'PARTIALLY', notes:'' },
+  { id:'dx67', symbol:'NQ',      direction:'Long',  pnl:420,  rr:2.4, session:'New York', trade_date:'2026-04-07', emotional_state:'Focused',     trade_rating:'A+ Setup', entry_reason:'Daily bullish OB retest, killzone entry',               did_correctly:'Full size on A+ setup',                        did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx68', symbol:'XAUUSD',  direction:'Long',  pnl:1100, rr:4.5, session:'London',   trade_date:'2026-04-08', emotional_state:'Patient',     trade_rating:'A+ Setup', entry_reason:'Monthly liquidity sweep + 4H FVG, massive run',         did_correctly:'Held the runner, no early exit',               did_wrong:'',                                                  followed_plan:'YES',       notes:'Trade of the year — let it run' },
+  { id:'dx69', symbol:'NQ',      direction:'Short', pnl:320,  rr:1.9, session:'New York', trade_date:'2026-04-09', emotional_state:'Focused',     trade_rating:'A Setup',  entry_reason:'iFVG, distribution clear post-rally',                    did_correctly:'Patient on entry',                             did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx70', symbol:'EUR/USD', direction:'Long',  pnl:280,  rr:1.7, session:'London',   trade_date:'2026-04-10', emotional_state:'Patient',     trade_rating:'A Setup',  entry_reason:'London BOS + retest entry',                              did_correctly:'Took partials at midpoint',                    did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx71', symbol:'NQ',      direction:'Long',  pnl:320,  rr:1.9, session:'New York', trade_date:'2026-04-13', emotional_state:'Disciplined', trade_rating:'A+ Setup', entry_reason:'Liquidity sweep, NY killzone, premium TP',              did_correctly:'Trusted the model',                            did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx72', symbol:'ES',      direction:'Long',  pnl:260,  rr:1.6, session:'New York', trade_date:'2026-04-14', emotional_state:'Focused',     trade_rating:'A Setup',  entry_reason:'OB retest with volume',                                  did_correctly:'Clean execution',                              did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx73', symbol:'NQ',      direction:'Short', pnl:-200, rr:-1,  session:'New York', trade_date:'2026-04-15', emotional_state:'Tired',       trade_rating:'B Setup',  entry_reason:'Tried to short a weak setup',                            did_correctly:'',                                              did_wrong:'Should have skipped — tired',                       followed_plan:'PARTIALLY', notes:'' },
+  { id:'dx74', symbol:'XAUUSD',  direction:'Long',  pnl:360,  rr:2.1, session:'London',   trade_date:'2026-04-16', emotional_state:'Patient',     trade_rating:'A+ Setup', entry_reason:'4H continuation, FVG hold',                              did_correctly:'Followed the model exactly',                   did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx75', symbol:'NQ',      direction:'Long',  pnl:350,  rr:2.0, session:'New York', trade_date:'2026-04-17', emotional_state:'Focused',     trade_rating:'A Setup',  entry_reason:'Friday A setup — clean BOS',                            did_correctly:'A only Friday rule paid off',                  did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx76', symbol:'NQ',      direction:'Long',  pnl:-195, rr:-1,  session:'New York', trade_date:'2026-04-20', emotional_state:'Anxious',     trade_rating:'B Setup',  entry_reason:'Forced a Monday open trade',                            did_correctly:'',                                              did_wrong:'Monday opens are usually choppy',                  followed_plan:'PARTIALLY', notes:'' },
+  { id:'dx77', symbol:'ES',      direction:'Long',  pnl:230,  rr:1.4, session:'New York', trade_date:'2026-04-21', emotional_state:'Disciplined', trade_rating:'A Setup',  entry_reason:'Pullback to OB with confluence',                        did_correctly:'Stuck to the plan',                            did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx78', symbol:'NQ',      direction:'Short', pnl:-210, rr:-1,  session:'New York', trade_date:'2026-04-22', emotional_state:'Tired',       trade_rating:'B Setup',  entry_reason:'Late afternoon short, low conviction',                  did_correctly:'',                                              did_wrong:'Should have called it a day',                      followed_plan:'PARTIALLY', notes:'' },
+  { id:'dx79', symbol:'XAUUSD',  direction:'Long',  pnl:380,  rr:2.2, session:'London',   trade_date:'2026-04-23', emotional_state:'Patient',     trade_rating:'A+ Setup', entry_reason:'4H FVG, perfect SMT confirmation',                       did_correctly:'Trusted the setup',                            did_wrong:'',                                                  followed_plan:'YES',       notes:'' },
+  { id:'dx80', symbol:'NQ',      direction:'Long',  pnl:-180, rr:-1,  session:'New York', trade_date:'2026-04-24', emotional_state:'Anxious',     trade_rating:'B Setup',  entry_reason:'End-of-week trade, weak structure',                      did_correctly:'',                                              did_wrong:'Should have ended the month patient',              followed_plan:'PARTIALLY', notes:'Best month overall — finishing patient next time' },
 ]
 
 // Get the Monday of a week containing the given date (or today)
@@ -3926,33 +3988,6 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
         <h1 style={{ fontSize: '28px', fontWeight: '800', letterSpacing: '-1px', color: 'var(--text-hi)' }}>Settings</h1>
       </div>
 
-      {/* ── Content Mode ── */}
-      <div style={sectionCard}>
-        <div style={sectionTitle}>Content Mode</div>
-        <div style={{ height: '1px', background: '#1a1a1a', marginBottom: '20px' }} />
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: demoMode ? 'rgba(255,217,102,0.10)' : '#141414', border: `1px solid ${demoMode ? 'rgba(255,217,102,0.25)' : '#222'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.2s' }}>
-              <Sparkles size={16} color={demoMode ? '#ffd966' : '#888'} />
-            </div>
-            <div>
-              <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-hi)', marginBottom: '2px' }}>Demo Mode</div>
-              <div style={{ fontSize: '12px', color: '#666', lineHeight: 1.4 }}>Show sample data instead of your real journal — useful for screenshots, walkthroughs, or trying features.</div>
-            </div>
-          </div>
-          <div className={`toggle-track ${demoMode ? 'on' : ''}`} onClick={() => setDemoMode(!demoMode)} style={{ flexShrink: 0 }}>
-            <div className="toggle-knob" />
-          </div>
-        </div>
-
-        {demoMode && (
-          <div style={{ marginTop: '14px', background: 'rgba(255,217,102,0.05)', border: '1px solid rgba(255,217,102,0.20)', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: '#ffd966', lineHeight: 1.5 }}>
-            Showing 20 sample trades for <strong>Alex Rivera</strong>. Adding, editing, and deleting trades is disabled. Toggle off to return to your real data — nothing has been changed.
-          </div>
-        )}
-      </div>
-
       {/* ── Journal Theme ── */}
       <div style={sectionCard}>
         <div style={sectionTitle}>Journal Theme</div>
@@ -4193,6 +4228,23 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
           LIMITLESS v1.0 · Private Journal
         </div>
       </div>
+
+      {/* ── Developer (admin-only, hidden) ── */}
+      {session?.user?.email === ADMIN_EMAIL && (
+        <div style={{ ...sectionCard, marginTop: '24px', marginBottom: 0 }}>
+          <div style={sectionTitle}>Developer</div>
+          <div style={{ height: '1px', background: '#1a1a1a', marginBottom: '20px' }} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-hi)', marginBottom: '2px' }}>Demo Mode</div>
+              <div style={{ fontSize: '11px', color: '#555', lineHeight: 1.4 }}>Swap real journal data for the demo dataset</div>
+            </div>
+            <div className={`toggle-track ${demoMode ? 'on' : ''}`} onClick={() => setDemoMode(!demoMode)} style={{ flexShrink: 0 }}>
+              <div className="toggle-knob" />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -5423,12 +5475,10 @@ export default function App() {
   const [passwordRecovery, setPasswordRecovery] = useState(false)
   const [announcement, setAnnouncement] = useState(null) // { text, active }
   const [featureFlags, setFeatureFlags] = useState({ monthlyGoalTracker: true, aiChecklist: true, newsCalendar: true, feedSection: true })
-  const [demoMode,            setDemoModeRaw]        = useState(() => localStorage.getItem('demo_mode') === 'true')
-  const [demoBannerDismissed, setDemoBannerDismissed] = useState(false)
+  const [demoMode, setDemoModeRaw] = useState(() => localStorage.getItem('limitless_demo_mode') === 'true')
   const setDemoMode = (v) => {
     setDemoModeRaw(v)
-    try { localStorage.setItem('demo_mode', v ? 'true' : 'false') } catch {}
-    if (v) setDemoBannerDismissed(false) // re-show banner each time it's turned on
+    try { localStorage.setItem('limitless_demo_mode', v ? 'true' : 'false') } catch {}
   }
   const [profileLoading, setProfileLoading] = useState(false)
   const [tradesLoading,  setTradesLoading]  = useState(true)
@@ -5563,7 +5613,7 @@ export default function App() {
   }
 
   const goAddTrade = () => {
-    if (demoMode) { alert('Demo mode is active — adding trades is disabled.'); return }
+    if (demoMode) return // silently ignore in demo mode
     setShowAddTrade(true)
   }
 
@@ -5783,25 +5833,6 @@ export default function App() {
 
       {/* ── Main content ── */}
       <main style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1, minWidth: 0 }}>
-        {demoMode && !demoBannerDismissed && (
-          <div style={{
-            background: 'linear-gradient(90deg, rgba(255,217,102,0.14), rgba(255,217,102,0.06))',
-            borderBottom: '1px solid rgba(255,217,102,0.25)',
-            color: '#ffd966', fontSize: '13px', fontWeight: '600',
-            padding: '10px 24px', display: 'flex', alignItems: 'center',
-            justifyContent: 'center', gap: '12px', flexShrink: 0,
-            letterSpacing: '0.01em',
-          }}>
-            <span>⚠️ Demo Mode Active — This is sample data for demonstration purposes</span>
-            <button
-              onClick={() => setDemoBannerDismissed(true)}
-              style={{ background: 'transparent', border: 'none', color: '#ffd966', cursor: 'pointer', padding: '2px 6px', minHeight: 'auto', fontSize: '14px', lineHeight: 1, opacity: 0.7 }}
-              onMouseEnter={e => { e.currentTarget.style.opacity = '1' }}
-              onMouseLeave={e => { e.currentTarget.style.opacity = '0.7' }}
-              title="Dismiss"
-            >✕</button>
-          </div>
-        )}
         {announcement?.active && announcement.text && (
           <div style={{
             background: 'linear-gradient(90deg, rgba(170,255,160,0.10), rgba(170,255,160,0.04))',
