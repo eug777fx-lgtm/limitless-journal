@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, Fragment } from 'react'
 import { createPortal } from 'react-dom'
+import toast, { Toaster } from 'react-hot-toast'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   BarChart, Bar, Cell,
@@ -4360,12 +4361,26 @@ function AdminPanel({ session, setPage }) {
   }
 
   const updateStatus = async (id, status) => {
+    console.log('[admin] updateStatus →', { userId: id, status })
     setActioning(id)
+    const verb = status === 'approved' ? 'approve' : status === 'rejected' ? 'reject' : status === 'banned' ? 'ban' : 'update'
+    const past = status === 'approved' ? 'approved' : status === 'rejected' ? 'rejected' : status === 'banned' ? 'banned' : 'updated'
     try {
-      const { error } = await supabase.from('profiles').update({ status }).eq('id', id)
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({ status })
+        .eq('id', id)
+        .select()
+      console.log('[admin] supabase response →', { data, error })
       if (error) throw error
+      if (!data || data.length === 0) {
+        throw new Error('No rows updated — likely an RLS policy is blocking the write. Check Supabase → Authentication → Policies on the profiles table.')
+      }
       setUsers(prev => prev.map(u => u.id === id ? { ...u, status } : u))
+      toast.success(`User ${past}!`)
     } catch (e) {
+      console.error('[admin] updateStatus failed:', e)
+      toast.error(`Failed to ${verb} — ${e.message}`)
       setError(e.message)
     } finally {
       setActioning(null)
@@ -4374,12 +4389,20 @@ function AdminPanel({ session, setPage }) {
 
   const deleteUser = async (id) => {
     if (!confirm('Delete this user from profiles? (auth.users entry remains.)')) return
+    console.log('[admin] deleteUser →', { userId: id })
     setActioning(id)
     try {
-      const { error } = await supabase.from('profiles').delete().eq('id', id)
+      const { data, error } = await supabase.from('profiles').delete().eq('id', id).select()
+      console.log('[admin] supabase response →', { data, error })
       if (error) throw error
+      if (!data || data.length === 0) {
+        throw new Error('No rows deleted — likely an RLS policy is blocking the delete.')
+      }
       setUsers(prev => prev.filter(u => u.id !== id))
+      toast.success('User deleted')
     } catch (e) {
+      console.error('[admin] deleteUser failed:', e)
+      toast.error(`Failed to delete — ${e.message}`)
       setError(e.message)
     } finally {
       setActioning(null)
@@ -5697,6 +5720,15 @@ export default function App() {
         position: 'relative',
       }}>
       <style dangerouslySetInnerHTML={{ __html: ANIM_CSS }} />
+
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          style: { background: '#0d0d0d', color: '#eee', border: '1px solid #1f1f1f', fontSize: '13px', fontFamily: "'Inter', sans-serif" },
+          success: { iconTheme: { primary: '#aaffa0', secondary: '#000' } },
+          error:   { iconTheme: { primary: '#ff8080', secondary: '#000' }, duration: 5000 },
+        }}
+      />
 
       <AuroraBackground theme={theme} />
 
