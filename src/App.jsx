@@ -3043,16 +3043,6 @@ const NEWS_FALLBACK = (() => {
 const NEWS_CACHE_TTL = 60 * 60 * 1000 // 1 hour
 
 // ─── Demo Mode ────────────────────────────────────────────────
-const DEMO_PROFILE = {
-  username:     'alex_trades',
-  first_name:   'Alex',
-  last_name:    'Rivera',
-  market_focus: 'Futures · Forex',
-  theme:        'blue',
-  status:       'approved',
-  monthly_goal: 5000,
-}
-
 const DEMO_TRADES = [
   // ─── JANUARY: strong start, building confidence (12W/7L/1BE, ~+$3,140) ───
   { id:'dx01', symbol:'NQ',      direction:'Long',  pnl:350,  rr:2.0, session:'New York', trade_date:'2026-01-02', emotional_state:'Focused',     trade_rating:'A Setup',  entry_reason:'NY open BOS, 5m FVG entry, HTF bullish bias',           did_correctly:'Waited for confirmation, sized properly',     did_wrong:'',                                                  followed_plan:'YES',       notes:'Strong start to the year' },
@@ -5649,11 +5639,10 @@ export default function App() {
   ]
 
   // Sidebar user card values
-  // Effective profile + trades — swapped for demo data when demo mode is on
-  const displayProfile = demoMode ? { ...profile, ...DEMO_PROFILE } : profile
+  // Demo mode swaps trade data only — profile, name, and trading plan stay real.
   const effectiveTrades = demoMode ? DEMO_TRADES : trades
-  const displayName  = displayProfile?.username      || session?.user?.email?.split('@')[0] || 'User'
-  const marketFocus  = displayProfile?.market_focus  || 'Trader'
+  const displayName  = profile?.username      || session?.user?.email?.split('@')[0] || 'User'
+  const marketFocus  = profile?.market_focus  || 'Trader'
   const initials     = displayName.slice(0, 2).toUpperCase()
 
   // ── Loading ──
@@ -5876,7 +5865,7 @@ export default function App() {
             {announcement.text}
           </div>
         )}
-        {page === 'dashboard'   && <Dashboard trades={effectiveTrades} onAddTrade={goAddTrade} loading={demoMode ? false : tradesLoading} profile={displayProfile} flags={featureFlags} />}
+        {page === 'dashboard'   && <Dashboard trades={effectiveTrades} onAddTrade={goAddTrade} loading={demoMode ? false : tradesLoading} profile={profile} flags={featureFlags} />}
         {page === 'trades'      && (
           <Trades
             trades={effectiveTrades}
