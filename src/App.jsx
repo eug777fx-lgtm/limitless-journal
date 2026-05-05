@@ -775,7 +775,7 @@ function AuthPage({ onAuth }) {
             LIMITLESS
           </div>
           <div className="auth-tagline" style={{ fontSize: '9px', color: '#ffffff', letterSpacing: '0.3em', marginTop: '7px', textTransform: 'uppercase', fontWeight: '600' }}>
-            Private Journal
+            Trading Journal
           </div>
         </div>
 
@@ -1207,7 +1207,7 @@ function SetNewPasswordPage({ onDone }) {
           <img className="auth-logo-img" src="/logo2.png" alt="logo" style={{ height: '64px', marginBottom: '14px', display: 'block', margin: '0 auto 14px' }} />
           <div style={{ fontSize: '22px', fontWeight: '800', letterSpacing: '0.22em', color: '#fff', lineHeight: 1 }}>LIMITLESS</div>
           <div className="auth-tagline" style={{ fontSize: '9px', color: '#fff', letterSpacing: '0.3em', marginTop: '7px', textTransform: 'uppercase', fontWeight: '600' }}>
-            Private Journal
+            Trading Journal
           </div>
         </div>
 
@@ -1299,7 +1299,7 @@ function PendingScreen({ onLogout }) {
       <div style={{ position: 'relative', zIndex: 2, textAlign: 'center', animation: 'pageFade 0.3s ease both' }}>
         <img src="/logo2.png" alt="logo" style={{ height: '64px', display: 'block', margin: '0 auto 16px' }} />
         <div style={{ fontSize: '22px', fontWeight: '800', letterSpacing: '0.22em', color: '#fff', lineHeight: 1 }}>LIMITLESS</div>
-        <div style={{ fontSize: '9px', color: '#444', letterSpacing: '0.3em', marginTop: '7px', textTransform: 'uppercase', fontWeight: '600', marginBottom: '48px' }}>Private Journal</div>
+        <div style={{ fontSize: '9px', color: '#444', letterSpacing: '0.3em', marginTop: '7px', textTransform: 'uppercase', fontWeight: '600', marginBottom: '48px' }}>Trading Journal</div>
         <div style={{ background: 'rgba(10,10,10,0.85)', border: '1px solid #1c1c1c', borderRadius: '18px', padding: '36px 44px', maxWidth: '420px', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}>
           <div style={{ fontSize: '28px', marginBottom: '18px' }}>⏳</div>
           <div style={{ fontSize: '17px', fontWeight: '700', color: '#fff', marginBottom: '12px', letterSpacing: '-0.3px' }}>Account Pending Approval</div>
@@ -4216,7 +4216,7 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
 
         <div style={{ height: '1px', background: '#141414', marginBottom: '16px' }} />
         <div style={{ fontSize: '11px', color: '#444', letterSpacing: '0.04em' }}>
-          LIMITLESS v1.0 · Private Journal
+          LIMITLESS v1.0 · Trading Journal
         </div>
       </div>
 
@@ -5744,7 +5744,7 @@ export default function App() {
             LIMITLESS
           </div>
           <div style={{ fontSize: '9px', color: '#555', letterSpacing: '0.2em', textTransform: 'uppercase', fontWeight: '600' }}>
-            Private Journal
+            Trading Journal
           </div>
         </div>
 
@@ -5844,7 +5844,7 @@ export default function App() {
             <img src="/logo2.png" alt="logo" style={{ height: '22px', width: 'auto', display: 'block', flexShrink: 0 }} onError={e => { e.target.style.display = 'none' }} />
             <span style={{ fontSize: '14px', fontWeight: '700', letterSpacing: '0.15em', color: '#fff', lineHeight: 1 }}>LIMITLESS</span>
           </div>
-          <div style={{ fontSize: '9px', color: '#555', letterSpacing: '0.2em', textTransform: 'uppercase', marginTop: '2px' }}>Private Journal</div>
+          <div style={{ fontSize: '9px', color: '#555', letterSpacing: '0.2em', textTransform: 'uppercase', marginTop: '2px' }}>Trading Journal</div>
         </div>
         <button
           onClick={goAddTrade}
@@ -5916,7 +5916,7 @@ export default function App() {
                 />
                 <div>
                   <div style={{ fontSize: '13px', fontWeight: '700', letterSpacing: '0.12em', color: '#fff', lineHeight: 1 }}>LIMITLESS</div>
-                  <div style={{ fontSize: '8px', color: '#555', letterSpacing: '0.2em', textTransform: 'uppercase', marginTop: '2px' }}>Private Journal</div>
+                  <div style={{ fontSize: '8px', color: '#555', letterSpacing: '0.2em', textTransform: 'uppercase', marginTop: '2px' }}>Trading Journal</div>
                 </div>
               </div>
               <button
