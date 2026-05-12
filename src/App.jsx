@@ -677,7 +677,7 @@ function AuthPage({ onAuth }) {
     setLoading(true)
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: 'https://limitless-journal.vercel.app',
+        redirectTo: 'https://app.limitless-journal.com',
       })
       if (error) throw error
       setMessage('Check your email for a password reset link')
@@ -4405,7 +4405,7 @@ function AdminPanel({ session, setPage }) {
     setResetMsg(null)
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: 'https://limitless-journal.vercel.app',
+        redirectTo: 'https://app.limitless-journal.com',
       })
       if (error) throw error
       setResetMsg({ id, text: `Reset email sent to ${email}` })
