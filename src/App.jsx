@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, Fragment } from 'react'
 import { createPortal } from 'react-dom'
 import toast, { Toaster } from 'react-hot-toast'
+import { NetworkPartners, NetworkHallOfFame } from './NetworkExtras.jsx'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   BarChart, Bar, Cell,
@@ -12,7 +13,8 @@ import {
   Pencil, Trash2, GripVertical, Sparkles, Loader2, Shield, Users, Search, X,
   Bell, Megaphone, Link2, Download, ChevronDown, RefreshCw,
   Mail, Ban, Flag, Activity, MessageSquare, Save,
-  Globe, Video, Flame, Play, Clock,
+  Globe, Video, Flame, Play, Clock, Award, Heart,
+  Trophy, FileText, ExternalLink, Calendar,
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 
@@ -2822,6 +2824,25 @@ function Trades({ trades, session, onTradeAdded, onTradeDeleted, onTradeUpdated,
     onTradeDeleted(id)
   }
 
+  // Hall of Fame — admin can feature any trade
+  const isAdmin = session?.user?.email === ADMIN_EMAIL
+  const featureTrade = async (trade) => {
+    if (demoMode) return
+    if (!confirm(`Feature this ${trade.symbol} ${trade.direction} (${trade.pnl >= 0 ? '+' : '−'}$${Math.abs(Math.round(trade.pnl))}) in the Hall of Fame?`)) return
+    try {
+      const { error } = await supabase.from('hall_of_fame').insert({
+        trade_id: trade.id,
+        user_id: trade.user_id || session.user.id,
+        featured_by: session.user.id,
+      })
+      if (error) throw error
+      toast.success('Featured in Hall of Fame 🏆')
+    } catch (e) {
+      console.error('[feature]', e)
+      toast.error(`Couldn't feature — ${e.message}`)
+    }
+  }
+
   const sorted = [...trades].sort((a, b) => new Date(b.trade_date) - new Date(a.trade_date))
 
   return (
@@ -2950,12 +2971,23 @@ function Trades({ trades, session, onTradeAdded, onTradeDeleted, onTradeUpdated,
                       <td style={{ ...TD, color: 'var(--text-lo)', fontSize: '12px' }}>{t.session || '—'}</td>
                       <td style={TD}><span style={resultStyle}>{resultLabel}</span></td>
                       <td style={TD}>
-                        <button
-                          className="del-btn"
-                          onClick={e => { e.stopPropagation(); deleteTrade(t.id) }}
-                          style={{ background: 'transparent', border: '1px solid transparent', color: '#444', fontSize: '11px', cursor: 'pointer', padding: '3px 8px', borderRadius: '6px', fontFamily: 'inherit', transition: 'all 0.15s' }}
-                          title="Delete trade"
-                        >✕</button>
+                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center', justifyContent: 'flex-end' }}>
+                          {isAdmin && !demoMode && (
+                            <button
+                              onClick={e => { e.stopPropagation(); featureTrade(t) }}
+                              style={{ background: 'transparent', border: '1px solid transparent', color: '#5a4500', fontSize: '13px', cursor: 'pointer', padding: '3px 6px', borderRadius: '6px', fontFamily: 'inherit', transition: 'all 0.15s', minHeight: 'auto', lineHeight: 1 }}
+                              onMouseEnter={e => { e.currentTarget.style.color = '#FFD700'; e.currentTarget.style.background = 'rgba(255,215,0,0.05)' }}
+                              onMouseLeave={e => { e.currentTarget.style.color = '#5a4500'; e.currentTarget.style.background = 'transparent' }}
+                              title="Feature in Hall of Fame"
+                            >🏆</button>
+                          )}
+                          <button
+                            className="del-btn"
+                            onClick={e => { e.stopPropagation(); deleteTrade(t.id) }}
+                            style={{ background: 'transparent', border: '1px solid transparent', color: '#444', fontSize: '11px', cursor: 'pointer', padding: '3px 8px', borderRadius: '6px', fontFamily: 'inherit', transition: 'all 0.15s' }}
+                            title="Delete trade"
+                          >✕</button>
+                        </div>
                       </td>
                     </tr>
                   )
@@ -3066,6 +3098,76 @@ const NETWORK_SEED_BREAKDOWNS = [
   { id: 201, title: 'NQ Long +$480 — Clean Sweep + iFVG',          symbol: 'NQ',     direction: 'Long',  outcome: 'WIN',  youtube_url: 'https://youtube.com/watch?v=dQw4w9WgXcQ', description: 'Liquidity sweep below previous low, iFVG entry on the 1m, held to NY killzone target.', lessons: 'Patience on entry. Trust the model. Don\'t exit early on the first pullback.', creator_id: 1 },
   { id: 202, title: 'XAUUSD Short -$250 — Counter Trend Mistake',  symbol: 'XAUUSD', direction: 'Short', outcome: 'LOSS', youtube_url: 'https://youtube.com/watch?v=dQw4w9WgXcQ', description: 'Shorted into a strong daily bullish bias. No structural confirmation, just FOMO.',     lessons: 'Always respect HTF bias. Counter-trend needs textbook reversal — not a hunch.',         creator_id: 2 },
   { id: 203, title: 'NQ Short +$650 — Distribution Top',           symbol: 'NQ',     direction: 'Short', outcome: 'WIN',  youtube_url: 'https://youtube.com/watch?v=dQw4w9WgXcQ', description: 'EQH sweep + distribution complete. Took the iFVG short at 10am NY.',                description: 'Wait for the sweep. Distribution before entry is non-negotiable.',                   creator_id: 1, lessons: 'Wait for the sweep. Distribution before entry is non-negotiable.' },
+]
+
+const _today = () => new Date().toISOString().slice(0, 10)
+const _addDays = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10) }
+
+const NETWORK_SEED_CHALLENGES = [
+  {
+    id: 1,
+    title: 'No Revenge Trading Week',
+    description: 'A full week of disciplined trading — no chasing losses, no doubling down. Prove you can step away when the plan says stop.',
+    rules: 'Max 3 trades per day. No re-entry within 30 minutes of a loss. Daily journal required.',
+    reward: 'Featured on weekly leaderboard + badge on profile',
+    start_date: _addDays(-2),
+    end_date: _addDays(5),
+    created_at: _addDays(-3),
+  },
+  {
+    id: 2,
+    title: 'A+ Setups Only Challenge',
+    description: 'Trade only your highest-conviction setups for the entire week. Patience over frequency. Quality over quantity.',
+    rules: 'Only A or A+ rated setups. Mandatory pre-trade screenshot. Max 1 trade per day.',
+    reward: '1:1 mentorship session with Eugene',
+    start_date: _addDays(8),
+    end_date: _addDays(14),
+    created_at: _addDays(-1),
+  },
+]
+
+const NETWORK_SEED_CHALLENGE_PARTICIPANTS = [
+  { id: 1, challenge_id: 1, user_id: 'demo-1', user_name: 'Carlos',  joined_at: _addDays(-1) },
+  { id: 2, challenge_id: 1, user_id: 'demo-2', user_name: 'Mia',     joined_at: _addDays(-1) },
+  { id: 3, challenge_id: 1, user_id: 'demo-3', user_name: 'Jordan',  joined_at: _today() },
+  { id: 4, challenge_id: 1, user_id: 'demo-4', user_name: 'Lina',    joined_at: _today() },
+  { id: 5, challenge_id: 1, user_id: 'demo-5', user_name: 'Marcus',  joined_at: _today() },
+]
+
+const RESOURCE_CATEGORIES = ['Playbooks', 'Psychology', 'Risk Management', 'Strategy', 'Tools']
+const RESOURCE_TYPES      = ['PDF', 'VIDEO', 'LINK', 'TEMPLATE']
+
+const NETWORK_SEED_RESOURCES = [
+  {
+    id: 1,
+    title: 'ICT Killzone Playbook',
+    description: 'Complete playbook for the New York killzone — entry models, liquidity reading, and risk parameters. Used daily by Eugene since 2022.',
+    category: 'Playbooks',
+    resource_type: 'PDF',
+    url: 'https://example.com/ict-killzone-playbook.pdf',
+    file_size: '2.4 MB',
+    created_at: _addDays(-12),
+  },
+  {
+    id: 2,
+    title: 'Beating Revenge Trading',
+    description: 'A 45-minute video covering the psychology of revenge trading, why it happens, and a 4-step interruption protocol that actually works.',
+    category: 'Psychology',
+    resource_type: 'VIDEO',
+    url: 'https://youtube.com/watch?v=dQw4w9WgXcQ',
+    file_size: '45 min',
+    created_at: _addDays(-7),
+  },
+  {
+    id: 3,
+    title: 'Position Size Calculator',
+    description: 'Spreadsheet template that auto-calculates position size, max risk, and R multiples. Drop in your account size and stop distance.',
+    category: 'Risk Management',
+    resource_type: 'TEMPLATE',
+    url: 'https://example.com/position-size-calculator.xlsx',
+    file_size: '120 KB',
+    created_at: _addDays(-3),
+  },
 ]
 
 // Load from localStorage with seed fallback (admin can edit; persists in browser)
@@ -4859,6 +4961,384 @@ function NetworkStreaks({ session }) {
   )
 }
 
+// ─── Network · Challenges ───────────────
+const challengeStatus = (c) => {
+  const today = new Date().toISOString().slice(0, 10)
+  if (today < c.start_date) return 'UPCOMING'
+  if (today > c.end_date)   return 'ENDED'
+  return 'ACTIVE'
+}
+const STATUS_CFG = {
+  ACTIVE:   { bg: 'rgba(170,255,160,0.10)', border: 'rgba(170,255,160,0.30)', color: '#aaffa0' },
+  UPCOMING: { bg: 'rgba(120,180,255,0.10)', border: 'rgba(120,180,255,0.30)', color: '#7cc9ff' },
+  ENDED:    { bg: 'rgba(180,180,180,0.08)', border: 'rgba(180,180,180,0.20)', color: '#999'    },
+}
+
+function NetworkChallenges({ isAdmin, session }) {
+  const userId = session?.user?.id || 'anon'
+  const userName = session?.user?.user_metadata?.full_name || session?.user?.email?.split('@')[0] || 'You'
+
+  const [challenges,   setChallenges]   = useState(() => loadNetwork('network_challenges', NETWORK_SEED_CHALLENGES))
+  const [participants, setParticipants] = useState(() => loadNetwork('network_challenge_participants', NETWORK_SEED_CHALLENGE_PARTICIPANTS))
+  const [modal,        setModal]        = useState(null) // 'add' | 'edit' | null
+  const [draft,        setDraft]        = useState({})
+  const [leaderFor,    setLeaderFor]    = useState(null)
+
+  const persistChallenges   = (next) => { setChallenges(next);   saveNetwork('network_challenges',   next) }
+  const persistParticipants = (next) => { setParticipants(next); saveNetwork('network_challenge_participants', next) }
+
+  const openAdd = () => { setDraft({ title: '', description: '', rules: '', reward: '', start_date: _today(), end_date: _addDays(7) }); setModal('add') }
+  const openEdit = (c) => { setDraft({ ...c }); setModal('edit') }
+  const save = () => {
+    if (!draft.title || !draft.start_date || !draft.end_date) return
+    if (modal === 'edit') {
+      persistChallenges(challenges.map(c => c.id === draft.id ? { ...draft } : c))
+    } else {
+      persistChallenges([...challenges, { ...draft, id: Date.now(), created_at: new Date().toISOString() }])
+    }
+    setModal(null)
+  }
+  const del = (id) => {
+    if (!confirm('Delete this challenge?')) return
+    persistChallenges(challenges.filter(c => c.id !== id))
+    persistParticipants(participants.filter(p => p.challenge_id !== id))
+  }
+
+  const joined = (cid) => participants.some(p => p.challenge_id === cid && p.user_id === userId)
+  const join = (cid) => {
+    if (joined(cid)) return
+    persistParticipants([...participants, { id: Date.now(), challenge_id: cid, user_id: userId, user_name: userName, joined_at: new Date().toISOString() }])
+  }
+  const leave = (cid) => {
+    persistParticipants(participants.filter(p => !(p.challenge_id === cid && p.user_id === userId)))
+  }
+  const countFor = (cid) => participants.filter(p => p.challenge_id === cid).length
+  const topFor   = (cid) => participants.filter(p => p.challenge_id === cid).slice(0, 10)
+
+  const fmtRange = (s, e) => {
+    try {
+      const f = (d) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      return `${f(s)} → ${f(e)}`
+    } catch { return `${s} → ${e}` }
+  }
+  const progressOf = (c) => {
+    const today = new Date()
+    const start = new Date(c.start_date + 'T00:00:00')
+    const end   = new Date(c.end_date   + 'T23:59:59')
+    const total = end - start
+    if (total <= 0) return { pct: 0, daysLeft: 0 }
+    const elapsed = today - start
+    const pct = Math.max(0, Math.min(100, (elapsed / total) * 100))
+    const daysLeft = Math.max(0, Math.ceil((end - today) / 86400000))
+    return { pct, daysLeft }
+  }
+
+  const sorted = [...challenges].sort((a, b) => {
+    const order = { ACTIVE: 0, UPCOMING: 1, ENDED: 2 }
+    const sa = order[challengeStatus(a)], sb = order[challengeStatus(b)]
+    if (sa !== sb) return sa - sb
+    return new Date(a.start_date) - new Date(b.start_date)
+  })
+
+  const cardS = { background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: '14px', padding: '20px', backdropFilter: 'var(--card-blur, none)' }
+
+  return (
+    <>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <div style={{ fontSize: '11px', fontWeight: '600', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888' }}>Trading Challenges</div>
+        {isAdmin && (
+          <button onClick={openAdd} style={{ background: 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', color: '#aaffa0', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px' }}><Plus size={13} /> Add Challenge</button>
+        )}
+      </div>
+
+      {sorted.length === 0 ? (
+        <div style={{ ...cardS, padding: '40px', textAlign: 'center', fontSize: '13px', color: 'var(--text-lo)' }}>No challenges yet</div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '14px' }} className="chart-grid">
+          {sorted.map(c => {
+            const status = challengeStatus(c)
+            const cfg = STATUS_CFG[status]
+            const { pct, daysLeft } = progressOf(c)
+            const isJoined = joined(c.id)
+            const count = countFor(c.id)
+            return (
+              <div key={c.id} style={{ ...cardS, position: 'relative' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', gap: '8px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: '700', letterSpacing: '0.06em', color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}`, padding: '3px 9px', borderRadius: '99px' }}>{status}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#888' }}>
+                    <Users size={11} /> {count} {count === 1 ? 'participant' : 'participants'}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '12px' }}>
+                  <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'rgba(255,217,102,0.08)', border: '1px solid rgba(255,217,102,0.20)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Trophy size={20} color="#ffd966" />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-hi)', letterSpacing: '-0.3px', marginBottom: '4px' }}>{c.title}</div>
+                    <div style={{ fontSize: '11px', color: '#888', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <Calendar size={11} /> {fmtRange(c.start_date, c.end_date)}
+                    </div>
+                  </div>
+                </div>
+
+                {c.description && <div style={{ fontSize: '12px', color: 'var(--text-md)', lineHeight: 1.5, marginBottom: '12px' }}>{c.description}</div>}
+
+                {c.rules && (
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid #1a1a1a', borderRadius: '10px', padding: '10px 12px', marginBottom: '12px' }}>
+                    <div style={{ fontSize: '10px', color: '#666', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>Rules</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-md)', lineHeight: 1.5 }}>{c.rules}</div>
+                  </div>
+                )}
+
+                {c.reward && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px', fontSize: '12px', color: '#ffd966' }}>
+                    <Award size={13} />
+                    <span style={{ fontWeight: '600' }}>{c.reward}</span>
+                  </div>
+                )}
+
+                <div style={{ marginBottom: '14px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#666', marginBottom: '6px', letterSpacing: '0.05em' }}>
+                    <span>{status === 'UPCOMING' ? 'Starts soon' : status === 'ENDED' ? 'Completed' : `${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} remaining`}</span>
+                    <span>{Math.round(pct)}%</span>
+                  </div>
+                  <div style={{ height: '6px', background: '#141414', borderRadius: '99px', overflow: 'hidden' }}>
+                    <div style={{ width: `${pct}%`, height: '100%', background: status === 'ENDED' ? '#444' : 'linear-gradient(90deg, #aaffa0 0%, #00cc66 100%)', borderRadius: '99px', transition: 'width 0.4s ease' }} />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  {status !== 'ENDED' ? (
+                    isJoined ? (
+                      <button onClick={() => leave(c.id)} style={{ flex: 1, background: 'rgba(170,255,160,0.10)', border: '1px solid rgba(170,255,160,0.30)', color: '#aaffa0', borderRadius: '99px', padding: '9px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                        <Check size={13} /> Joined
+                      </button>
+                    ) : (
+                      <button onClick={() => join(c.id)} style={{ flex: 1, background: '#fff', color: '#000', border: 'none', borderRadius: '99px', padding: '9px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', fontFamily: 'inherit' }}>
+                        Join Challenge
+                      </button>
+                    )
+                  ) : (
+                    <button disabled style={{ flex: 1, background: 'transparent', border: '1px solid #2a2a2a', color: '#555', borderRadius: '99px', padding: '9px 16px', fontSize: '12px', fontWeight: '600', cursor: 'default', fontFamily: 'inherit' }}>Challenge Ended</button>
+                  )}
+                  <button onClick={() => setLeaderFor(c.id)} title="Leaderboard" style={{ background: 'transparent', border: '1px solid var(--card-border)', color: 'var(--text-md)', borderRadius: '99px', padding: '8px 12px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <Trophy size={12} />
+                  </button>
+                  {isAdmin && (
+                    <>
+                      <button onClick={() => openEdit(c)} title="Edit" style={{ background: 'transparent', border: '1px solid #2a2a2a', color: '#666', borderRadius: '99px', padding: '8px 10px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit' }}><Pencil size={11} /></button>
+                      <button onClick={() => del(c.id)}  title="Delete" style={{ background: 'transparent', border: '1px solid #2a2a2a', color: '#666', borderRadius: '99px', padding: '8px 10px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit' }}><Trash2 size={11} /></button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {leaderFor !== null && (() => {
+        const c = challenges.find(x => x.id === leaderFor)
+        if (!c) return null
+        const top = topFor(c.id)
+        return (
+          <NetworkModal onClose={() => setLeaderFor(null)} maxWidth="480px">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+              <Trophy size={20} color="#ffd966" />
+              <div style={{ fontSize: '18px', fontWeight: '800', color: '#fff', letterSpacing: '-0.5px' }}>Leaderboard</div>
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--text-lo)', marginBottom: '20px' }}>{c.title}</div>
+            {top.length === 0 ? (
+              <div style={{ padding: '24px', textAlign: 'center', fontSize: '13px', color: 'var(--text-lo)' }}>No participants yet — be the first to join.</div>
+            ) : (
+              <div>
+                {top.map((p, i) => (
+                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 0', borderBottom: i === top.length - 1 ? 'none' : '1px solid #141414' }}>
+                    <div style={{ fontSize: '12px', fontWeight: '800', color: i === 0 ? '#ffd966' : i === 1 ? '#bbb' : i === 2 ? '#cd9166' : '#666', width: '22px' }}>{i + 1}</div>
+                    <NetworkAvatar name={p.user_name} size={28} />
+                    <div style={{ flex: 1, fontSize: '13px', fontWeight: '600', color: 'var(--text-hi)' }}>{p.user_name}{p.user_id === userId && <span style={{ color: '#aaffa0', marginLeft: '6px', fontSize: '11px' }}>(you)</span>}</div>
+                    <div style={{ fontSize: '11px', color: '#666' }}>{new Date(p.joined_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </NetworkModal>
+        )
+      })()}
+
+      {modal && (
+        <NetworkModal onClose={() => setModal(null)}>
+          <div style={{ fontSize: '17px', fontWeight: '800', color: '#fff', marginBottom: '18px' }}>{modal === 'edit' ? 'Edit Challenge' : 'Add Challenge'}</div>
+          <FormField label="Title"><input value={draft.title || ''} onChange={e => setDraft({ ...draft, title: e.target.value })} style={inp} placeholder="e.g. No Revenge Trading Week" /></FormField>
+          <FormField label="Description"><textarea value={draft.description || ''} onChange={e => setDraft({ ...draft, description: e.target.value })} style={{ ...inp, minHeight: '70px', resize: 'vertical' }} /></FormField>
+          <FormField label="Rules"><textarea value={draft.rules || ''} onChange={e => setDraft({ ...draft, rules: e.target.value })} style={{ ...inp, minHeight: '60px', resize: 'vertical' }} placeholder="What participants must follow…" /></FormField>
+          <FormField label="Reward"><input value={draft.reward || ''} onChange={e => setDraft({ ...draft, reward: e.target.value })} style={inp} placeholder="e.g. Featured on leaderboard" /></FormField>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            <FormField label="Start Date"><input type="date" value={draft.start_date || ''} onChange={e => setDraft({ ...draft, start_date: e.target.value })} style={inp} /></FormField>
+            <FormField label="End Date"><input type="date" value={draft.end_date || ''} onChange={e => setDraft({ ...draft, end_date: e.target.value })} style={inp} /></FormField>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
+            <button onClick={() => setModal(null)} style={{ background: 'transparent', border: '1px solid #2a2a2a', color: 'var(--text-md)', borderRadius: '99px', padding: '9px 18px', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+            <button onClick={save} style={{ background: '#fff', color: '#000', border: 'none', borderRadius: '99px', padding: '9px 20px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', fontFamily: 'inherit' }}>Save</button>
+          </div>
+        </NetworkModal>
+      )}
+    </>
+  )
+}
+
+// ─── Network · Resources ────────────────
+const CATEGORY_ICONS = {
+  'Playbooks':       BookOpen,
+  'Psychology':      Heart,
+  'Risk Management': Shield,
+  'Strategy':        Target,
+  'Tools':           Settings2,
+}
+const CATEGORY_COLORS = {
+  'Playbooks':       { bg: 'rgba(170,255,160,0.08)', border: 'rgba(170,255,160,0.25)', color: '#aaffa0' },
+  'Psychology':      { bg: 'rgba(194,140,255,0.08)', border: 'rgba(194,140,255,0.25)', color: '#c28cff' },
+  'Risk Management': { bg: 'rgba(255,128,128,0.08)', border: 'rgba(255,128,128,0.25)', color: '#ff8080' },
+  'Strategy':        { bg: 'rgba(120,180,255,0.08)', border: 'rgba(120,180,255,0.25)', color: '#7cc9ff' },
+  'Tools':           { bg: 'rgba(255,217,102,0.08)', border: 'rgba(255,217,102,0.25)', color: '#ffd966' },
+}
+const TYPE_ICONS = { PDF: FileText, VIDEO: Video, LINK: ExternalLink, TEMPLATE: Layers }
+
+function NetworkResources({ isAdmin }) {
+  const [resources, setResources] = useState(() => loadNetwork('network_resources', NETWORK_SEED_RESOURCES))
+  const [filter,    setFilter]    = useState('All')
+  const [query,     setQuery]     = useState('')
+  const [modal,     setModal]     = useState(null)
+  const [draft,     setDraft]     = useState({})
+
+  const persist = (next) => { setResources(next); saveNetwork('network_resources', next) }
+  const openAdd = () => { setDraft({ title: '', description: '', category: 'Playbooks', resource_type: 'PDF', url: '', file_size: '' }); setModal('add') }
+  const openEdit = (r) => { setDraft({ ...r }); setModal('edit') }
+  const save = () => {
+    if (!draft.title || !draft.url) return
+    if (modal === 'edit') {
+      persist(resources.map(r => r.id === draft.id ? { ...draft } : r))
+    } else {
+      persist([...resources, { ...draft, id: Date.now(), created_at: new Date().toISOString() }])
+    }
+    setModal(null)
+  }
+  const del = (id) => { if (!confirm('Delete this resource?')) return; persist(resources.filter(r => r.id !== id)) }
+
+  const filtered = resources.filter(r => {
+    if (filter !== 'All' && r.category !== filter) return false
+    if (query) {
+      const q = query.toLowerCase()
+      if (!r.title?.toLowerCase().includes(q) && !r.description?.toLowerCase().includes(q)) return false
+    }
+    return true
+  })
+
+  const pillStyle = (active) => ({ background: active ? 'var(--text-hi)' : 'transparent', border: `1px solid ${active ? 'var(--text-hi)' : 'var(--card-border)'}`, color: active ? 'var(--bg)' : 'var(--text-md)', fontSize: '12px', fontWeight: active ? '700' : '500', padding: '6px 14px', borderRadius: '99px', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s', whiteSpace: 'nowrap' })
+  const cardS = { background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: '14px', padding: '18px', backdropFilter: 'var(--card-blur, none)' }
+  const fmtDate = (iso) => { try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) } catch { return '' } }
+
+  return (
+    <>
+      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: '220px', position: 'relative' }}>
+          <Search size={14} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#666', pointerEvents: 'none' }} />
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Search resources…"
+            style={{ ...inp, paddingLeft: '38px' }}
+          />
+        </div>
+        {isAdmin && (
+          <button onClick={openAdd} style={{ background: 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', color: '#aaffa0', borderRadius: '8px', padding: '9px 14px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px' }}><Plus size={13} /> Add Resource</button>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '18px', flexWrap: 'wrap', overflowX: 'auto' }}>
+        <button onClick={() => setFilter('All')} style={pillStyle(filter === 'All')}>All</button>
+        {RESOURCE_CATEGORIES.map(cat => (
+          <button key={cat} onClick={() => setFilter(cat)} style={pillStyle(filter === cat)}>{cat}</button>
+        ))}
+      </div>
+
+      {filtered.length === 0 ? (
+        <div style={{ ...cardS, padding: '40px', textAlign: 'center', fontSize: '13px', color: 'var(--text-lo)' }}>
+          {query ? `No resources match "${query}"` : filter === 'All' ? 'No resources yet' : `No resources in ${filter}`}
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }} className="chart-grid">
+          {filtered.map(r => {
+            const CatIcon = CATEGORY_ICONS[r.category] || BookOpen
+            const TypeIcon = TYPE_ICONS[r.resource_type] || FileText
+            const catCfg = CATEGORY_COLORS[r.category] || CATEGORY_COLORS['Playbooks']
+            return (
+              <div key={r.id} style={{ ...cardS, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px' }}>
+                  <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: catCfg.bg, border: `1px solid ${catCfg.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <CatIcon size={20} color={catCfg.color} />
+                  </div>
+                  <span style={{ fontSize: '10px', fontWeight: '700', letterSpacing: '0.08em', color: '#aaa', background: '#141414', border: '1px solid #1f1f1f', padding: '3px 9px', borderRadius: '99px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                    <TypeIcon size={10} /> {r.resource_type}
+                  </span>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-hi)', marginBottom: '6px', lineHeight: 1.3, letterSpacing: '-0.2px' }}>{r.title}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-lo)', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{r.description}</div>
+                </div>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
+                  <span style={{ fontSize: '10px', fontWeight: '700', letterSpacing: '0.06em', color: catCfg.color, background: catCfg.bg, border: `1px solid ${catCfg.border}`, padding: '3px 9px', borderRadius: '99px', textTransform: 'uppercase' }}>{r.category}</span>
+                  {r.file_size && <span style={{ fontSize: '10px', color: '#666' }}>· {r.file_size}</span>}
+                </div>
+
+                <div style={{ display: 'flex', gap: '6px', marginTop: 'auto', alignItems: 'center' }}>
+                  <a
+                    href={r.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ flex: 1, background: '#fff', color: '#000', border: 'none', borderRadius: '99px', padding: '8px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'none', textAlign: 'center', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                  >
+                    {r.resource_type === 'LINK' || r.resource_type === 'VIDEO' ? <><ExternalLink size={12} /> View</> : <><Download size={12} /> Download</>}
+                  </a>
+                  {isAdmin && (
+                    <>
+                      <button onClick={() => openEdit(r)} title="Edit" style={{ background: 'transparent', border: '1px solid #2a2a2a', color: '#666', borderRadius: '99px', padding: '7px 10px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit' }}><Pencil size={11} /></button>
+                      <button onClick={() => del(r.id)} title="Delete" style={{ background: 'transparent', border: '1px solid #2a2a2a', color: '#666', borderRadius: '99px', padding: '7px 10px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit' }}><Trash2 size={11} /></button>
+                    </>
+                  )}
+                </div>
+
+                {r.created_at && <div style={{ fontSize: '10px', color: '#555', letterSpacing: '0.02em' }}>Added {fmtDate(r.created_at)}</div>}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {modal && (
+        <NetworkModal onClose={() => setModal(null)}>
+          <div style={{ fontSize: '17px', fontWeight: '800', color: '#fff', marginBottom: '18px' }}>{modal === 'edit' ? 'Edit Resource' : 'Add Resource'}</div>
+          <FormField label="Title"><input value={draft.title || ''} onChange={e => setDraft({ ...draft, title: e.target.value })} style={inp} placeholder="e.g. ICT Killzone Playbook" /></FormField>
+          <FormField label="Description"><textarea value={draft.description || ''} onChange={e => setDraft({ ...draft, description: e.target.value })} style={{ ...inp, minHeight: '70px', resize: 'vertical' }} /></FormField>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            <FormField label="Category"><CustomSelect value={draft.category} onChange={v => setDraft({ ...draft, category: v })} options={RESOURCE_CATEGORIES} /></FormField>
+            <FormField label="Type"><CustomSelect value={draft.resource_type} onChange={v => setDraft({ ...draft, resource_type: v })} options={RESOURCE_TYPES} /></FormField>
+          </div>
+          <FormField label="URL"><input value={draft.url || ''} onChange={e => setDraft({ ...draft, url: e.target.value })} style={inp} placeholder="https://…" /></FormField>
+          <FormField label="File size / duration"><input value={draft.file_size || ''} onChange={e => setDraft({ ...draft, file_size: e.target.value })} style={inp} placeholder="e.g. 2.4 MB or 45 min" /></FormField>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
+            <button onClick={() => setModal(null)} style={{ background: 'transparent', border: '1px solid #2a2a2a', color: 'var(--text-md)', borderRadius: '99px', padding: '9px 18px', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+            <button onClick={save} style={{ background: '#fff', color: '#000', border: 'none', borderRadius: '99px', padding: '9px 20px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', fontFamily: 'inherit' }}>Save</button>
+          </div>
+        </NetworkModal>
+      )}
+    </>
+  )
+}
+
 // ─── Network Page ───────────────────────
 function NetworkPage({ session, setPage }) {
   const isAdmin = session?.user?.email === ADMIN_EMAIL
@@ -4876,6 +5356,10 @@ function NetworkPage({ session, setPage }) {
     { id: 'creators',   label: 'Creators',   Icon: Users },
     { id: 'breakdowns', label: 'Breakdowns', Icon: Play },
     { id: 'streaks',    label: 'Streaks',    Icon: Flame },
+    { id: 'partners',   label: 'Partners',   Icon: Heart },
+    { id: 'hall',       label: 'Hall of Fame', Icon: Award },
+    { id: 'challenges', label: 'Challenges', Icon: Trophy },
+    { id: 'resources',  label: 'Resources',  Icon: BookOpen },
   ]
 
   return (
@@ -4917,6 +5401,10 @@ function NetworkPage({ session, setPage }) {
       {tab === 'creators'   && <NetworkCreators   isAdmin={isAdmin} creators={creators} setCreators={setCreators} />}
       {tab === 'breakdowns' && <NetworkBreakdowns isAdmin={isAdmin} creators={creators} />}
       {tab === 'streaks'    && <NetworkStreaks    session={session} />}
+      {tab === 'partners'   && <NetworkPartners   session={session} />}
+      {tab === 'hall'       && <NetworkHallOfFame isAdmin={isAdmin} />}
+      {tab === 'challenges' && <NetworkChallenges isAdmin={isAdmin} session={session} />}
+      {tab === 'resources'  && <NetworkResources  isAdmin={isAdmin} />}
     </div>
   )
 }
@@ -6316,7 +6804,6 @@ export default function App() {
     { id: 'trades',    Icon: BookOpen,        label: 'Trade Log'    },
     { id: 'plan',      Icon: ClipboardList,   label: 'Trading Plan' },
     ...(featureFlags.newsCalendar ? [{ id: 'news', Icon: CalendarDays, label: 'News' }] : []),
-    ...(session?.user?.email === ADMIN_EMAIL ? [{ id: 'network', Icon: Globe, label: 'Network' }] : []),
     { id: 'settings',  Icon: Settings2,       label: 'Settings'     },
   ]
 
@@ -6472,6 +6959,55 @@ export default function App() {
             {n.label}
           </button>
         ))}
+
+        {/* Network — admin only, accent purple, NEW badge */}
+        {session?.user?.email === ADMIN_EMAIL && (
+          <button
+            onClick={() => setPage('network')}
+            style={{
+              marginTop: '24px',
+              background: page === 'network' ? 'rgba(139, 92, 246, 0.3)' : 'rgba(139, 92, 246, 0.12)',
+              border: page === 'network' ? '1px solid rgba(139, 92, 246, 0.6)' : '1px solid rgba(139, 92, 246, 0.25)',
+              color: page === 'network' ? '#c4b5fd' : '#a78bfa',
+              borderRadius: '10px',
+              padding: '10px 14px',
+              cursor: 'pointer',
+              textAlign: 'left',
+              fontSize: '13px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              width: '100%',
+              fontFamily: 'inherit',
+              fontWeight: page === 'network' ? '500' : '400',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => {
+              if (page !== 'network') {
+                e.currentTarget.style.background = 'rgba(139, 92, 246, 0.22)'
+                e.currentTarget.style.border = '1px solid rgba(139, 92, 246, 0.4)'
+              }
+            }}
+            onMouseLeave={e => {
+              if (page !== 'network') {
+                e.currentTarget.style.background = 'rgba(139, 92, 246, 0.12)'
+                e.currentTarget.style.border = '1px solid rgba(139, 92, 246, 0.25)'
+              }
+            }}
+          >
+            <Globe size={18} color={page === 'network' ? '#c4b5fd' : '#a78bfa'} />
+            <span style={{ flex: 1 }}>Network</span>
+            <span style={{
+              fontSize: '9px',
+              background: '#7c3aed',
+              color: '#fff',
+              padding: '2px 6px',
+              borderRadius: '99px',
+              fontWeight: 600,
+              letterSpacing: '0.05em',
+            }}>NEW</span>
+          </button>
+        )}
 
         <div style={{ flex: 1 }} />
 
@@ -6633,6 +7169,37 @@ export default function App() {
                 {n.label}
               </button>
             ))}
+
+            {/* Network — admin only, accent purple, NEW badge */}
+            {session?.user?.email === ADMIN_EMAIL && (
+              <button
+                onClick={() => { setMobileSidebarOpen(false); setTimeout(() => setPage('network'), 20) }}
+                style={{
+                  marginTop: '24px',
+                  background: page === 'network' ? 'rgba(139, 92, 246, 0.3)' : 'rgba(139, 92, 246, 0.12)',
+                  border: page === 'network' ? '1px solid rgba(139, 92, 246, 0.6)' : '1px solid rgba(139, 92, 246, 0.25)',
+                  color: page === 'network' ? '#c4b5fd' : '#a78bfa',
+                  borderRadius: '10px', padding: '11px 13px',
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  width: '100%', textAlign: 'left',
+                  cursor: 'pointer', fontFamily: 'inherit',
+                  fontSize: '13px', fontWeight: page === 'network' ? '600' : '400',
+                  transition: 'all 0.15s', marginBottom: '2px', minHeight: '44px',
+                }}
+              >
+                <Globe size={16} color={page === 'network' ? '#c4b5fd' : '#a78bfa'} />
+                <span style={{ flex: 1 }}>Network</span>
+                <span style={{
+                  fontSize: '9px',
+                  background: '#7c3aed',
+                  color: '#fff',
+                  padding: '2px 6px',
+                  borderRadius: '99px',
+                  fontWeight: 600,
+                  letterSpacing: '0.05em',
+                }}>NEW</span>
+              </button>
+            )}
 
             {/* User card at bottom */}
             <div style={{ marginTop: 'auto', paddingTop: '20px', borderTop: '1px solid #1a1a1a' }}>
