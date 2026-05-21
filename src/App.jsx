@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef, Fragment } from 'react'
 import { createPortal } from 'react-dom'
 import toast, { Toaster } from 'react-hot-toast'
-import { NetworkPartners, NetworkHallOfFame } from './NetworkExtras.jsx'
+import {
+  NetworkPartners, NetworkHallOfFame, NetworkChat, NetworkAnnouncements,
+  NetworkMembersList, NetworkMemberPopup,
+} from './NetworkExtras.jsx'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   BarChart, Bar, Cell,
@@ -5340,71 +5343,184 @@ function NetworkResources({ isAdmin }) {
 }
 
 // ─── Network Page ───────────────────────
-function NetworkPage({ session, setPage }) {
-  const isAdmin = session?.user?.email === ADMIN_EMAIL
-  const [tab,      setTab]      = useState('sessions')
-  const [creators, setCreators] = useState(() => loadNetwork('network_creators', NETWORK_SEED_CREATORS))
+// Channel definitions for the Discord-style Network layout
+const NETWORK_CHANNELS = [
+  { id: 'general-chat',     section: 'GENERAL',        label: 'general-chat',     description: 'General conversation — say hi, share wins, ask questions' },
+  { id: 'announcements',    section: 'GENERAL',        label: 'announcements',    description: 'Admin posts — platform updates, news, important notices' },
+  { id: 'trade-breakdowns', section: 'TRADING',        label: 'trade-breakdowns', description: 'Trade breakdowns and post-mortems — video walkthroughs' },
+  { id: 'hall-of-fame',     section: 'TRADING',        label: 'hall-of-fame',     description: 'Legendary trades from the community 🏆' },
+  { id: 'challenges',       section: 'TRADING',        label: 'challenges',       description: 'Community trading challenges — discipline, win rate, risk' },
+  { id: 'resources',        section: 'EDUCATION',      label: 'resources',        description: 'Curated books, videos, courses, and tools' },
+  { id: 'sessions',         section: 'EDUCATION',      label: 'sessions',         description: 'Upcoming live sessions and past replays' },
+  { id: 'creators',         section: 'EDUCATION',      label: 'creators',         description: 'Trader profiles — the people behind the content' },
+  { id: 'streaks',          section: 'ACCOUNTABILITY', label: 'streaks',          description: 'Daily check-ins, streak tracker, community leaderboard' },
+  { id: 'partners',         section: 'ACCOUNTABILITY', label: 'partners',         description: 'Find an accountability partner — pair up and trade better together' },
+]
+const NETWORK_SECTIONS = ['GENERAL', 'TRADING', 'EDUCATION', 'ACCOUNTABILITY']
 
-  // Redirect any non-admin away from this page
+function NetworkPage({ session, setPage, profile }) {
+  const isAdmin = session?.user?.email === ADMIN_EMAIL
+  const [channel, setChannel] = useState('general-chat')
+  const [creators, setCreators] = useState(() => loadNetwork('network_creators', NETWORK_SEED_CREATORS))
+  const [members, setMembers] = useState([])
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [collapsed, setCollapsed] = useState({}) // section → bool
+  const [pickedMember, setPickedMember] = useState(null)
+
+  useEffect(() => { if (!isAdmin) setPage('dashboard') }, [isAdmin, setPage])
+
+  // Load members (approved users)
   useEffect(() => {
-    if (!isAdmin) setPage('dashboard')
-  }, [isAdmin, setPage])
+    if (!isAdmin) return
+    ;(async () => {
+      try {
+        const { data } = await supabase.from('profiles').select('id, username, first_name, last_name, status, email:auth_email_view, monthly_goal').eq('status', 'approved')
+        // Fallback if no auth_email_view: try admin_users_view
+        if (!data) {
+          const { data: viewData } = await supabase.from('admin_users_view').select('id, username, first_name, last_name, status, email').eq('status', 'approved')
+          setMembers(viewData || [])
+        } else {
+          setMembers(data)
+        }
+      } catch {
+        try {
+          const { data } = await supabase.from('admin_users_view').select('id, username, first_name, last_name, status, email').eq('status', 'approved')
+          setMembers(data || [])
+        } catch {}
+      }
+    })()
+  }, [isAdmin])
+
   if (!isAdmin) return null
 
-  const tabs = [
-    { id: 'sessions',   label: 'Sessions',   Icon: Video },
-    { id: 'creators',   label: 'Creators',   Icon: Users },
-    { id: 'breakdowns', label: 'Breakdowns', Icon: Play },
-    { id: 'streaks',    label: 'Streaks',    Icon: Flame },
-    { id: 'partners',   label: 'Partners',   Icon: Heart },
-    { id: 'hall',       label: 'Hall of Fame', Icon: Award },
-    { id: 'challenges', label: 'Challenges', Icon: Trophy },
-    { id: 'resources',  label: 'Resources',  Icon: BookOpen },
-  ]
+  const current = NETWORK_CHANNELS.find(c => c.id === channel) || NETWORK_CHANNELS[0]
+
+  const channelCard = (c) => {
+    const active = channel === c.id
+    return (
+      <button
+        key={c.id}
+        onClick={() => { setChannel(c.id); setDrawerOpen(false) }}
+        style={{
+          width: '100%',
+          background: active ? 'rgba(255,255,255,0.1)' : 'transparent',
+          border: 'none',
+          borderRadius: '4px',
+          padding: '6px 10px',
+          color: active ? 'var(--text-hi)' : 'var(--text-md)',
+          fontSize: '13px',
+          fontWeight: active ? '600' : '500',
+          fontFamily: 'inherit',
+          cursor: 'pointer',
+          textAlign: 'left',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          minHeight: 'auto',
+          transition: 'background 0.1s',
+        }}
+        onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}
+        onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}
+      >
+        <span style={{ color: active ? '#aaa' : '#555', fontWeight: '400' }}>#</span>
+        {c.label}
+      </button>
+    )
+  }
+
+  const sectionHeader = (s) => (
+    <button
+      onClick={() => setCollapsed(prev => ({ ...prev, [s]: !prev[s] }))}
+      style={{
+        width: '100%', background: 'transparent', border: 'none',
+        padding: '14px 10px 4px', display: 'flex', alignItems: 'center', gap: '4px',
+        fontSize: '11px', fontWeight: '700', letterSpacing: '0.08em',
+        color: '#555', textTransform: 'uppercase', cursor: 'pointer', fontFamily: 'inherit', minHeight: 'auto',
+      }}
+    >
+      <ChevronDown size={10} style={{ transform: collapsed[s] ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }} />
+      {s}
+    </button>
+  )
+
+  const renderChannel = () => {
+    switch (channel) {
+      case 'general-chat':     return <NetworkChat          session={session} profile={profile} channel="general-chat" isAdmin={isAdmin} />
+      case 'announcements':    return <NetworkAnnouncements session={session} profile={profile} isAdmin={isAdmin} />
+      case 'trade-breakdowns': return <div style={{ padding: '24px', overflowY: 'auto' }}><NetworkBreakdowns isAdmin={isAdmin} creators={creators} /></div>
+      case 'hall-of-fame':     return <div style={{ padding: '24px', overflowY: 'auto' }}><NetworkHallOfFame isAdmin={isAdmin} /></div>
+      case 'challenges':       return <div style={{ padding: '24px', overflowY: 'auto', height: '100%' }}><NetworkChallenges isAdmin={isAdmin} session={session} /></div>
+      case 'resources':        return <div style={{ padding: '24px', overflowY: 'auto', height: '100%' }}><NetworkResources isAdmin={isAdmin} /></div>
+      case 'sessions':         return <div style={{ padding: '24px', overflowY: 'auto' }}><NetworkSessions isAdmin={isAdmin} creators={creators} /></div>
+      case 'creators':         return <div style={{ padding: '24px', overflowY: 'auto' }}><NetworkCreators isAdmin={isAdmin} creators={creators} setCreators={setCreators} /></div>
+      case 'streaks':          return <div style={{ padding: '24px', overflowY: 'auto' }}><NetworkStreaks session={session} /></div>
+      case 'partners':         return <div style={{ padding: '24px', overflowY: 'auto' }}><NetworkPartners session={session} /></div>
+      default:                 return null
+    }
+  }
 
   return (
-    <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-        <Globe size={22} color="#aaffa0" />
-        <h1 style={{ fontSize: '28px', fontWeight: '800', letterSpacing: '-1px', color: 'var(--text-hi)' }}>Network</h1>
-      </div>
-      <div style={{ fontSize: '12px', color: 'var(--text-lo)', marginBottom: '24px', letterSpacing: '0.02em' }}>Sessions, creators, and accountability — the ecosystem layer.</div>
+    <div className="network-layout" style={{ display: 'flex', flex: 1, minHeight: 0, height: '100%', animation: 'pageEnter 0.2s ease-out both', overflow: 'hidden' }}>
+      {/* Inline CSS for responsive behavior */}
+      <style>{`
+        .network-left  { width: 220px; flex-shrink: 0; background: #0d0d0d; border-right: 1px solid #1a1a1a; display: flex; flex-direction: column; overflow-y: auto; }
+        .network-mid   { flex: 1; min-width: 0; display: flex; flex-direction: column; background: #080808; overflow: hidden; }
+        .network-right { width: 240px; flex-shrink: 0; background: #111; border-left: 1px solid #1a1a1a; overflow-y: auto; }
+        .network-drawer-btn { display: none; }
+        @media (max-width: 1100px) { .network-right { display: none; } }
+        @media (max-width: 768px) {
+          .network-left { position: fixed; top: 0; left: 0; bottom: 0; z-index: 200; transform: translateX(-100%); transition: transform 0.22s ease-out; box-shadow: 0 0 32px rgba(0,0,0,0.6); }
+          .network-left.open { transform: translateX(0); }
+          .network-drawer-btn { display: flex !important; }
+        }
+        .network-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 199; }
+      `}</style>
 
-      {/* Tab strip — pill style */}
-      <div style={{ display: 'flex', gap: '6px', marginBottom: '24px', flexWrap: 'wrap', overflowX: 'auto' }}>
-        {tabs.map(t => {
-          const active = tab === t.id
-          const Icon = t.Icon
-          return (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              style={{
-                background: active ? 'var(--text-hi)' : 'transparent',
-                border: `1px solid ${active ? 'var(--text-hi)' : 'var(--card-border)'}`,
-                color: active ? 'var(--bg)' : 'var(--text-md)',
-                fontSize: '13px', fontWeight: active ? '700' : '500',
-                padding: '8px 18px', borderRadius: '99px',
-                cursor: 'pointer', fontFamily: 'inherit',
-                display: 'flex', alignItems: 'center', gap: '7px',
-                transition: 'all 0.15s', whiteSpace: 'nowrap',
-              }}
-            >
-              <Icon size={14} />
-              {t.label}
-            </button>
-          )
-        })}
-      </div>
+      {drawerOpen && <div className="network-overlay" onClick={() => setDrawerOpen(false)} />}
 
-      {tab === 'sessions'   && <NetworkSessions   isAdmin={isAdmin} creators={creators} />}
-      {tab === 'creators'   && <NetworkCreators   isAdmin={isAdmin} creators={creators} setCreators={setCreators} />}
-      {tab === 'breakdowns' && <NetworkBreakdowns isAdmin={isAdmin} creators={creators} />}
-      {tab === 'streaks'    && <NetworkStreaks    session={session} />}
-      {tab === 'partners'   && <NetworkPartners   session={session} />}
-      {tab === 'hall'       && <NetworkHallOfFame isAdmin={isAdmin} />}
-      {tab === 'challenges' && <NetworkChallenges isAdmin={isAdmin} session={session} />}
-      {tab === 'resources'  && <NetworkResources  isAdmin={isAdmin} />}
+      {/* LEFT — Channel list */}
+      <aside className={`network-left${drawerOpen ? ' open' : ''}`}>
+        <div style={{ padding: '14px 14px 8px', borderBottom: '1px solid #1a1a1a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Globe size={14} color="#aaffa0" />
+          <div style={{ fontSize: '11px', fontWeight: '700', letterSpacing: '0.1em', color: '#888', textTransform: 'uppercase' }}>LIMITLESS NETWORK</div>
+        </div>
+        <div style={{ padding: '4px 6px 16px', flex: 1 }}>
+          {NETWORK_SECTIONS.map(s => (
+            <div key={s}>
+              {sectionHeader(s)}
+              {!collapsed[s] && NETWORK_CHANNELS.filter(c => c.section === s).map(channelCard)}
+            </div>
+          ))}
+        </div>
+      </aside>
+
+      {/* MIDDLE — Content */}
+      <main className="network-mid">
+        {/* Top channel header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 18px', borderBottom: '1px solid #1a1a1a', flexShrink: 0, minHeight: '48px' }}>
+          <button
+            className="network-drawer-btn"
+            onClick={() => setDrawerOpen(true)}
+            style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', padding: '4px', minHeight: 'auto', display: 'none', alignItems: 'center' }}
+          >☰</button>
+          <span style={{ fontSize: '18px', color: '#666', fontWeight: '400' }}>#</span>
+          <div style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-hi)', whiteSpace: 'nowrap' }}>{current.label}</div>
+          <div style={{ width: '1px', height: '20px', background: '#222' }} />
+          <div style={{ fontSize: '12px', color: 'var(--text-lo)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{current.description}</div>
+        </div>
+
+        {/* Channel body */}
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+          {renderChannel()}
+        </div>
+      </main>
+
+      {/* RIGHT — Members */}
+      <aside className="network-right">
+        <NetworkMembersList members={members} onPickMember={setPickedMember} />
+      </aside>
+
+      {pickedMember && <NetworkMemberPopup member={pickedMember} onClose={() => setPickedMember(null)} />}
     </div>
   )
 }
@@ -7097,7 +7213,7 @@ export default function App() {
           />
         )}
         {page === 'news' && featureFlags.newsCalendar && <NewsCalendar />}
-        {page === 'network'     && <NetworkPage session={session} setPage={setPage} />}
+        {page === 'network'     && <NetworkPage session={session} setPage={setPage} profile={profile} />}
         {page === 'plan'        && <TradingPlan flags={featureFlags} />}
         {page === 'settings'    && <Settings theme={theme} setTheme={handleSetTheme} session={session} profile={profile} setProfile={setProfile} glassMode={glassMode} setGlassMode={v => { setGlassMode(v); localStorage.setItem('glass_mode', v) }} onLogout={logout} trades={effectiveTrades} demoMode={demoMode} setDemoMode={setDemoMode} />}
         {page === 'admin'       && <AdminPanel session={session} setPage={setPage} />}

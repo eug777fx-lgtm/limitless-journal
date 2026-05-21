@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import toast from 'react-hot-toast'
-import { Award, Heart } from 'lucide-react'
+import { Award, Heart, Smile, Image as ImageIcon, Send, Pin, Trash2, BookOpen, Target, ChevronRight, X } from 'lucide-react'
 import { supabase } from './lib/supabase'
+
+export const NETWORK_ADMIN_EMAIL = 'eug777fx@gmail.com'
 
 // Small helpers reused only inside this file
 const cardS = { background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: '14px', padding: '20px', backdropFilter: 'var(--card-blur, none)' }
@@ -424,5 +426,380 @@ export function NetworkHallOfFame({ isAdmin }) {
         </div>
       )}
     </>
+  )
+}
+
+// ─── Chat (general-chat + announcements share this) ─────────
+const EMOJIS = ['😀', '😂', '🔥', '💪', '🎉', '📈', '📉', '🏆', '🤝', '👍', '❤️', '🙏', '💯', '⚡', '🎯', '✨']
+
+export function NetworkChat({ session, profile, channel = 'general-chat', readOnly = false, isAdmin = false }) {
+  const [messages, setMessages] = useState([])
+  const [input, setInput] = useState('')
+  const [sending, setSending] = useState(false)
+  const [emojiOpen, setEmojiOpen] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const scrollRef = useRef(null)
+  const fileRef = useRef(null)
+
+  const myId = session?.user?.id
+  const myUsername = profile?.username || session?.user?.email?.split('@')[0] || 'user'
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data, error } = await supabase
+          .from('network_messages').select('*')
+          .eq('channel', channel)
+          .order('created_at', { ascending: true })
+          .limit(200)
+        if (error) throw error
+        if (!cancelled) setMessages(data || [])
+      } catch (e) {
+        console.error('[chat] load', e)
+        toast.error(`Couldn't load #${channel} — ${e.message}`)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [channel])
+
+  useEffect(() => {
+    const sub = supabase.channel(`chat-${channel}-${Date.now()}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'network_messages', filter: `channel=eq.${channel}` }, payload => {
+        setMessages(prev => prev.find(m => m.id === payload.new.id) ? prev : [...prev, payload.new])
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'network_messages', filter: `channel=eq.${channel}` }, payload => {
+        setMessages(prev => prev.filter(m => m.id !== payload.old.id))
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(sub) }
+  }, [channel])
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100
+    if (nearBottom) el.scrollTop = el.scrollHeight
+  }, [messages])
+
+  const send = async (text, imageUrl) => {
+    const body = (text ?? input).trim()
+    if (!body && !imageUrl) return
+    if (!myId) { toast.error('Not signed in'); return }
+    setSending(true)
+    try {
+      const { error } = await supabase.from('network_messages').insert({
+        user_id: myId, username: myUsername, channel, message: body || null, image_url: imageUrl || null,
+      })
+      if (error) throw error
+      setInput('')
+    } catch (e) {
+      console.error('[chat] send', e)
+      toast.error(`Failed to send — ${e.message}`)
+    } finally { setSending(false) }
+  }
+
+  const deleteMessage = async (id) => {
+    if (!confirm('Delete this message?')) return
+    try {
+      const { error } = await supabase.from('network_messages').delete().eq('id', id)
+      if (error) throw error
+    } catch (e) { toast.error(e.message) }
+  }
+
+  const onKey = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
+  }
+
+  const onFile = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setUploading(true)
+    try {
+      const ext = file.name.split('.').pop() || 'png'
+      const path = `chat/${myId}/${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage.from('chart-images').upload(path, file, { upsert: false })
+      if (upErr) throw upErr
+      const { data: pub } = supabase.storage.from('chart-images').getPublicUrl(path)
+      await send('', pub.publicUrl)
+    } catch (e) {
+      toast.error(`Upload failed — ${e.message}`)
+    } finally { setUploading(false) }
+  }
+
+  const items = []
+  let lastDate = null
+  for (const m of messages) {
+    const dateStr = new Date(m.created_at).toDateString()
+    if (dateStr !== lastDate) {
+      items.push({ type: 'date', key: `d-${dateStr}`, date: dateStr })
+      lastDate = dateStr
+    }
+    items.push({ type: 'msg', key: m.id, msg: m })
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+        {items.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-lo)', fontSize: '13px' }}>
+            No messages yet. Be the first to say something.
+          </div>
+        ) : items.map(it => {
+          if (it.type === 'date') {
+            const today = new Date().toDateString()
+            const yesterday = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toDateString() })()
+            const label = it.date === today ? 'Today' : it.date === yesterday ? 'Yesterday' : new Date(it.date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
+            return (
+              <div key={it.key} style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '20px 0 12px', color: '#555' }}>
+                <div style={{ flex: 1, height: '1px', background: '#1a1a1a' }} />
+                <div style={{ fontSize: '11px', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{label}</div>
+                <div style={{ flex: 1, height: '1px', background: '#1a1a1a' }} />
+              </div>
+            )
+          }
+          const m = it.msg
+          const mine = m.user_id === myId
+          const time = new Date(m.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+          return (
+            <div key={it.key} className="chat-row" style={{ display: 'flex', gap: '12px', padding: '6px 8px', borderRadius: '8px', alignItems: 'flex-start', position: 'relative' }}>
+              <Avatar name={m.username} size={36} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '2px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-hi)' }}>{m.username || 'user'}</span>
+                  <span style={{ fontSize: '10px', color: '#555' }}>{time}</span>
+                </div>
+                {m.message && <div style={{ fontSize: '14px', color: 'var(--text-md)', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.message}</div>}
+                {m.image_url && (
+                  <a href={m.image_url} target="_blank" rel="noopener noreferrer">
+                    <img src={m.image_url} alt="" style={{ maxWidth: '320px', maxHeight: '240px', marginTop: '6px', borderRadius: '8px', border: '1px solid #1a1a1a', display: 'block' }} />
+                  </a>
+                )}
+              </div>
+              {(mine || isAdmin) && (
+                <button onClick={() => deleteMessage(m.id)} className="chat-delete" style={{ background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', padding: '2px 4px', minHeight: 'auto', fontFamily: 'inherit', fontSize: '11px', opacity: 0 }} title="Delete">✕</button>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {!readOnly && (
+        <div style={{ padding: '14px 18px 18px', borderTop: '1px solid #1a1a1a', flexShrink: 0, position: 'relative' }}>
+          <div style={{ background: '#141414', border: '1px solid #1f1f1f', borderRadius: '10px', padding: '6px 10px', display: 'flex', alignItems: 'flex-end', gap: '4px' }}>
+            <button onClick={() => fileRef.current?.click()} disabled={uploading || sending} style={{ background: 'transparent', border: 'none', color: '#666', cursor: 'pointer', padding: '6px', minHeight: 'auto', display: 'flex', alignItems: 'center' }} title="Attach image">
+              <ImageIcon size={16} />
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" onChange={onFile} style={{ display: 'none' }} />
+            <button onClick={() => setEmojiOpen(v => !v)} style={{ background: 'transparent', border: 'none', color: '#666', cursor: 'pointer', padding: '6px', minHeight: 'auto', display: 'flex', alignItems: 'center' }} title="Emoji">
+              <Smile size={16} />
+            </button>
+            <textarea
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={onKey}
+              placeholder={`Message #${channel}`}
+              rows={1}
+              style={{ flex: 1, background: 'transparent', border: 'none', color: 'var(--text-hi)', fontSize: '14px', resize: 'none', outline: 'none', padding: '8px 4px', fontFamily: 'inherit', maxHeight: '120px' }}
+            />
+            <button onClick={() => send()} disabled={sending || !input.trim()} style={{ background: input.trim() ? '#fff' : 'transparent', border: 'none', color: input.trim() ? '#000' : '#555', borderRadius: '8px', padding: '7px 10px', cursor: sending || !input.trim() ? 'default' : 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', minHeight: 'auto', opacity: (sending || !input.trim()) ? 0.5 : 1 }} title="Send">
+              <Send size={14} />
+            </button>
+          </div>
+          {emojiOpen && (
+            <div style={{ position: 'absolute', bottom: '70px', right: '18px', background: '#0d0d0d', border: '1px solid #1f1f1f', borderRadius: '10px', padding: '8px', display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: '2px', zIndex: 10, boxShadow: '0 12px 32px rgba(0,0,0,0.6)' }}>
+              {EMOJIS.map(e => (
+                <button key={e} onClick={() => { setInput(s => s + e); setEmojiOpen(false) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '6px', fontSize: '18px', minHeight: 'auto', borderRadius: '6px' }}>{e}</button>
+              ))}
+            </div>
+          )}
+          {uploading && <div style={{ fontSize: '11px', color: '#aaffa0', marginTop: '6px' }}>Uploading…</div>}
+        </div>
+      )}
+      {readOnly && (
+        <div style={{ padding: '12px 18px', borderTop: '1px solid #1a1a1a', flexShrink: 0, fontSize: '12px', color: 'var(--text-lo)', textAlign: 'center' }}>
+          🔒 Only admins can post here
+        </div>
+      )}
+
+      <style>{`.chat-row:hover { background: rgba(255,255,255,0.02); } .chat-row:hover .chat-delete { opacity: 1 !important; }`}</style>
+    </div>
+  )
+}
+
+export function NetworkAnnouncements({ session, profile, isAdmin }) {
+  return <NetworkChat session={session} profile={profile} channel="announcements" readOnly={!isAdmin} isAdmin={isAdmin} />
+}
+
+// ─── Challenges ─────────────────────────────────────────────
+const NETWORK_CHALLENGES = [
+  { id: 1, title: '30 Days No Revenge Trades',   duration: '30 days', reward: '🛡️ Discipline Badge', description: 'Zero revenge trades for 30 consecutive days. Walk away after every loss.', participants: 12 },
+  { id: 2, title: '60% Win Rate Month',          duration: '1 month', reward: '🎯 Sharpshooter Badge', description: 'Hit at least 60% win rate over a full calendar month with 20+ trades.', participants: 8 },
+  { id: 3, title: 'Plan Adherence Streak',       duration: '21 days', reward: '📋 Process Badge',     description: 'Follow your trading plan on every trade for 21 days straight.',           participants: 15 },
+  { id: 4, title: 'Risk Discipline Challenge',   duration: '60 days', reward: '⚖️ Risk Master Badge', description: 'Never risk more than 1% per trade for 60 days. No exceptions.',           participants: 6 },
+]
+
+export function NetworkChallenges() {
+  return (
+    <div style={{ padding: '24px' }}>
+      <div style={{ fontSize: '11px', fontWeight: '600', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888', marginBottom: '16px' }}>Active Challenges</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
+        {NETWORK_CHALLENGES.map(c => (
+          <div key={c.id} style={cardS}>
+            <div style={{ fontSize: '24px', marginBottom: '10px' }}>{c.reward.split(' ')[0]}</div>
+            <div style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-hi)', marginBottom: '6px' }}>{c.title}</div>
+            <div style={{ fontSize: '12px', color: 'var(--text-md)', lineHeight: 1.5, marginBottom: '14px' }}>{c.description}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '11px', color: '#aaa', background: '#141414', border: '1px solid #222', padding: '3px 9px', borderRadius: '99px' }}>{c.duration}</span>
+                <span style={{ fontSize: '11px', color: '#aaa', background: '#141414', border: '1px solid #222', padding: '3px 9px', borderRadius: '99px' }}>{c.participants} joined</span>
+              </div>
+              <button style={{ background: 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', color: '#aaffa0', borderRadius: '99px', padding: '6px 14px', fontSize: '11px', fontWeight: '700', cursor: 'pointer', fontFamily: 'inherit', minHeight: 'auto' }} onClick={() => toast.success(`Joined "${c.title}"`)}>Join</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── Resources ──────────────────────────────────────────────
+const NETWORK_RESOURCES = [
+  { id: 1, title: 'The Inner Voice of Trading',         type: 'Book',    author: 'Michael Martin',          url: 'https://www.amazon.com/Inner-Voice-Trading-Michael-Martin/dp/0132616254', description: 'Psychology + risk management for serious traders.' },
+  { id: 2, title: 'ICT 2022 Mentorship',                type: 'Video',   author: 'The Inner Circle Trader', url: 'https://youtube.com/playlist?list=PLwjvfFC-Mlz3uXJUfXjnHmhKnFKJyKfBl', description: 'Free public mentorship on price action, liquidity, and time-based concepts.' },
+  { id: 3, title: 'Trading in the Zone',                type: 'Book',    author: 'Mark Douglas',            url: 'https://www.amazon.com/Trading-Zone-Confidence-Discipline-Attitude/dp/0735201447', description: 'The classic on trading psychology. Essential reading.' },
+  { id: 4, title: 'BabyPips School of Pipsology',       type: 'Course',  author: 'BabyPips',                url: 'https://www.babypips.com/learn/forex', description: 'Free comprehensive forex education for beginners and beyond.' },
+  { id: 5, title: 'Reminiscences of a Stock Operator',  type: 'Book',    author: 'Edwin Lefèvre',           url: 'https://www.amazon.com/Reminiscences-Stock-Operator-Edwin-Lefevre/dp/0471770884', description: 'Wisdom from Jesse Livermore — timeless trader stories.' },
+  { id: 6, title: 'Forex Factory Calendar',             type: 'Tool',    author: 'Forex Factory',           url: 'https://www.forexfactory.com/calendar', description: 'Free high-impact news calendar for all sessions.' },
+]
+const RESOURCE_TYPE_COLOR = { Book: '#7cc9ff', Video: '#ff8080', Course: '#aaffa0', Tool: '#ffd966', Article: '#c28cff' }
+
+export function NetworkResources() {
+  return (
+    <div style={{ padding: '24px' }}>
+      <div style={{ fontSize: '11px', fontWeight: '600', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888', marginBottom: '16px' }}>Curated Resource Library</div>
+      <div style={{ display: 'grid', gap: '8px' }}>
+        {NETWORK_RESOURCES.map(r => {
+          const tcolor = RESOURCE_TYPE_COLOR[r.type] || '#aaa'
+          return (
+            <a key={r.id} href={r.url} target="_blank" rel="noopener noreferrer" style={{ ...cardS, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '14px', textDecoration: 'none', transition: 'border-color 0.15s' }}
+               onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)' }}
+               onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--card-border)' }}
+            >
+              <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: `${tcolor}15`, border: `1px solid ${tcolor}40`, color: tcolor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <BookOpen size={16} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-hi)' }}>{r.title}</span>
+                  <span style={{ fontSize: '10px', color: tcolor, background: `${tcolor}15`, border: `1px solid ${tcolor}40`, padding: '2px 7px', borderRadius: '4px', fontWeight: '700', letterSpacing: '0.04em' }}>{r.type}</span>
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-lo)', marginBottom: '4px' }}>by {r.author}</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-md)', lineHeight: 1.4 }}>{r.description}</div>
+              </div>
+              <ChevronRight size={16} color="#444" style={{ flexShrink: 0 }} />
+            </a>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ─── Members List + Popup (right column) ─────────────────────
+export function NetworkMembersList({ members, onPickMember }) {
+  return (
+    <div style={{ padding: '16px 14px' }}>
+      <div style={{ fontSize: '11px', fontWeight: '600', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#555', marginBottom: '12px', padding: '0 6px' }}>Members — {members.length}</div>
+      {members.length === 0 ? (
+        <div style={{ fontSize: '12px', color: 'var(--text-lo)', textAlign: 'center', padding: '20px 0' }}>No members</div>
+      ) : (
+        <div>
+          {members.map(m => {
+            const isAdminMember = m.email === NETWORK_ADMIN_EMAIL
+            const display = nameOf(m) || m.email || 'user'
+            return (
+              <button
+                key={m.id}
+                onClick={() => onPickMember?.(m)}
+                style={{ width: '100%', background: 'transparent', border: 'none', padding: '7px 6px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', transition: 'background 0.15s', minHeight: 'auto' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+              >
+                <div style={{ position: 'relative', flexShrink: 0 }}>
+                  <Avatar name={display} size={28} />
+                  <span style={{ position: 'absolute', bottom: '-2px', right: '-2px', width: '10px', height: '10px', borderRadius: '50%', background: '#3ba55d', border: '2px solid #111' }} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0, fontSize: '13px', color: 'var(--text-md)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>{display}</span>
+                  {isAdminMember && <span title="Admin" style={{ fontSize: '13px' }}>👑</span>}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function NetworkMemberPopup({ member, onClose }) {
+  const [stats, setStats] = useState({ loading: true })
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data, error } = await supabase.from('trades').select('id, pnl, trade_date').eq('user_id', member.id)
+        if (error) throw error
+        if (cancelled) return
+        const trades = data || []
+        const wins = trades.filter(t => (Number(t.pnl) || 0) > 0).length
+        const wr = trades.length > 0 ? Math.round((wins / trades.length) * 100) : 0
+        const dates = new Set(trades.map(t => (t.trade_date || '').slice(0, 10)))
+        let streak = 0
+        let cursor = new Date()
+        while (dates.has(cursor.toISOString().slice(0, 10))) { streak++; cursor.setDate(cursor.getDate() - 1) }
+        setStats({ loading: false, totalTrades: trades.length, winRate: wr, streak })
+      } catch (e) {
+        if (!cancelled) setStats({ loading: false, error: e.message })
+      }
+    })()
+    return () => { cancelled = true }
+  }, [member.id])
+
+  const display = nameOf(member) || member.email || 'user'
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1500, background: 'rgba(0,0,0,0.4)' }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '320px', background: '#0d0d0d', border: '1px solid #1f1f1f', borderRadius: '14px', padding: '22px', boxShadow: '0 32px 100px rgba(0,0,0,0.9)' }}>
+        <button onClick={onClose} style={{ position: 'absolute', top: '12px', right: '12px', background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', padding: '4px', minHeight: 'auto', lineHeight: 1, fontSize: '16px' }}>✕</button>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', marginBottom: '18px' }}>
+          <Avatar name={display} size={64} />
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '16px', fontWeight: '800', color: 'var(--text-hi)' }}>{display}</div>
+            {member.username && <div style={{ fontSize: '11px', color: 'var(--text-lo)', marginTop: '2px' }}>@{member.username}</div>}
+            {member.email === NETWORK_ADMIN_EMAIL && <div style={{ fontSize: '10px', fontWeight: '700', color: '#ffd700', marginTop: '6px', letterSpacing: '0.08em' }}>👑 ADMIN</div>}
+          </div>
+        </div>
+        {stats.loading ? (
+          <div style={{ fontSize: '12px', color: 'var(--text-lo)', textAlign: 'center' }}>Loading…</div>
+        ) : stats.error ? (
+          <div style={{ fontSize: '12px', color: '#ff8080', textAlign: 'center' }}>{stats.error}</div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+            {[
+              { l: 'Streak',  v: stats.streak > 0 ? `${stats.streak}🔥` : '—', c: stats.streak > 0 ? '#ff8c28' : 'var(--text-md)' },
+              { l: 'Trades',  v: stats.totalTrades,                              c: 'var(--text-hi)' },
+              { l: 'Win Rate', v: stats.totalTrades > 0 ? `${stats.winRate}%`   : '—', c: stats.winRate >= 50 ? '#aaffa0' : 'var(--text-hi)' },
+            ].map(s => (
+              <div key={s.l} style={{ background: '#080808', border: '1px solid #141414', borderRadius: '8px', padding: '10px 8px', textAlign: 'center' }}>
+                <div style={{ fontSize: '9px', color: '#666', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '5px' }}>{s.l}</div>
+                <div style={{ fontSize: '14px', fontWeight: '700', color: s.c, letterSpacing: '-0.3px' }}>{s.v}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
