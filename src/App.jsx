@@ -12,6 +12,7 @@ import {
   Pencil, Trash2, GripVertical, Sparkles, Loader2, Shield, Users, Search, X,
   Bell, Megaphone, Link2, Download, ChevronDown, RefreshCw,
   Mail, Ban, Flag, Activity, MessageSquare, Save,
+  Globe, Video, Flame, Play, Clock,
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 
@@ -3042,6 +3043,53 @@ const NEWS_FALLBACK = (() => {
 
 const NEWS_CACHE_TTL = 60 * 60 * 1000 // 1 hour
 
+// ─── Network (seeded mock data for the trading ecosystem) ─────
+const NETWORK_SEED_CREATORS = [
+  { id: 1, name: 'Eugene',  bio: 'Futures trader since 2019. ICT methodology, NY killzone specialist.', strategy: 'ICT · Futures', twitter: 'eug777fx', instagram: 'eugene_trades', avatar_url: null, user_id: null },
+  { id: 2, name: 'Carlos',  bio: 'Forex + Gold. London session focus. Smart Money Concepts + price action.',     strategy: 'SMC · Forex',   twitter: 'carlos_fx',  instagram: 'carlos.trades',     avatar_url: null, user_id: null },
+]
+
+const _inDays = (d) => { const x = new Date(); x.setDate(x.getDate() + d); return x.toISOString() }
+
+const NETWORK_SEED_SESSIONS = [
+  { id: 1, title: 'Live NQ Market Open Analysis', description: 'Live coverage of the New York open. ICT killzone setup walkthrough.', type: 'LIVE',       scheduled_at: _inDays(1), duration_min: 90, zoom_link: 'https://zoom.us/j/example1', youtube_url: '', is_live: false, creator_id: 1 },
+  { id: 2, title: 'Trading Psychology Workshop',  description: 'How to handle losing streaks and avoid revenge trading.',              type: 'PSYCHOLOGY', scheduled_at: _inDays(4), duration_min: 60, zoom_link: 'https://zoom.us/j/example2', youtube_url: '', is_live: false, creator_id: 2 },
+]
+
+const NETWORK_SEED_REPLAYS = [
+  { id: 101, title: 'NFP Friday Breakdown',                 youtube_url: 'https://youtube.com/watch?v=dQw4w9WgXcQ', creator_id: 1, recorded_at: _inDays(-7),  duration: '12:34' },
+  { id: 102, title: 'XAUUSD London Session Anatomy',        youtube_url: 'https://youtube.com/watch?v=dQw4w9WgXcQ', creator_id: 2, recorded_at: _inDays(-14), duration: '18:02' },
+  { id: 103, title: 'How I Recovered From a -$2k Week',     youtube_url: 'https://youtube.com/watch?v=dQw4w9WgXcQ', creator_id: 1, recorded_at: _inDays(-21), duration: '23:15' },
+]
+
+const NETWORK_SEED_BREAKDOWNS = [
+  { id: 201, title: 'NQ Long +$480 — Clean Sweep + iFVG',          symbol: 'NQ',     direction: 'Long',  outcome: 'WIN',  youtube_url: 'https://youtube.com/watch?v=dQw4w9WgXcQ', description: 'Liquidity sweep below previous low, iFVG entry on the 1m, held to NY killzone target.', lessons: 'Patience on entry. Trust the model. Don\'t exit early on the first pullback.', creator_id: 1 },
+  { id: 202, title: 'XAUUSD Short -$250 — Counter Trend Mistake',  symbol: 'XAUUSD', direction: 'Short', outcome: 'LOSS', youtube_url: 'https://youtube.com/watch?v=dQw4w9WgXcQ', description: 'Shorted into a strong daily bullish bias. No structural confirmation, just FOMO.',     lessons: 'Always respect HTF bias. Counter-trend needs textbook reversal — not a hunch.',         creator_id: 2 },
+  { id: 203, title: 'NQ Short +$650 — Distribution Top',           symbol: 'NQ',     direction: 'Short', outcome: 'WIN',  youtube_url: 'https://youtube.com/watch?v=dQw4w9WgXcQ', description: 'EQH sweep + distribution complete. Took the iFVG short at 10am NY.',                description: 'Wait for the sweep. Distribution before entry is non-negotiable.',                   creator_id: 1, lessons: 'Wait for the sweep. Distribution before entry is non-negotiable.' },
+]
+
+// Load from localStorage with seed fallback (admin can edit; persists in browser)
+const loadNetwork = (key, seed) => {
+  try {
+    const stored = localStorage.getItem(key)
+    if (stored) {
+      const parsed = JSON.parse(stored)
+      if (Array.isArray(parsed)) return parsed
+    }
+  } catch {}
+  try { localStorage.setItem(key, JSON.stringify(seed)) } catch {}
+  return seed
+}
+const saveNetwork = (key, data) => { try { localStorage.setItem(key, JSON.stringify(data)) } catch {} }
+
+// Extract YouTube video ID from any common URL form
+const ytId = (url) => {
+  if (!url || typeof url !== 'string') return null
+  const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/|shorts\/))([\w-]{11})/)
+  return m ? m[1] : null
+}
+
+
 // ─── Demo Mode ────────────────────────────────────────────────
 const DEMO_TRADES = [
   // ─── JANUARY: strong start, building confidence (12W/7L/1BE, ~+$3,140) ───
@@ -4236,6 +4284,639 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Network ──────────────────────────────────────────────────
+const SESSION_TYPE_CFG = {
+  LIVE:       { bg: 'rgba(255,80,80,0.10)',   border: 'rgba(255,80,80,0.30)',   color: '#ff8080' },
+  WEBINAR:    { bg: 'rgba(120,180,255,0.10)', border: 'rgba(120,180,255,0.30)', color: '#7cc9ff' },
+  BREAKDOWN:  { bg: 'rgba(170,255,160,0.10)', border: 'rgba(170,255,160,0.30)', color: '#aaffa0' },
+  PSYCHOLOGY: { bg: 'rgba(194,140,255,0.10)', border: 'rgba(194,140,255,0.30)', color: '#c28cff' },
+}
+
+function NetworkAvatar({ name, size = 32 }) {
+  const initials = (name || 'U').split(/\s+/).map(s => s[0]).slice(0, 2).join('').toUpperCase()
+  return (
+    <div style={{ width: size, height: size, borderRadius: '50%', background: '#141414', border: '1px solid #222', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.36, fontWeight: '700', color: '#aaa', flexShrink: 0 }}>{initials}</div>
+  )
+}
+
+function CountdownLabel({ targetISO }) {
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 60_000); return () => clearInterval(t) }, [])
+  const diff = new Date(targetISO).getTime() - now
+  if (diff < 0) return null
+  if (diff > 24 * 60 * 60 * 1000) return null
+  const h = Math.floor(diff / 3_600_000)
+  const m = Math.floor((diff % 3_600_000) / 60_000)
+  return <span style={{ color: '#ffd966', fontWeight: '700' }}>Starting in {h > 0 ? `${h}h ` : ''}{m}m</span>
+}
+
+function NetworkModal({ children, onClose, maxWidth = '560px' }) {
+  return createPortal(
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth, maxHeight: '90vh', overflowY: 'auto', background: '#0d0d0d', border: '1px solid #1f1f1f', borderRadius: '16px', padding: '28px', boxShadow: '0 32px 100px rgba(0,0,0,0.9)', animation: 'modalIn 0.2s ease both', position: 'relative' }}>
+        <button onClick={onClose} style={{ position: 'absolute', top: '18px', right: '18px', background: 'transparent', border: 'none', color: '#666', cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: '4px', minHeight: 'auto', zIndex: 1 }}>✕</button>
+        {children}
+      </div>
+    </div>,
+    document.body
+  )
+}
+
+// ─── Network · Sessions ─────────────────
+function NetworkSessions({ isAdmin, creators }) {
+  const [sessions, setSessions] = useState(() => loadNetwork('network_sessions', NETWORK_SEED_SESSIONS))
+  const [replays,  setReplays]  = useState(() => loadNetwork('network_replays',  NETWORK_SEED_REPLAYS))
+  const [modal,    setModal]    = useState(null) // 'session' | 'replay' | null
+  const [draft,    setDraft]    = useState({})
+
+  const persist = (next, key, setter) => { setter(next); saveNetwork(key, next) }
+  const upcoming = [...sessions].sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at))
+  const past     = [...replays].sort((a, b) => new Date(b.recorded_at) - new Date(a.recorded_at))
+
+  const openNewSession = () => { setDraft({ title: '', description: '', type: 'WEBINAR', scheduled_at: '', zoom_link: '', creator_id: creators[0]?.id || 1, is_live: false }); setModal('session') }
+  const openNewReplay  = () => { setDraft({ title: '', youtube_url: '', creator_id: creators[0]?.id || 1, duration: '' }); setModal('replay') }
+  const saveSession = () => {
+    if (!draft.title || !draft.scheduled_at) return
+    const next = [...sessions, { ...draft, id: Date.now() }]
+    persist(next, 'network_sessions', setSessions)
+    setModal(null)
+  }
+  const saveReplay = () => {
+    if (!draft.title || !draft.youtube_url) return
+    const next = [...replays, { ...draft, id: Date.now(), recorded_at: new Date().toISOString() }]
+    persist(next, 'network_replays', setReplays)
+    setModal(null)
+  }
+  const deleteSession = (id) => { if (!confirm('Delete this session?')) return; const next = sessions.filter(s => s.id !== id); persist(next, 'network_sessions', setSessions) }
+  const deleteReplay  = (id) => { if (!confirm('Delete this replay?'))  return; const next = replays.filter(r => r.id !== id);  persist(next, 'network_replays',  setReplays) }
+
+  const creatorOf = (id) => creators.find(c => c.id === id) || { name: 'Unknown' }
+  const fmtDateTime = (iso) => { try { return new Date(iso).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) } catch { return iso } }
+
+  const cardS = { background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: '14px', padding: '20px', backdropFilter: 'var(--card-blur, none)' }
+
+  return (
+    <>
+      {/* Upcoming */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <div style={{ fontSize: '11px', fontWeight: '600', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888' }}>Upcoming Sessions</div>
+        {isAdmin && (
+          <button onClick={openNewSession} style={{ background: 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', color: '#aaffa0', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px' }}><Plus size={13} /> Add Session</button>
+        )}
+      </div>
+
+      {upcoming.length === 0 ? (
+        <div style={{ ...cardS, padding: '40px', textAlign: 'center', fontSize: '13px', color: 'var(--text-lo)' }}>No upcoming sessions</div>
+      ) : (
+        <div style={{ display: 'grid', gap: '10px', marginBottom: '32px' }}>
+          {upcoming.map(s => {
+            const cfg = SESSION_TYPE_CFG[s.type] || SESSION_TYPE_CFG.WEBINAR
+            const c = creatorOf(s.creator_id)
+            return (
+              <div key={s.id} style={{ ...cardS, position: 'relative' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
+                  <NetworkAvatar name={c.name} size={42} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '11px', fontWeight: '700', letterSpacing: '0.06em', color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}`, padding: '3px 9px', borderRadius: '99px' }}>{s.type}</span>
+                      {s.is_live && (
+                        <span style={{ fontSize: '11px', fontWeight: '700', color: '#fff', background: '#ff4040', padding: '3px 9px', borderRadius: '99px', display: 'inline-flex', alignItems: 'center', gap: '6px', animation: 'goalPulse 1.4s ease-in-out infinite' }}>
+                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#fff' }} />
+                          LIVE NOW
+                        </span>
+                      )}
+                      <CountdownLabel targetISO={s.scheduled_at} />
+                    </div>
+                    <div style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-hi)', marginBottom: '4px' }}>{s.title}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-md)', marginBottom: '6px' }}>{c.name} · {fmtDateTime(s.scheduled_at)}{s.duration_min ? ` · ${s.duration_min}min` : ''}</div>
+                    {s.description && <div style={{ fontSize: '12px', color: 'var(--text-lo)', lineHeight: 1.5, marginBottom: '12px' }}>{s.description}</div>}
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      {s.zoom_link && (
+                        <a href={s.zoom_link} target="_blank" rel="noopener noreferrer" style={{ background: '#fff', color: '#000', border: 'none', borderRadius: '99px', padding: '8px 18px', fontSize: '12px', fontWeight: '700', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Video size={12} /> Join Session</a>
+                      )}
+                      {isAdmin && (
+                        <button onClick={() => deleteSession(s.id)} style={{ background: 'transparent', border: '1px solid #2a2a2a', color: '#666', borderRadius: '99px', padding: '7px 14px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', minHeight: 'auto' }}>Delete</button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Past replays */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <div style={{ fontSize: '11px', fontWeight: '600', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888' }}>Past Sessions / Replays</div>
+        {isAdmin && (
+          <button onClick={openNewReplay} style={{ background: 'transparent', border: '1px solid var(--card-border)', color: 'var(--text-md)', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px' }}><Plus size={13} /> Add Replay</button>
+        )}
+      </div>
+
+      {past.length === 0 ? (
+        <div style={{ ...cardS, padding: '40px', textAlign: 'center', fontSize: '13px', color: 'var(--text-lo)' }}>No replays yet</div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }} className="chart-grid">
+          {past.map(r => {
+            const id = ytId(r.youtube_url)
+            const thumb = id ? `https://img.youtube.com/vi/${id}/maxresdefault.jpg` : null
+            const c = creatorOf(r.creator_id)
+            return (
+              <div key={r.id} style={{ ...cardS, padding: 0, overflow: 'hidden' }}>
+                <a href={r.youtube_url} target="_blank" rel="noopener noreferrer" style={{ display: 'block', position: 'relative', aspectRatio: '16/9', background: '#000', textDecoration: 'none' }}>
+                  {thumb ? <img src={thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.style.display = 'none' }} /> : null}
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(to top, rgba(0,0,0,0.6), rgba(0,0,0,0.1))' }}>
+                    <div style={{ width: '52px', height: '52px', borderRadius: '50%', background: 'rgba(255,255,255,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Play size={22} color="#000" fill="#000" />
+                    </div>
+                  </div>
+                  {r.duration && <div style={{ position: 'absolute', bottom: '8px', right: '8px', background: 'rgba(0,0,0,0.8)', color: '#fff', fontSize: '11px', fontWeight: '600', padding: '2px 6px', borderRadius: '4px' }}>{r.duration}</div>}
+                </a>
+                <div style={{ padding: '14px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-hi)', marginBottom: '4px', lineHeight: 1.3 }}>{r.title}</div>
+                  <div style={{ fontSize: '11px', color: '#666' }}>{c.name} · {new Date(r.recorded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
+                  {isAdmin && <button onClick={() => deleteReplay(r.id)} style={{ marginTop: '8px', background: 'transparent', border: '1px solid #2a2a2a', color: '#555', borderRadius: '6px', padding: '4px 10px', fontSize: '10px', cursor: 'pointer', fontFamily: 'inherit', minHeight: 'auto' }}>Delete</button>}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Modals */}
+      {modal === 'session' && (
+        <NetworkModal onClose={() => setModal(null)}>
+          <div style={{ fontSize: '17px', fontWeight: '800', color: '#fff', marginBottom: '18px' }}>Add Session</div>
+          <FormField label="Title"><input value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} style={inp} placeholder="e.g. Live NQ Market Open" /></FormField>
+          <FormField label="Description"><textarea value={draft.description} onChange={e => setDraft({ ...draft, description: e.target.value })} style={{ ...inp, minHeight: '70px', resize: 'vertical' }} /></FormField>
+          <FormField label="Type">
+            <CustomSelect value={draft.type} onChange={v => setDraft({ ...draft, type: v })} options={['LIVE', 'WEBINAR', 'BREAKDOWN', 'PSYCHOLOGY']} />
+          </FormField>
+          <FormField label="Date & Time"><input type="datetime-local" value={draft.scheduled_at?.slice(0, 16) || ''} onChange={e => setDraft({ ...draft, scheduled_at: new Date(e.target.value).toISOString() })} style={inp} /></FormField>
+          <FormField label="Duration (min)"><input type="number" value={draft.duration_min || 60} onChange={e => setDraft({ ...draft, duration_min: parseInt(e.target.value) || 60 })} style={inp} /></FormField>
+          <FormField label="Zoom Link"><input value={draft.zoom_link} onChange={e => setDraft({ ...draft, zoom_link: e.target.value })} style={inp} placeholder="https://zoom.us/j/..." /></FormField>
+          <FormField label="Creator">
+            <CustomSelect value={String(draft.creator_id)} onChange={v => setDraft({ ...draft, creator_id: parseInt(v) })} options={creators.map(c => String(c.id))} labels={creators.reduce((a, c) => ({ ...a, [c.id]: c.name }), {})} />
+          </FormField>
+          <FormField label=""><label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-md)', cursor: 'pointer' }}><input type="checkbox" checked={!!draft.is_live} onChange={e => setDraft({ ...draft, is_live: e.target.checked })} /> Currently live</label></FormField>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
+            <button onClick={() => setModal(null)} style={{ background: 'transparent', border: '1px solid #2a2a2a', color: 'var(--text-md)', borderRadius: '99px', padding: '9px 18px', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+            <button onClick={saveSession} style={{ background: '#fff', color: '#000', border: 'none', borderRadius: '99px', padding: '9px 20px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', fontFamily: 'inherit' }}>Save</button>
+          </div>
+        </NetworkModal>
+      )}
+      {modal === 'replay' && (
+        <NetworkModal onClose={() => setModal(null)}>
+          <div style={{ fontSize: '17px', fontWeight: '800', color: '#fff', marginBottom: '18px' }}>Add Replay</div>
+          <FormField label="Title"><input value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} style={inp} /></FormField>
+          <FormField label="YouTube URL"><input value={draft.youtube_url} onChange={e => setDraft({ ...draft, youtube_url: e.target.value })} style={inp} placeholder="https://youtube.com/watch?v=..." /></FormField>
+          <FormField label="Duration"><input value={draft.duration} onChange={e => setDraft({ ...draft, duration: e.target.value })} style={inp} placeholder="12:34" /></FormField>
+          <FormField label="Creator">
+            <CustomSelect value={String(draft.creator_id)} onChange={v => setDraft({ ...draft, creator_id: parseInt(v) })} options={creators.map(c => String(c.id))} labels={creators.reduce((a, c) => ({ ...a, [c.id]: c.name }), {})} />
+          </FormField>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
+            <button onClick={() => setModal(null)} style={{ background: 'transparent', border: '1px solid #2a2a2a', color: 'var(--text-md)', borderRadius: '99px', padding: '9px 18px', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+            <button onClick={saveReplay} style={{ background: '#fff', color: '#000', border: 'none', borderRadius: '99px', padding: '9px 20px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', fontFamily: 'inherit' }}>Save</button>
+          </div>
+        </NetworkModal>
+      )}
+    </>
+  )
+}
+
+// Small label helper for forms
+function FormField({ label, children }) {
+  return (
+    <div style={{ marginBottom: '12px' }}>
+      {label && <div style={{ ...lbl, marginBottom: '7px' }}>{label}</div>}
+      {children}
+    </div>
+  )
+}
+
+// ─── Network · Creators ─────────────────
+function NetworkCreators({ isAdmin, creators, setCreators }) {
+  const [profile, setProfile] = useState(null)
+  const [modal,   setModal]   = useState(null)
+  const [draft,   setDraft]   = useState({})
+  const cardS = { background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: '14px', padding: '20px', backdropFilter: 'var(--card-blur, none)' }
+  const persist = (next) => { setCreators(next); saveNetwork('network_creators', next) }
+
+  const openAdd = () => { setDraft({ name: '', bio: '', strategy: '', twitter: '', instagram: '', user_id: '' }); setModal(true) }
+  const save = () => {
+    if (!draft.name) return
+    const next = [...creators, { ...draft, id: Date.now() }]
+    persist(next)
+    setModal(false)
+  }
+  const del = (id) => { if (!confirm('Delete this creator?')) return; persist(creators.filter(c => c.id !== id)) }
+
+  return (
+    <>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <div style={{ fontSize: '11px', fontWeight: '600', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888' }}>Creators</div>
+        {isAdmin && (
+          <button onClick={openAdd} style={{ background: 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', color: '#aaffa0', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px' }}><Plus size={13} /> Add Creator</button>
+        )}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }} className="chart-grid">
+        {creators.map(c => (
+          <div key={c.id} style={cardS}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+              <NetworkAvatar name={c.name} size={48} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-hi)' }}>{c.name}</div>
+                <div style={{ fontSize: '11px', color: '#aaffa0', marginTop: '2px' }}>{c.strategy}</div>
+              </div>
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--text-md)', lineHeight: 1.5, marginBottom: '12px', minHeight: '40px' }}>{c.bio}</div>
+            <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' }}>
+              {c.twitter   && <a href={`https://x.com/${c.twitter}`}        target="_blank" rel="noopener noreferrer" style={{ background: '#141414', border: '1px solid #222', color: '#aaa', borderRadius: '99px', padding: '4px 10px', fontSize: '11px', textDecoration: 'none' }}>@{c.twitter}</a>}
+              {c.instagram && <a href={`https://instagram.com/${c.instagram}`} target="_blank" rel="noopener noreferrer" style={{ background: '#141414', border: '1px solid #222', color: '#aaa', borderRadius: '99px', padding: '4px 10px', fontSize: '11px', textDecoration: 'none' }}>IG</a>}
+            </div>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button onClick={() => setProfile(c)} style={{ flex: 1, background: 'transparent', border: '1px solid #2a2a2a', color: 'var(--text-md)', borderRadius: '8px', padding: '7px', fontSize: '11px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit' }}>View Profile</button>
+              {isAdmin && <button onClick={() => del(c.id)} style={{ background: 'transparent', border: '1px solid #2a2a2a', color: '#555', borderRadius: '8px', padding: '7px 10px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', minHeight: 'auto' }}><Trash2 size={11} /></button>}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {profile && (
+        <NetworkModal onClose={() => setProfile(null)} maxWidth="520px">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
+            <NetworkAvatar name={profile.name} size={72} />
+            <div>
+              <div style={{ fontSize: '22px', fontWeight: '800', color: '#fff', letterSpacing: '-0.5px' }}>{profile.name}</div>
+              <div style={{ fontSize: '12px', color: '#aaffa0', marginTop: '4px' }}>{profile.strategy}</div>
+            </div>
+          </div>
+          <div style={{ fontSize: '13px', color: 'var(--text-md)', lineHeight: 1.6, marginBottom: '18px' }}>{profile.bio}</div>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {profile.twitter   && <a href={`https://x.com/${profile.twitter}`}        target="_blank" rel="noopener noreferrer" style={{ background: '#141414', border: '1px solid #222', color: '#ccc', borderRadius: '99px', padding: '6px 14px', fontSize: '12px', textDecoration: 'none' }}>X · @{profile.twitter}</a>}
+            {profile.instagram && <a href={`https://instagram.com/${profile.instagram}`} target="_blank" rel="noopener noreferrer" style={{ background: '#141414', border: '1px solid #222', color: '#ccc', borderRadius: '99px', padding: '6px 14px', fontSize: '12px', textDecoration: 'none' }}>Instagram · @{profile.instagram}</a>}
+          </div>
+        </NetworkModal>
+      )}
+
+      {modal && (
+        <NetworkModal onClose={() => setModal(false)}>
+          <div style={{ fontSize: '17px', fontWeight: '800', color: '#fff', marginBottom: '18px' }}>Add Creator</div>
+          <FormField label="Name"><input value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} style={inp} /></FormField>
+          <FormField label="Bio"><textarea value={draft.bio} onChange={e => setDraft({ ...draft, bio: e.target.value })} style={{ ...inp, minHeight: '70px', resize: 'vertical' }} /></FormField>
+          <FormField label="Strategy"><input value={draft.strategy} onChange={e => setDraft({ ...draft, strategy: e.target.value })} style={inp} placeholder="e.g. ICT · Futures" /></FormField>
+          <FormField label="Twitter handle"><input value={draft.twitter} onChange={e => setDraft({ ...draft, twitter: e.target.value })} style={inp} placeholder="without @" /></FormField>
+          <FormField label="Instagram handle"><input value={draft.instagram} onChange={e => setDraft({ ...draft, instagram: e.target.value })} style={inp} placeholder="without @" /></FormField>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
+            <button onClick={() => setModal(false)} style={{ background: 'transparent', border: '1px solid #2a2a2a', color: 'var(--text-md)', borderRadius: '99px', padding: '9px 18px', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+            <button onClick={save} style={{ background: '#fff', color: '#000', border: 'none', borderRadius: '99px', padding: '9px 20px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', fontFamily: 'inherit' }}>Save</button>
+          </div>
+        </NetworkModal>
+      )}
+    </>
+  )
+}
+
+// ─── Network · Breakdowns ───────────────
+function NetworkBreakdowns({ isAdmin, creators }) {
+  const [breakdowns, setBreakdowns] = useState(() => loadNetwork('network_breakdowns', NETWORK_SEED_BREAKDOWNS))
+  const [filter,     setFilter]     = useState('all') // 'all' | 'wins' | 'losses' | <symbol>
+  const [watching,   setWatching]   = useState(null)
+  const [modal,      setModal]      = useState(false)
+  const [draft,      setDraft]      = useState({})
+  const persist = (next) => { setBreakdowns(next); saveNetwork('network_breakdowns', next) }
+
+  const symbols = Array.from(new Set(breakdowns.map(b => b.symbol).filter(Boolean)))
+  const filtered = breakdowns.filter(b => {
+    if (filter === 'all') return true
+    if (filter === 'wins')   return b.outcome === 'WIN'
+    if (filter === 'losses') return b.outcome === 'LOSS'
+    return b.symbol === filter
+  })
+  const creatorOf = (id) => creators.find(c => c.id === id) || { name: 'Unknown' }
+
+  const openAdd = () => { setDraft({ title: '', symbol: 'NQ', direction: 'Long', outcome: 'WIN', youtube_url: '', description: '', lessons: '', creator_id: creators[0]?.id || 1 }); setModal(true) }
+  const save = () => { if (!draft.title || !draft.youtube_url) return; persist([...breakdowns, { ...draft, id: Date.now() }]); setModal(false) }
+  const del = (id) => { if (!confirm('Delete this breakdown?')) return; persist(breakdowns.filter(b => b.id !== id)) }
+
+  const cardS = { background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: '14px', backdropFilter: 'var(--card-blur, none)' }
+  const pillStyle = (active) => ({ background: active ? 'var(--text-hi)' : 'transparent', border: `1px solid ${active ? 'var(--text-hi)' : 'var(--card-border)'}`, color: active ? 'var(--bg)' : 'var(--text-md)', fontSize: '12px', fontWeight: active ? '700' : '500', padding: '6px 14px', borderRadius: '99px', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s' })
+
+  return (
+    <>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '14px' }}>
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+          <button onClick={() => setFilter('all')}    style={pillStyle(filter === 'all')}>All</button>
+          <button onClick={() => setFilter('wins')}   style={pillStyle(filter === 'wins')}>Wins</button>
+          <button onClick={() => setFilter('losses')} style={pillStyle(filter === 'losses')}>Losses</button>
+          {symbols.map(s => <button key={s} onClick={() => setFilter(s)} style={pillStyle(filter === s)}>{s}</button>)}
+        </div>
+        {isAdmin && (
+          <button onClick={openAdd} style={{ background: 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', color: '#aaffa0', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px' }}><Plus size={13} /> Add Breakdown</button>
+        )}
+      </div>
+
+      {filtered.length === 0 ? (
+        <div style={{ ...cardS, padding: '40px', textAlign: 'center', fontSize: '13px', color: 'var(--text-lo)' }}>No breakdowns yet</div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }} className="chart-grid">
+          {filtered.map(b => {
+            const id = ytId(b.youtube_url)
+            const thumb = id ? `https://img.youtube.com/vi/${id}/maxresdefault.jpg` : null
+            const c = creatorOf(b.creator_id)
+            const isWin = b.outcome === 'WIN'
+            return (
+              <div key={b.id} style={{ ...cardS, overflow: 'hidden', cursor: 'pointer' }} onClick={() => setWatching(b)}>
+                <div style={{ position: 'relative', aspectRatio: '16/9', background: '#000' }}>
+                  {thumb ? <img src={thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.style.display = 'none' }} /> : null}
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(to top, rgba(0,0,0,0.6), rgba(0,0,0,0.1))' }}>
+                    <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(255,255,255,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Play size={20} color="#000" fill="#000" />
+                    </div>
+                  </div>
+                  <div style={{ position: 'absolute', top: '8px', left: '8px', display: 'flex', gap: '6px' }}>
+                    {b.symbol && <span style={{ background: 'rgba(0,0,0,0.8)', color: '#fff', fontSize: '11px', fontWeight: '700', padding: '3px 8px', borderRadius: '6px' }}>{b.symbol}</span>}
+                    <span style={{ background: isWin ? 'rgba(170,255,160,0.9)' : 'rgba(255,128,128,0.9)', color: '#000', fontSize: '11px', fontWeight: '700', padding: '3px 8px', borderRadius: '6px' }}>{b.outcome}</span>
+                  </div>
+                </div>
+                <div style={{ padding: '14px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-hi)', marginBottom: '6px', lineHeight: 1.3 }}>{b.title}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                    <NetworkAvatar name={c.name} size={20} />
+                    <span style={{ fontSize: '11px', color: 'var(--text-md)' }}>{c.name}</span>
+                  </div>
+                  {b.description && <div style={{ fontSize: '11px', color: 'var(--text-lo)', lineHeight: 1.4, marginBottom: '8px' }}>{b.description.slice(0, 100)}{b.description.length > 100 ? '…' : ''}</div>}
+                  {isAdmin && <button onClick={(e) => { e.stopPropagation(); del(b.id) }} style={{ background: 'transparent', border: '1px solid #2a2a2a', color: '#555', borderRadius: '6px', padding: '4px 10px', fontSize: '10px', cursor: 'pointer', fontFamily: 'inherit', minHeight: 'auto' }}>Delete</button>}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {watching && (() => {
+        const id = ytId(watching.youtube_url)
+        const c = creatorOf(watching.creator_id)
+        return (
+          <NetworkModal onClose={() => setWatching(null)} maxWidth="720px">
+            {id && (
+              <div style={{ aspectRatio: '16/9', background: '#000', marginBottom: '16px', borderRadius: '10px', overflow: 'hidden' }}>
+                <iframe src={`https://www.youtube.com/embed/${id}`} title={watching.title} style={{ width: '100%', height: '100%', border: 'none' }} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen />
+              </div>
+            )}
+            <div style={{ fontSize: '18px', fontWeight: '800', color: '#fff', marginBottom: '6px' }}>{watching.title}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+              <NetworkAvatar name={c.name} size={24} />
+              <span style={{ fontSize: '12px', color: 'var(--text-md)' }}>{c.name}</span>
+              {watching.symbol && <span style={{ background: '#141414', color: '#aaa', fontSize: '11px', fontWeight: '700', padding: '2px 8px', borderRadius: '6px', marginLeft: '6px' }}>{watching.symbol}</span>}
+              <span style={{ background: watching.outcome === 'WIN' ? 'rgba(170,255,160,0.10)' : 'rgba(255,128,128,0.10)', border: `1px solid ${watching.outcome === 'WIN' ? 'rgba(170,255,160,0.30)' : 'rgba(255,128,128,0.30)'}`, color: watching.outcome === 'WIN' ? '#aaffa0' : '#ff8080', fontSize: '11px', fontWeight: '700', padding: '2px 8px', borderRadius: '99px' }}>{watching.outcome}</span>
+            </div>
+            {watching.description && <div style={{ fontSize: '13px', color: 'var(--text-md)', lineHeight: 1.6, marginBottom: '14px' }}>{watching.description}</div>}
+            {watching.lessons && (
+              <div>
+                <div style={{ ...lbl, marginBottom: '8px' }}>Key Lessons</div>
+                <div style={{ background: 'rgba(170,255,160,0.04)', border: '1px solid rgba(170,255,160,0.15)', borderRadius: '10px', padding: '14px', fontSize: '13px', color: 'var(--text-md)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{watching.lessons}</div>
+              </div>
+            )}
+          </NetworkModal>
+        )
+      })()}
+
+      {modal && (
+        <NetworkModal onClose={() => setModal(false)}>
+          <div style={{ fontSize: '17px', fontWeight: '800', color: '#fff', marginBottom: '18px' }}>Add Breakdown</div>
+          <FormField label="Title"><input value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} style={inp} /></FormField>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '12px' }}>
+            <FormField label="Symbol"><input value={draft.symbol} onChange={e => setDraft({ ...draft, symbol: e.target.value })} style={inp} /></FormField>
+            <FormField label="Direction"><CustomSelect value={draft.direction} onChange={v => setDraft({ ...draft, direction: v })} options={['Long', 'Short']} /></FormField>
+            <FormField label="Outcome"><CustomSelect value={draft.outcome} onChange={v => setDraft({ ...draft, outcome: v })} options={['WIN', 'LOSS', 'BE']} /></FormField>
+          </div>
+          <FormField label="YouTube URL"><input value={draft.youtube_url} onChange={e => setDraft({ ...draft, youtube_url: e.target.value })} style={inp} placeholder="https://youtube.com/watch?v=..." /></FormField>
+          <FormField label="Description"><textarea value={draft.description} onChange={e => setDraft({ ...draft, description: e.target.value })} style={{ ...inp, minHeight: '70px', resize: 'vertical' }} /></FormField>
+          <FormField label="Key Lessons"><textarea value={draft.lessons} onChange={e => setDraft({ ...draft, lessons: e.target.value })} style={{ ...inp, minHeight: '70px', resize: 'vertical' }} /></FormField>
+          <FormField label="Creator">
+            <CustomSelect value={String(draft.creator_id)} onChange={v => setDraft({ ...draft, creator_id: parseInt(v) })} options={creators.map(c => String(c.id))} labels={creators.reduce((a, c) => ({ ...a, [c.id]: c.name }), {})} />
+          </FormField>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
+            <button onClick={() => setModal(false)} style={{ background: 'transparent', border: '1px solid #2a2a2a', color: 'var(--text-md)', borderRadius: '99px', padding: '9px 18px', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+            <button onClick={save} style={{ background: '#fff', color: '#000', border: 'none', borderRadius: '99px', padding: '9px 20px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', fontFamily: 'inherit' }}>Save</button>
+          </div>
+        </NetworkModal>
+      )}
+    </>
+  )
+}
+
+// ─── Network · Streaks ──────────────────
+function NetworkStreaks({ session }) {
+  const userKey = `network_streaks_${session?.user?.id || 'anon'}`
+  const [checkins, setCheckins] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(userKey) || '[]') } catch { return [] }
+  })
+  const [note, setNote] = useState('')
+
+  const todayKey = new Date().toISOString().slice(0, 10)
+  const alreadyChecked = checkins.some(c => c.date === todayKey)
+
+  const persist = (next) => { setCheckins(next); try { localStorage.setItem(userKey, JSON.stringify(next)) } catch {} }
+  const checkIn = () => {
+    if (alreadyChecked) return
+    persist([...checkins, { date: todayKey, note: note.trim() || null }])
+    setNote('')
+  }
+
+  // Compute current streak (consecutive days back from today)
+  const dates = new Set(checkins.map(c => c.date))
+  let currentStreak = 0
+  let cursor = new Date()
+  while (dates.has(cursor.toISOString().slice(0, 10))) {
+    currentStreak++
+    cursor.setDate(cursor.getDate() - 1)
+  }
+  // Longest streak
+  const sortedDates = Array.from(dates).sort()
+  let longest = 0, run = 0, prev = null
+  for (const d of sortedDates) {
+    if (prev) {
+      const p = new Date(prev); p.setDate(p.getDate() + 1)
+      run = (p.toISOString().slice(0, 10) === d) ? run + 1 : 1
+    } else run = 1
+    longest = Math.max(longest, run)
+    prev = d
+  }
+  // This month rate
+  const now = new Date()
+  const ym = now.toISOString().slice(0, 7)
+  const daysSoFar = now.getDate()
+  const thisMonthCount = checkins.filter(c => c.date.startsWith(ym)).length
+  const rate = daysSoFar > 0 ? Math.round((thisMonthCount / daysSoFar) * 100) : 0
+
+  // Calendar — last 35 days
+  const days = []
+  for (let i = 34; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i)
+    const key = d.toISOString().slice(0, 10)
+    days.push({ key, on: dates.has(key), label: d.getDate(), isToday: key === todayKey })
+  }
+
+  // Mock leaderboard
+  const leaderboard = [
+    { name: 'Eugene',  streak: Math.max(currentStreak, 12) },
+    { name: 'Carlos',  streak: 9 },
+    { name: 'Mia',     streak: 7 },
+    { name: 'Jordan',  streak: 5 },
+    { name: 'Lina',    streak: 3 },
+  ].sort((a, b) => b.streak - a.streak).slice(0, 5)
+
+  const cardS = { background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: '14px', padding: '24px', backdropFilter: 'var(--card-blur, none)' }
+
+  return (
+    <>
+      {/* Streak counter */}
+      <div style={{ ...cardS, textAlign: 'center', marginBottom: '16px', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', inset: 0, background: currentStreak > 0 ? 'radial-gradient(circle at 50% 100%, rgba(255,140,40,0.10), transparent 60%)' : 'none', pointerEvents: 'none' }} />
+        <div style={{ position: 'relative' }}>
+          <Flame size={28} color={currentStreak > 0 ? '#ff8c28' : '#444'} style={{ margin: '0 auto 8px' }} />
+          <div style={{ fontSize: '56px', fontWeight: '900', letterSpacing: '-2px', color: '#fff', lineHeight: 1 }}>{currentStreak}</div>
+          <div style={{ fontSize: '13px', color: '#aaa', marginTop: '6px', letterSpacing: '0.02em' }}>{currentStreak === 1 ? 'day streak' : 'day streak'} 🔥</div>
+        </div>
+      </div>
+
+      {/* Check in */}
+      <div style={{ ...cardS, marginBottom: '16px' }}>
+        <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-hi)', marginBottom: '6px' }}>{alreadyChecked ? 'Checked in for today' : 'Check in for today'}</div>
+        <div style={{ fontSize: '12px', color: '#666', marginBottom: '14px' }}>How was your trading mindset today? (optional)</div>
+        <textarea
+          value={note}
+          onChange={e => setNote(e.target.value)}
+          disabled={alreadyChecked}
+          placeholder={alreadyChecked ? 'Come back tomorrow' : 'Patient, focused, followed the plan…'}
+          style={{ ...inp, minHeight: '60px', resize: 'vertical', marginBottom: '12px', opacity: alreadyChecked ? 0.5 : 1 }}
+        />
+        <button
+          onClick={checkIn}
+          disabled={alreadyChecked}
+          style={{ background: alreadyChecked ? 'rgba(170,255,160,0.10)' : '#fff', border: alreadyChecked ? '1px solid rgba(170,255,160,0.25)' : 'none', color: alreadyChecked ? '#aaffa0' : '#000', borderRadius: '99px', padding: '10px 24px', fontSize: '13px', fontWeight: '700', cursor: alreadyChecked ? 'default' : 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px' }}
+        >
+          {alreadyChecked ? <><Check size={14} /> Checked in today</> : 'Check In Today'}
+        </button>
+      </div>
+
+      {/* Stats + Calendar + Leaderboard */}
+      <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: '12px', marginBottom: '16px' }} className="chart-grid">
+        <div style={cardS}>
+          <div style={{ ...lbl, marginBottom: '14px' }}>Last 35 Days</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '6px' }}>
+            {days.map(d => (
+              <div key={d.key} title={d.key} style={{
+                aspectRatio: '1',
+                borderRadius: '6px',
+                background: d.on ? 'linear-gradient(135deg, #aaffa0 0%, #00cc66 100%)' : '#141414',
+                border: `1px solid ${d.isToday ? '#aaffa0' : d.on ? 'transparent' : '#1f1f1f'}`,
+                boxShadow: d.on ? '0 0 8px rgba(170,255,160,0.25)' : 'none',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '10px', fontWeight: '600',
+                color: d.on ? '#000' : d.isToday ? '#aaffa0' : '#444',
+              }}>{d.label}</div>
+            ))}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginTop: '18px' }}>
+            {[
+              { l: 'Current',  v: currentStreak,    color: '#ff8c28' },
+              { l: 'Longest',  v: longest,          color: '#fff'    },
+              { l: 'Total',    v: checkins.length,  color: '#fff'    },
+              { l: 'This Month', v: `${rate}%`,     color: rate >= 50 ? '#aaffa0' : '#ffd966' },
+            ].map(s => (
+              <div key={s.l}>
+                <div style={{ fontSize: '10px', color: '#666', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '6px' }}>{s.l}</div>
+                <div style={{ fontSize: '20px', fontWeight: '800', color: s.color, letterSpacing: '-0.5px' }}>{s.v}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={cardS}>
+          <div style={{ ...lbl, marginBottom: '14px' }}>Community Streaks</div>
+          {leaderboard.map((u, i) => (
+            <div key={u.name + i} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 0', borderBottom: i === leaderboard.length - 1 ? 'none' : '1px solid #141414' }}>
+              <div style={{ fontSize: '11px', fontWeight: '700', color: i === 0 ? '#ffd966' : '#666', width: '20px' }}>{i + 1}</div>
+              <NetworkAvatar name={u.name} size={28} />
+              <div style={{ flex: 1, fontSize: '13px', fontWeight: '600', color: 'var(--text-hi)' }}>{u.name}</div>
+              <div style={{ fontSize: '13px', fontWeight: '700', color: '#ff8c28', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Flame size={12} /> {u.streak}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  )
+}
+
+// ─── Network Page ───────────────────────
+function NetworkPage({ session, setPage }) {
+  const isAdmin = session?.user?.email === ADMIN_EMAIL
+  const [tab,      setTab]      = useState('sessions')
+  const [creators, setCreators] = useState(() => loadNetwork('network_creators', NETWORK_SEED_CREATORS))
+
+  // Redirect any non-admin away from this page
+  useEffect(() => {
+    if (!isAdmin) setPage('dashboard')
+  }, [isAdmin, setPage])
+  if (!isAdmin) return null
+
+  const tabs = [
+    { id: 'sessions',   label: 'Sessions',   Icon: Video },
+    { id: 'creators',   label: 'Creators',   Icon: Users },
+    { id: 'breakdowns', label: 'Breakdowns', Icon: Play },
+    { id: 'streaks',    label: 'Streaks',    Icon: Flame },
+  ]
+
+  return (
+    <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+        <Globe size={22} color="#aaffa0" />
+        <h1 style={{ fontSize: '28px', fontWeight: '800', letterSpacing: '-1px', color: 'var(--text-hi)' }}>Network</h1>
+      </div>
+      <div style={{ fontSize: '12px', color: 'var(--text-lo)', marginBottom: '24px', letterSpacing: '0.02em' }}>Sessions, creators, and accountability — the ecosystem layer.</div>
+
+      {/* Tab strip — pill style */}
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '24px', flexWrap: 'wrap', overflowX: 'auto' }}>
+        {tabs.map(t => {
+          const active = tab === t.id
+          const Icon = t.Icon
+          return (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              style={{
+                background: active ? 'var(--text-hi)' : 'transparent',
+                border: `1px solid ${active ? 'var(--text-hi)' : 'var(--card-border)'}`,
+                color: active ? 'var(--bg)' : 'var(--text-md)',
+                fontSize: '13px', fontWeight: active ? '700' : '500',
+                padding: '8px 18px', borderRadius: '99px',
+                cursor: 'pointer', fontFamily: 'inherit',
+                display: 'flex', alignItems: 'center', gap: '7px',
+                transition: 'all 0.15s', whiteSpace: 'nowrap',
+              }}
+            >
+              <Icon size={14} />
+              {t.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {tab === 'sessions'   && <NetworkSessions   isAdmin={isAdmin} creators={creators} />}
+      {tab === 'creators'   && <NetworkCreators   isAdmin={isAdmin} creators={creators} setCreators={setCreators} />}
+      {tab === 'breakdowns' && <NetworkBreakdowns isAdmin={isAdmin} creators={creators} />}
+      {tab === 'streaks'    && <NetworkStreaks    session={session} />}
     </div>
   )
 }
@@ -5635,6 +6316,7 @@ export default function App() {
     { id: 'trades',    Icon: BookOpen,        label: 'Trade Log'    },
     { id: 'plan',      Icon: ClipboardList,   label: 'Trading Plan' },
     ...(featureFlags.newsCalendar ? [{ id: 'news', Icon: CalendarDays, label: 'News' }] : []),
+    ...(session?.user?.email === ADMIN_EMAIL ? [{ id: 'network', Icon: Globe, label: 'Network' }] : []),
     { id: 'settings',  Icon: Settings2,       label: 'Settings'     },
   ]
 
@@ -5879,6 +6561,7 @@ export default function App() {
           />
         )}
         {page === 'news' && featureFlags.newsCalendar && <NewsCalendar />}
+        {page === 'network'     && <NetworkPage session={session} setPage={setPage} />}
         {page === 'plan'        && <TradingPlan flags={featureFlags} />}
         {page === 'settings'    && <Settings theme={theme} setTheme={handleSetTheme} session={session} profile={profile} setProfile={setProfile} glassMode={glassMode} setGlassMode={v => { setGlassMode(v); localStorage.setItem('glass_mode', v) }} onLogout={logout} trades={effectiveTrades} demoMode={demoMode} setDemoMode={setDemoMode} />}
         {page === 'admin'       && <AdminPanel session={session} setPage={setPage} />}
