@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom'
 import toast, { Toaster } from 'react-hot-toast'
 import {
   NetworkPartners, NetworkHallOfFame, NetworkChat, NetworkAnnouncements,
-  NetworkMembersList, NetworkMemberPopup,
 } from './NetworkExtras.jsx'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -5342,185 +5341,246 @@ function NetworkResources({ isAdmin }) {
   )
 }
 
-// ─── Network Page ───────────────────────
-// Channel definitions for the Discord-style Network layout
-const NETWORK_CHANNELS = [
-  { id: 'general-chat',     section: 'GENERAL',        label: 'general-chat',     description: 'General conversation — say hi, share wins, ask questions' },
-  { id: 'announcements',    section: 'GENERAL',        label: 'announcements',    description: 'Admin posts — platform updates, news, important notices' },
-  { id: 'trade-breakdowns', section: 'TRADING',        label: 'trade-breakdowns', description: 'Trade breakdowns and post-mortems — video walkthroughs' },
-  { id: 'hall-of-fame',     section: 'TRADING',        label: 'hall-of-fame',     description: 'Legendary trades from the community 🏆' },
-  { id: 'challenges',       section: 'TRADING',        label: 'challenges',       description: 'Community trading challenges — discipline, win rate, risk' },
-  { id: 'resources',        section: 'EDUCATION',      label: 'resources',        description: 'Curated books, videos, courses, and tools' },
-  { id: 'sessions',         section: 'EDUCATION',      label: 'sessions',         description: 'Upcoming live sessions and past replays' },
-  { id: 'creators',         section: 'EDUCATION',      label: 'creators',         description: 'Trader profiles — the people behind the content' },
-  { id: 'streaks',          section: 'ACCOUNTABILITY', label: 'streaks',          description: 'Daily check-ins, streak tracker, community leaderboard' },
-  { id: 'partners',         section: 'ACCOUNTABILITY', label: 'partners',         description: 'Find an accountability partner — pair up and trade better together' },
-]
-const NETWORK_SECTIONS = ['GENERAL', 'TRADING', 'EDUCATION', 'ACCOUNTABILITY']
+// ─── Network Page (LIMITLESS vertical layout) ─────────────
+const NETWORK_ACCENT = '#7c3aed'
 
 function NetworkPage({ session, setPage, profile }) {
   const isAdmin = session?.user?.email === ADMIN_EMAIL
-  const [channel, setChannel] = useState('general-chat')
-  const [creators, setCreators] = useState(() => loadNetwork('network_creators', NETWORK_SEED_CREATORS))
-  const [members, setMembers] = useState([])
-  const [drawerOpen, setDrawerOpen] = useState(false)
-  const [collapsed, setCollapsed] = useState({}) // section → bool
-  const [pickedMember, setPickedMember] = useState(null)
+  const [creators] = useState(() => loadNetwork('network_creators', NETWORK_SEED_CREATORS))
+  const [memberCount,   setMemberCount]   = useState(null)
+  const [msgsTodayCount, setMsgsTodayCount] = useState(null)
+  const [announcements, setAnnouncements] = useState([])
+  const [annDraft,      setAnnDraft]      = useState('')
+  const [annPosting,    setAnnPosting]    = useState(false)
+  const [annModal,      setAnnModal]      = useState(false)
 
   useEffect(() => { if (!isAdmin) setPage('dashboard') }, [isAdmin, setPage])
 
-  // Load members (approved users)
   useEffect(() => {
     if (!isAdmin) return
     ;(async () => {
       try {
-        const { data } = await supabase.from('profiles').select('id, username, first_name, last_name, status, email:auth_email_view, monthly_goal').eq('status', 'approved')
-        // Fallback if no auth_email_view: try admin_users_view
-        if (!data) {
-          const { data: viewData } = await supabase.from('admin_users_view').select('id, username, first_name, last_name, status, email').eq('status', 'approved')
-          setMembers(viewData || [])
-        } else {
-          setMembers(data)
-        }
-      } catch {
-        try {
-          const { data } = await supabase.from('admin_users_view').select('id, username, first_name, last_name, status, email').eq('status', 'approved')
-          setMembers(data || [])
-        } catch {}
-      }
+        // Active members count
+        const { count: mc } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('status', 'approved')
+        setMemberCount(mc || 0)
+      } catch { setMemberCount(0) }
+
+      try {
+        // Messages today
+        const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0)
+        const { count: mt } = await supabase.from('network_messages').select('*', { count: 'exact', head: true }).gte('created_at', startOfDay.toISOString())
+        setMsgsTodayCount(mt || 0)
+      } catch { setMsgsTodayCount(0) }
+
+      try {
+        // Latest 3 announcements
+        const { data } = await supabase.from('network_messages').select('*').eq('channel', 'announcements').order('created_at', { ascending: false }).limit(3)
+        setAnnouncements(data || [])
+      } catch { setAnnouncements([]) }
     })()
   }, [isAdmin])
 
   if (!isAdmin) return null
 
-  const current = NETWORK_CHANNELS.find(c => c.id === channel) || NETWORK_CHANNELS[0]
-
-  const channelCard = (c) => {
-    const active = channel === c.id
-    return (
-      <button
-        key={c.id}
-        onClick={() => { setChannel(c.id); setDrawerOpen(false) }}
-        style={{
-          width: '100%',
-          background: active ? 'rgba(255,255,255,0.1)' : 'transparent',
-          border: 'none',
-          borderRadius: '4px',
-          padding: '6px 10px',
-          color: active ? 'var(--text-hi)' : 'var(--text-md)',
-          fontSize: '13px',
-          fontWeight: active ? '600' : '500',
-          fontFamily: 'inherit',
-          cursor: 'pointer',
-          textAlign: 'left',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          minHeight: 'auto',
-          transition: 'background 0.1s',
-        }}
-        onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}
-        onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}
-      >
-        <span style={{ color: active ? '#aaa' : '#555', fontWeight: '400' }}>#</span>
-        {c.label}
-      </button>
-    )
+  const postAnnouncement = async () => {
+    if (!annDraft.trim() || !session?.user?.id) return
+    setAnnPosting(true)
+    try {
+      const { data, error } = await supabase.from('network_messages').insert({
+        user_id: session.user.id,
+        username: profile?.username || session.user.email.split('@')[0],
+        channel: 'announcements',
+        message: annDraft.trim(),
+      }).select().single()
+      if (error) throw error
+      setAnnouncements(prev => [data, ...prev].slice(0, 3))
+      setAnnDraft('')
+      setAnnModal(false)
+      toast.success('Announcement posted')
+    } catch (e) { toast.error(`Failed — ${e.message}`) }
+    finally { setAnnPosting(false) }
   }
 
-  const sectionHeader = (s) => (
-    <button
-      onClick={() => setCollapsed(prev => ({ ...prev, [s]: !prev[s] }))}
-      style={{
-        width: '100%', background: 'transparent', border: 'none',
-        padding: '14px 10px 4px', display: 'flex', alignItems: 'center', gap: '4px',
-        fontSize: '11px', fontWeight: '700', letterSpacing: '0.08em',
-        color: '#555', textTransform: 'uppercase', cursor: 'pointer', fontFamily: 'inherit', minHeight: 'auto',
-      }}
-    >
-      <ChevronDown size={10} style={{ transform: collapsed[s] ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }} />
-      {s}
-    </button>
+  const accent = NETWORK_ACCENT
+  const sectionTitle = (icon, title, action) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: accent, boxShadow: `0 0 8px ${accent}88`, display: 'inline-block' }} />
+        <h2 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-hi)', letterSpacing: '-0.3px' }}>{icon}{icon ? ' ' : ''}{title}</h2>
+      </div>
+      {action}
+    </div>
   )
 
-  const renderChannel = () => {
-    switch (channel) {
-      case 'general-chat':     return <NetworkChat          session={session} profile={profile} channel="general-chat" isAdmin={isAdmin} />
-      case 'announcements':    return <NetworkAnnouncements session={session} profile={profile} isAdmin={isAdmin} />
-      case 'trade-breakdowns': return <div style={{ padding: '24px', overflowY: 'auto' }}><NetworkBreakdowns isAdmin={isAdmin} creators={creators} /></div>
-      case 'hall-of-fame':     return <div style={{ padding: '24px', overflowY: 'auto' }}><NetworkHallOfFame isAdmin={isAdmin} /></div>
-      case 'challenges':       return <div style={{ padding: '24px', overflowY: 'auto', height: '100%' }}><NetworkChallenges isAdmin={isAdmin} session={session} /></div>
-      case 'resources':        return <div style={{ padding: '24px', overflowY: 'auto', height: '100%' }}><NetworkResources isAdmin={isAdmin} /></div>
-      case 'sessions':         return <div style={{ padding: '24px', overflowY: 'auto' }}><NetworkSessions isAdmin={isAdmin} creators={creators} /></div>
-      case 'creators':         return <div style={{ padding: '24px', overflowY: 'auto' }}><NetworkCreators isAdmin={isAdmin} creators={creators} setCreators={setCreators} /></div>
-      case 'streaks':          return <div style={{ padding: '24px', overflowY: 'auto' }}><NetworkStreaks session={session} /></div>
-      case 'partners':         return <div style={{ padding: '24px', overflowY: 'auto' }}><NetworkPartners session={session} /></div>
-      default:                 return null
-    }
-  }
+  const glassCard = { background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: '14px', backdropFilter: 'var(--card-blur, none)', WebkitBackdropFilter: 'var(--card-blur, none)' }
 
   return (
-    <div className="network-layout" style={{ display: 'flex', flex: 1, minHeight: 0, height: '100%', animation: 'pageEnter 0.2s ease-out both', overflow: 'hidden' }}>
-      {/* Inline CSS for responsive behavior */}
+    <div className="page-wrap" style={{ animation: 'networkEnter 220ms cubic-bezier(0.4, 0, 0.2, 1) both', paddingBottom: '60px' }}>
       <style>{`
-        .network-left  { width: 220px; flex-shrink: 0; background: #0d0d0d; border-right: 1px solid #1a1a1a; display: flex; flex-direction: column; overflow-y: auto; }
-        .network-mid   { flex: 1; min-width: 0; display: flex; flex-direction: column; background: #080808; overflow: hidden; }
-        .network-right { width: 240px; flex-shrink: 0; background: #111; border-left: 1px solid #1a1a1a; overflow-y: auto; }
-        .network-drawer-btn { display: none; }
-        @media (max-width: 1100px) { .network-right { display: none; } }
-        @media (max-width: 768px) {
-          .network-left { position: fixed; top: 0; left: 0; bottom: 0; z-index: 200; transform: translateX(-100%); transition: transform 0.22s ease-out; box-shadow: 0 0 32px rgba(0,0,0,0.6); }
-          .network-left.open { transform: translateX(0); }
-          .network-drawer-btn { display: flex !important; }
+        @keyframes networkEnter {
+          from { opacity: 0; transform: scale(0.96) translateX(12px); }
+          to   { opacity: 1; transform: scale(1) translateX(0); }
         }
-        .network-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 199; }
+        @keyframes networkPulse {
+          0%, 100% { transform: scale(1);   opacity: 0.55; }
+          50%      { transform: scale(1.15); opacity: 0.8;  }
+        }
+        .net-hscroll { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+        .net-hscroll::-webkit-scrollbar { height: 6px; }
+        .net-hscroll::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 3px; }
+        .net-glow:hover { border-color: ${accent}55 !important; box-shadow: 0 0 24px ${accent}22; }
+        .net-section { margin-bottom: 36px; }
       `}</style>
 
-      {drawerOpen && <div className="network-overlay" onClick={() => setDrawerOpen(false)} />}
-
-      {/* LEFT — Channel list */}
-      <aside className={`network-left${drawerOpen ? ' open' : ''}`}>
-        <div style={{ padding: '14px 14px 8px', borderBottom: '1px solid #1a1a1a', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Globe size={14} color="#aaffa0" />
-          <div style={{ fontSize: '11px', fontWeight: '700', letterSpacing: '0.1em', color: '#888', textTransform: 'uppercase' }}>LIMITLESS NETWORK</div>
+      {/* ── HEADER BANNER ── */}
+      <div style={{
+        position: 'relative', overflow: 'hidden',
+        background: `linear-gradient(135deg, rgba(124,58,237,0.10) 0%, rgba(13,13,13,0.92) 50%, rgba(8,8,8,0.95) 100%), #0d0d0d`,
+        border: `1px solid ${accent}25`, borderRadius: '18px',
+        padding: '32px 32px', marginBottom: '32px',
+        boxShadow: `0 0 0 1px ${accent}11 inset, 0 12px 48px rgba(124,58,237,0.08)`,
+      }}>
+        {/* Pulsing purple aurora blob */}
+        <div style={{ position: 'absolute', top: '-40%', right: '-10%', width: '320px', height: '320px', borderRadius: '50%', background: `radial-gradient(circle, ${accent}55 0%, transparent 65%)`, filter: 'blur(60px)', animation: 'networkPulse 6s ease-in-out infinite', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', bottom: '-50%', left: '20%', width: '260px', height: '260px', borderRadius: '50%', background: `radial-gradient(circle, ${accent}33 0%, transparent 65%)`, filter: 'blur(70px)', animation: 'networkPulse 8s ease-in-out infinite 1.5s', pointerEvents: 'none' }} />
+        <div style={{ position: 'relative' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+            <Globe size={20} color={accent} />
+            <div style={{ fontSize: '11px', fontWeight: '700', letterSpacing: '0.2em', color: accent, textTransform: 'uppercase' }}>The Network</div>
+          </div>
+          <h1 style={{ fontSize: '44px', fontWeight: '900', letterSpacing: '-2px', color: '#fff', lineHeight: 1, marginBottom: '10px' }}>NETWORK</h1>
+          <div style={{ fontSize: '14px', color: '#aaa', letterSpacing: '0.01em' }}>Your trading community — grow together</div>
         </div>
-        <div style={{ padding: '4px 6px 16px', flex: 1 }}>
-          {NETWORK_SECTIONS.map(s => (
-            <div key={s}>
-              {sectionHeader(s)}
-              {!collapsed[s] && NETWORK_CHANNELS.filter(c => c.section === s).map(channelCard)}
+      </div>
+
+      {/* ── 1. QUICK STATS ── */}
+      <div className="net-section">
+        <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+          {[
+            { l: 'Active Members',    v: memberCount    ?? '—', Icon: Users,    color: accent     },
+            { l: 'Messages Today',    v: msgsTodayCount ?? '—', Icon: MessageSquare, color: '#aaffa0' },
+            { l: 'Active Challenges', v: 4,                     Icon: Target,   color: '#ffd966'  },
+            { l: 'Resources',         v: 6,                     Icon: BookOpen, color: '#7cc9ff'  },
+          ].map(s => (
+            <div key={s.l} className="net-glow" style={{ ...glassCard, padding: '18px 20px', transition: 'all 0.2s', cursor: 'default' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: `${s.color}15`, border: `1px solid ${s.color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <s.Icon size={15} color={s.color} />
+                </div>
+              </div>
+              <div style={{ fontSize: '24px', fontWeight: '800', letterSpacing: '-0.5px', color: 'var(--text-hi)', lineHeight: 1, marginBottom: '4px' }}>{s.v}</div>
+              <div style={{ fontSize: '11px', color: '#666', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: '600' }}>{s.l}</div>
             </div>
           ))}
         </div>
-      </aside>
+      </div>
 
-      {/* MIDDLE — Content */}
-      <main className="network-mid">
-        {/* Top channel header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 18px', borderBottom: '1px solid #1a1a1a', flexShrink: 0, minHeight: '48px' }}>
-          <button
-            className="network-drawer-btn"
-            onClick={() => setDrawerOpen(true)}
-            style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', padding: '4px', minHeight: 'auto', display: 'none', alignItems: 'center' }}
-          >☰</button>
-          <span style={{ fontSize: '18px', color: '#666', fontWeight: '400' }}>#</span>
-          <div style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-hi)', whiteSpace: 'nowrap' }}>{current.label}</div>
-          <div style={{ width: '1px', height: '20px', background: '#222' }} />
-          <div style={{ fontSize: '12px', color: 'var(--text-lo)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{current.description}</div>
+      {/* ── 2. ANNOUNCEMENTS ── */}
+      <div className="net-section">
+        {sectionTitle('📢', 'Announcements', isAdmin && (
+          <button onClick={() => setAnnModal(true)} style={{ background: `${accent}15`, border: `1px solid ${accent}40`, color: accent, borderRadius: '99px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Plus size={13} /> Post
+          </button>
+        ))}
+        {announcements.length === 0 ? (
+          <div style={{ ...glassCard, padding: '32px', textAlign: 'center', fontSize: '13px', color: 'var(--text-lo)' }}>No announcements yet</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {announcements.map(a => (
+              <div key={a.id} style={{ ...glassCard, padding: '18px 22px', borderLeft: `3px solid ${accent}`, display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: `${accent}20`, border: `1px solid ${accent}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: accent, fontSize: '14px', fontWeight: '700', flexShrink: 0 }}>L</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '13px', fontWeight: '800', color: 'var(--text-hi)' }}>LIMITLESS</span>
+                    <span style={{ fontSize: '9px', fontWeight: '700', color: accent, background: `${accent}15`, border: `1px solid ${accent}30`, padding: '2px 7px', borderRadius: '4px', letterSpacing: '0.06em' }}>ADMIN</span>
+                    <span style={{ fontSize: '11px', color: '#555' }}>{new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                  </div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-md)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{a.message}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── 3. SESSIONS ── */}
+      <div className="net-section">
+        {sectionTitle('🎙️', 'Live & Upcoming Sessions')}
+        <NetworkSessions isAdmin={isAdmin} creators={creators} />
+      </div>
+
+      {/* ── 4. GENERAL CHAT (contained, 400px) ── */}
+      <div className="net-section">
+        {sectionTitle('💬', 'General Chat')}
+        <div style={{ ...glassCard, height: '420px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <NetworkChat session={session} profile={profile} channel="general-chat" isAdmin={isAdmin} />
         </div>
+      </div>
 
-        {/* Channel body */}
-        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-          {renderChannel()}
+      {/* ── 5. CHALLENGES ── */}
+      <div className="net-section">
+        {sectionTitle('🎯', 'Active Challenges')}
+        <NetworkChallenges isAdmin={isAdmin} session={session} />
+      </div>
+
+      {/* ── 6. CREATORS ── */}
+      <div className="net-section">
+        {sectionTitle('🧠', 'Creators')}
+        <NetworkCreators isAdmin={isAdmin} creators={creators} setCreators={() => {}} />
+      </div>
+
+      {/* ── 7. TRADE BREAKDOWNS ── */}
+      <div className="net-section">
+        {sectionTitle('📊', 'Trade Breakdowns')}
+        <NetworkBreakdowns isAdmin={isAdmin} creators={creators} />
+      </div>
+
+      {/* ── 8. RESOURCES ── */}
+      <div className="net-section">
+        {sectionTitle('📚', 'Resources')}
+        <NetworkResources isAdmin={isAdmin} />
+      </div>
+
+      {/* ── 9. HALL OF FAME ── */}
+      <div className="net-section">
+        {sectionTitle('🏆', 'Hall of Fame')}
+        <NetworkHallOfFame isAdmin={isAdmin} />
+      </div>
+
+      {/* ── 10. ACCOUNTABILITY ── */}
+      <div className="net-section">
+        {sectionTitle('🔥', 'Accountability & Streaks')}
+        <div className="chart-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <NetworkStreaks session={session} />
+          <NetworkPartners session={session} />
         </div>
-      </main>
+      </div>
 
-      {/* RIGHT — Members */}
-      <aside className="network-right">
-        <NetworkMembersList members={members} onPickMember={setPickedMember} />
-      </aside>
-
-      {pickedMember && <NetworkMemberPopup member={pickedMember} onClose={() => setPickedMember(null)} />}
+      {/* Announcement compose modal */}
+      {annModal && createPortal(
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }} onClick={() => !annPosting && setAnnModal(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: '520px', background: '#0d0d0d', border: `1px solid ${accent}40`, borderRadius: '16px', padding: '26px', boxShadow: `0 32px 100px rgba(0,0,0,0.9), 0 0 0 1px ${accent}22 inset`, animation: 'modalIn 0.2s ease both' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '18px' }}>
+              <Megaphone size={18} color={accent} />
+              <div style={{ fontSize: '17px', fontWeight: '800', color: '#fff' }}>New Announcement</div>
+            </div>
+            <textarea
+              value={annDraft}
+              onChange={e => setAnnDraft(e.target.value)}
+              placeholder="What's important for the community to know?"
+              autoFocus
+              style={{ ...inp, minHeight: '120px', resize: 'vertical', marginBottom: '16px' }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button onClick={() => setAnnModal(false)} disabled={annPosting} style={{ background: 'transparent', border: '1px solid #2a2a2a', color: 'var(--text-md)', borderRadius: '99px', padding: '9px 18px', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+              <button onClick={postAnnouncement} disabled={annPosting || !annDraft.trim()} style={{ background: accent, color: '#fff', border: 'none', borderRadius: '99px', padding: '9px 22px', fontSize: '12px', fontWeight: '700', cursor: annPosting ? 'wait' : 'pointer', fontFamily: 'inherit', opacity: (annPosting || !annDraft.trim()) ? 0.5 : 1 }}>
+                {annPosting ? 'Posting…' : 'Post Announcement'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }
