@@ -14,9 +14,11 @@ import {
 } from 'recharts'
 import {
   Brain, ClipboardList, BookOpen, Shield, BarChart2, Wallet,
-  RefreshCw, Plus, Trash2, Check, X, AlertTriangle, TrendingUp,
-  Target, Activity, ChevronLeft, ChevronRight, DollarSign, Loader2,
+  RefreshCw, Plus, Trash2, Check, X, AlertTriangle, TrendingUp, TrendingDown,
+  Target, Activity, ChevronLeft, ChevronRight, ChevronDown, DollarSign, Loader2,
   ThumbsUp, ThumbsDown, Gauge, Scale, ShieldCheck, Crosshair, Trophy,
+  CheckCircle, XCircle, Zap, Award, Calendar, Clock, Flame,
+  Sparkles, Hourglass, Layers, Gem, Rocket,
 } from 'lucide-react'
 
 // ─── Palette ──────────────────────────────────────────────────────────────
@@ -101,11 +103,26 @@ const isThisMonth = (dateStr) => {
   const d = new Date(dateStr + 'T00:00:00'); const now = new Date()
   return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
 }
+// Analytics helpers (Edge / Streak / Psych / Goals)
+const confluenceCount = (t) => (t.liquidity_swept ? 1 : 0) + ((t.rejection_block || t.wick_ce) ? 1 : 0) + (t.ote_present ? 1 : 0) + (t.key_open ? 1 : 0)
+const winRateOf = (arr) => {
+  const d = arr.filter(t => t.result === 'Win' || t.result === 'Loss')
+  const w = d.filter(t => t.result === 'Win').length
+  return { wr: d.length ? (w / d.length) * 100 : 0, n: d.length }
+}
+const tradeHour = (t) => { if (!t.created_at) return null; const h = new Date(t.created_at).getHours(); return Number.isNaN(h) ? null : h }
+const weekdayOf = (dateStr) => dateStr ? new Date(dateStr + 'T00:00:00').getDay() : null // 0=Sun..6=Sat
+// chronological (oldest→newest) decided trades
+const chronoDecided = (trades) => [...trades]
+  .filter(t => t.result === 'Win' || t.result === 'Loss')
+  .sort((a, b) => a.trade_date === b.trade_date
+    ? new Date(a.created_at || 0) - new Date(b.created_at || 0)
+    : (a.trade_date || '').localeCompare(b.trade_date || ''))
 
 // ─── Option constants ───────────────────────────────────────────────────────
 const SESSIONS         = ['London', 'NY', 'Asian']
 const LIQ_TARGETS      = ['PDH', 'PDL', 'Data High', 'Data Low', 'Equal Highs', 'Equal Lows']
-const HTF_POI          = ['H4 Rejection Block', 'H1 Rejection Block', 'H1 Order Block', 'H1 FVG']
+const HTF_POI          = ['H4 Rejection Block', 'H4 FVG', 'H1 Rejection Block', 'H1 FVG']
 const KEY_OPENS        = ['18:00 Open', 'Midnight Open', '8:30 Open', '9:30 Open', '10:00 Open', '13:00 Open']
 const LIQ_CHECKLIST    = ['Liquidity Swept', 'Equal Highs Taken', 'Equal Lows Taken', 'PDH Taken', 'PDL Taken']
 const OTE_LEVELS       = ['0.62', '0.705', '0.79']
@@ -248,7 +265,7 @@ function SymbolSearch({ value, onChange }) {
     <div ref={ref} style={{ position: 'relative' }}>
       <div onClick={() => setOpen(v => !v)} style={{ ...inp, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', userSelect: 'none' }}>
         <span style={{ color: value ? '#fff' : '#555' }}>{value || 'Select instrument…'}</span>
-        <span style={{ color: '#555', fontSize: '10px' }}>▾</span>
+        <ChevronDown size={14} color="#555" />
       </div>
       {open && (
         <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 100, background: '#0d0d0d', border: `1px solid ${CARD_BORD}`, borderRadius: '8px', boxShadow: '0 12px 40px rgba(0,0,0,0.7)', maxHeight: '260px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -307,7 +324,7 @@ function computeQuality(p) {
   return { parts, total: Math.min(50, bias + targets + poi + keyOpens + ote + entry) }
 }
 
-function DailyPlan() {
+function DailyPlan({ pro = false }) {
   const [date, setDate] = useState(todayKey())
   const [plan, setPlan] = useState(() => lsGet(`tos_plan_${todayKey()}`, blankPlan()))
 
@@ -444,13 +461,68 @@ function DailyPlan() {
             )
           })}
         </div>
-        <div style={{ marginTop: '14px', fontSize: '11px', color: '#666', textAlign: 'center' }}>
-          {(!plan.bias || !plan.entryTrigger)
-            ? `⚠️ Missing required: ${[!plan.bias && 'Bias', !plan.entryTrigger && 'Entry Trigger'].filter(Boolean).join(' + ')}`
-            : total >= 35 ? '✅ A+ setup — conditions aligned' : total >= 20 ? '⚠️ Mediocre — wait for more confluence' : '🛑 Low quality — likely no-trade'}
-          <span style={{ color: '#444' }}>{'  ·  '}* required</span>
-        </div>
+        {(() => {
+          const missing = [!plan.bias && 'Bias', !plan.entryTrigger && 'Entry Trigger'].filter(Boolean)
+          const v = missing.length
+            ? { Icon: AlertTriangle, color: ORANGE, text: `Missing required: ${missing.join(' + ')}` }
+            : total >= 35 ? { Icon: CheckCircle, color: GREEN, text: 'A+ setup — conditions aligned' }
+            : total >= 20 ? { Icon: AlertTriangle, color: YELLOW, text: 'Mediocre — wait for more confluence' }
+            : { Icon: XCircle, color: RED, text: 'Low quality — likely no-trade' }
+          return (
+            <div style={{ marginTop: '14px', fontSize: '11px', color: '#888', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', flexWrap: 'wrap' }}>
+              <v.Icon size={13} color={v.color} />
+              <span style={{ color: v.color, fontWeight: 600 }}>{v.text}</span>
+              <span style={{ color: '#444' }}>· * required</span>
+            </div>
+          )
+        })()}
       </div>
+
+      {pro && (() => {
+        const probability = (!plan.bias || !plan.entryTrigger) ? Math.round((total / 50) * 40) : Math.round(40 + (total / 50) * 50)
+        const probColor = probability >= 65 ? GREEN : probability >= 40 ? YELLOW : RED
+        const prevDate = (() => { const d = new Date(date + 'T00:00:00'); d.setDate(d.getDate() - 1); return localKey(d) })()
+        const prevRaw = lsGet(`tos_plan_${prevDate}`, null)
+        const prev = prevRaw ? { ...blankPlan(), ...prevRaw } : null
+        const prevScore = prev ? computeQuality(prev).total : 0
+        return (
+          <div style={{ ...card, marginTop: '14px' }}>
+            <SectionTitle Icon={Gauge}>Setup Analysis (Pro)</SectionTitle>
+            <div className="tos-grid-2">
+              <div>
+                <div style={lbl}>Confluence Strength</div>
+                <div style={{ height: '14px', borderRadius: '8px', background: '#161616', overflow: 'hidden', marginTop: '6px', marginBottom: '8px' }}>
+                  <div style={{ width: `${(total / 50) * 100}%`, height: '100%', background: `linear-gradient(90deg, ${ORANGE}, ${GOLD}, ${GREEN})`, borderRadius: '8px', transition: 'width .4s' }} />
+                </div>
+                <div style={{ fontSize: '12px', color: '#888' }}>{total}/50 confluence points</div>
+                <div style={{ marginTop: '18px', display: 'flex', alignItems: 'baseline', gap: '9px' }}>
+                  <span style={{ fontSize: '34px', fontWeight: 900, color: probColor, lineHeight: 1 }}>{probability}%</span>
+                  <span style={{ ...lbl, marginBottom: 0 }}>Setup probability</span>
+                </div>
+                <div style={{ fontSize: '10px', color: '#555', marginTop: '5px' }}>Heuristic from the quality score — not a guarantee.</div>
+              </div>
+              <div>
+                <div style={lbl}>Previous Day's Plan</div>
+                {prev ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '9px', marginTop: '8px' }}>
+                    <div style={{ fontSize: '12px', color: '#888' }}>{prevDate}</div>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                      {prev.bias ? <Tag color={GOLD}>{prev.bias}</Tag> : null}
+                      {prev.entryTrigger ? <Tag>{prev.entryTrigger}</Tag> : null}
+                      <Tag color={BLUE}>{prev.targets.length} targets</Tag>
+                      <Tag color={BLUE}>{prev.poi.length} POI</Tag>
+                      <Tag color={prevScore >= 35 ? GREEN : prevScore >= 20 ? YELLOW : RED}>{prevScore}/50</Tag>
+                    </div>
+                    {prev.biasReason ? <div style={{ fontSize: '12px', color: '#999', lineHeight: 1.5 }}>{prev.biasReason}</div> : null}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: '13px', color: '#555', marginTop: '10px' }}>No plan saved for {prevDate}.</div>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
@@ -475,7 +547,7 @@ const initTradeForm = () => {
   return { ...blankTrade(), bias: plan?.bias || '' }
 }
 
-function TradeLog({ session, trades, tableMissing, onAdded, onDeleted }) {
+function TradeLog({ session, trades, tableMissing, onAdded, onDeleted, pro = false }) {
   const [form, setForm] = useState(initTradeForm)
   const [saving, setSaving] = useState(false)
   const [dismissed, setDismissed] = useState({}) // in-memory only → reappears on reload
@@ -500,9 +572,9 @@ function TradeLog({ session, trades, tableMissing, onAdded, onDeleted }) {
   const recent = trades.filter(t => t.trade_date !== todayKey()).slice(0, 15)
 
   const banners = []
-  if (lossesToday >= 2) banners.push({ id: 'stop', type: 'red', text: '🛑 STOP TRADING FOR TODAY — two losses, rules enforced' })
-  else if (lossesToday === 1) banners.push({ id: 'half', type: 'red', text: '⚠️ HALF RISK REQUIRED — reduce position size by 50%' })
-  if (winsToday >= 1 && lossesToday === 0) banners.push({ id: 'win', type: 'green', text: '✅ FIRST TRADE WON — consider calling it a day' })
+  if (lossesToday >= 2) banners.push({ id: 'stop', type: 'red', Icon: XCircle, text: 'STOP TRADING FOR TODAY — two losses, rules enforced' })
+  else if (lossesToday === 1) banners.push({ id: 'half', type: 'red', Icon: AlertTriangle, text: 'HALF RISK REQUIRED — reduce position size by 50%' })
+  if (winsToday >= 1 && lossesToday === 0) banners.push({ id: 'win', type: 'green', Icon: CheckCircle, text: 'FIRST TRADE WON — consider calling it a day' })
 
   // Low-quality plan nudge — connects the morning Daily Plan score to the log.
   // Only fires when a plan was actually started today (not a blank/auto-saved one).
@@ -512,7 +584,7 @@ function TradeLog({ session, trades, tableMissing, onAdded, onDeleted }) {
     planRaw.liqChecklist?.length || planRaw.ote?.length)
   if (planStarted) {
     const planTotal = computeQuality({ ...blankPlan(), ...planRaw }).total
-    if (planTotal < 20) banners.push({ id: 'plan', type: 'red', text: `🛑 PLAN QUALITY ${planTotal}/50 — no-trade conditions, confluence is thin` })
+    if (planTotal < 20) banners.push({ id: 'plan', type: 'red', Icon: AlertTriangle, text: `PLAN QUALITY ${planTotal}/50 — no-trade conditions, confluence is thin` })
   }
 
   const save = async () => {
@@ -571,7 +643,7 @@ function TradeLog({ session, trades, tableMissing, onAdded, onDeleted }) {
           color: b.type === 'red' ? RED : GREEN,
           animation: 'tosBannerPulse 2.4s ease-in-out infinite',
         }}>
-          {b.type === 'red' ? <AlertTriangle size={20} /> : <Trophy size={20} />}
+          <b.Icon size={20} />
           <span style={{ flex: 1 }}>{b.text}</span>
           <button onClick={() => setDismissed(d => ({ ...d, [b.id]: true }))} style={{ background: 'transparent', border: 'none', color: 'inherit', opacity: 0.6, cursor: 'pointer', display: 'flex', minHeight: 0 }}><X size={18} /></button>
         </div>
@@ -665,7 +737,7 @@ function TradeLog({ session, trades, tableMissing, onAdded, onDeleted }) {
               <div style={{ padding: '36px 16px', textAlign: 'center', color: '#555', fontSize: '13px' }}>No trades logged today.</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {todays.map(t => <TradeRow key={t.id} t={t} onDelete={del} />)}
+                {todays.map(t => <TradeRow key={t.id} t={t} onDelete={del} pro={pro} />)}
               </div>
             )}
           </div>
@@ -677,7 +749,7 @@ function TradeLog({ session, trades, tableMissing, onAdded, onDeleted }) {
                 <div style={{ fontSize: '12px', color: '#666' }}>last {recent.length}</div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {recent.map(t => <TradeRow key={t.id} t={t} onDelete={del} showDate />)}
+                {recent.map(t => <TradeRow key={t.id} t={t} onDelete={del} showDate pro={pro} />)}
               </div>
             </div>
           )}
@@ -691,8 +763,10 @@ function Tag({ children, color = '#888' }) {
   return <span style={{ padding: '2px 8px', borderRadius: '6px', fontSize: '10px', fontWeight: 600, background: `${color}14`, color, border: `1px solid ${color}28` }}>{children}</span>
 }
 
-function TradeRow({ t, onDelete, showDate = false }) {
+function TradeRow({ t, onDelete, showDate = false, pro = false }) {
   const c = t.result === 'Win' ? GREEN : t.result === 'Loss' ? RED : '#999'
+  const cc = confluenceCount(t)
+  const entryTime = t.created_at ? new Date(t.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '—'
   return (
     <div style={{ padding: '12px 14px', borderRadius: '10px', background: BG, border: `1px solid ${CARD_BORD}` }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
@@ -715,9 +789,25 @@ function TradeRow({ t, onDelete, showDate = false }) {
         {t.ote_present && <Tag>OTE</Tag>}
         {t.key_open && <Tag>Key Open</Tag>}
         {t.loss_reason && <Tag color={RED}>{t.loss_reason}</Tag>}
-        <Tag color={followedRules(t) ? GREEN : ORANGE}>{followedRules(t) ? 'Rules ✓' : 'Rules ✗'}</Tag>
+        <Tag color={followedRules(t) ? GREEN : ORANGE}>{followedRules(t) ? <><Check size={9} strokeWidth={3} style={{ verticalAlign: '-1px' }} /> Rules</> : <><X size={9} strokeWidth={3} style={{ verticalAlign: '-1px' }} /> Rules</>}</Tag>
       </div>
       {t.notes && <div style={{ fontSize: '12px', color: '#888', marginTop: '8px', lineHeight: 1.5 }}>{t.notes}</div>}
+      {pro && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px', marginTop: '10px', paddingTop: '9px', borderTop: '1px solid #161616' }}>
+          {[
+            { Icon: Layers, l: 'Confluence', v: `${cc}/4`, c: cc >= 3 ? GREEN : cc === 2 ? YELLOW : RED },
+            { Icon: Gauge, l: 'Setup', v: `${Math.round(cc / 4 * 100)}`, c: GOLD },
+            { Icon: Clock, l: 'Entry', v: entryTime, c: '#aaa' },
+            { Icon: ShieldCheck, l: 'Process', v: `${(t.process_score || 0) > 0 ? '+' : ''}${t.process_score || 0}`, c: (t.process_score || 0) > 0 ? GREEN : RED },
+          ].map(m => (
+            <div key={m.l} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <m.Icon size={12} color="#555" />
+              <span style={{ fontSize: '10px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{m.l}</span>
+              <span style={{ fontSize: '12px', fontWeight: 700, color: m.c }}>{m.v}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -725,7 +815,7 @@ function TradeRow({ t, onDelete, showDate = false }) {
 // ════════════════════════════════════════════════════════════════════════════
 //  PAGE 3 — RISK MANAGEMENT ENGINE
 // ════════════════════════════════════════════════════════════════════════════
-function RiskEngine({ lossTakenToday }) {
+function RiskEngine({ lossTakenToday, trades = [], pro = false }) {
   const [r, setR] = useState(() => getRisk())
   const [halfManual, setHalfManual] = useState(false)
   useEffect(() => { lsSet(RISK_KEY, r) }, [r])
@@ -761,16 +851,25 @@ function RiskEngine({ lossTakenToday }) {
   const tooSmall = rec && rec.contracts < 1
   const actualRisk = rec && !tooSmall ? rec.contracts * stop * rec.pointValue : 0
 
+  // Pro analytics — Kelly, break-even WR, account heat, daily-stop math
+  const decided = trades.filter(t => t.result === 'Win' || t.result === 'Loss')
+  const W = decided.length ? decided.filter(t => t.result === 'Win').length / decided.length : 0
+  const winRRs = trades.filter(t => t.result === 'Win').map(t => (Number(t.rr) > 0 ? Number(t.rr) : 1))
+  const avgWinR = winRRs.length ? winRRs.reduce((a, b) => a + b, 0) / winRRs.length : 0
+  const kellyPct = avgWinR > 0 ? Math.max(0, (W - (1 - W) / avgWinR) * 100) : 0
+  const beWR = avgWinR > 0 ? 100 / (1 + avgWinR) : 0
+  const maxLossesToDaily = effPct > 0 ? Math.floor(6 / effPct) : 0 // to a -6% day
+
   // Recommendation banner appearance
   let recView
   if (!rec) {
-    recView = { color: '#777', bg: BG, border: CARD_BORD, icon: '◷', main: 'Enter account size, risk % and stop', sub: '' }
+    recView = { color: '#777', bg: BG, border: CARD_BORD, Icon: Hourglass, main: 'Enter account size, risk % and stop', sub: '' }
   } else if (tooSmall) {
-    recView = { color: ORANGE, bg: 'rgba(255,159,67,0.10)', border: `${ORANGE}55`, icon: '⚠️', main: `Below 1 ${rec.instrument} contract`, sub: 'Reduce the stop or increase risk % to size up' }
+    recView = { color: ORANGE, bg: 'rgba(255,159,67,0.10)', border: `${ORANGE}55`, Icon: AlertTriangle, main: `Below 1 ${rec.instrument} contract`, sub: 'Reduce the stop or increase risk % to size up' }
   } else if (rec.micro) {
-    recView = { color: GOLD, bg: GOLD_SOFT, border: GOLD_LINE, icon: '⚡', main: `Trade ${rec.contracts} ${rec.instrument}`, sub: `${rawContracts.toFixed(2)} ${rec.from} (under 1) → auto-switched to micro ${rec.instrument}` }
+    recView = { color: GOLD, bg: GOLD_SOFT, border: GOLD_LINE, Icon: Zap, main: `Trade ${rec.contracts} ${rec.instrument}`, sub: `${rawContracts.toFixed(2)} ${rec.from} (under 1) → auto-switched to micro ${rec.instrument}` }
   } else {
-    recView = { color: GREEN, bg: 'rgba(126,231,135,0.10)', border: 'rgba(126,231,135,0.4)', icon: '✅', main: `Trade ${rec.contracts} ${rec.instrument} contract${rec.contracts !== 1 ? 's' : ''}`, sub: `${rawContracts.toFixed(2)} raw → rounded down` }
+    recView = { color: GREEN, bg: 'rgba(126,231,135,0.10)', border: 'rgba(126,231,135,0.4)', Icon: CheckCircle, main: `Trade ${rec.contracts} ${rec.instrument} contract${rec.contracts !== 1 ? 's' : ''}`, sub: `${rawContracts.toFixed(2)} raw → rounded down` }
   }
 
   const specRows = [
@@ -857,7 +956,7 @@ function RiskEngine({ lossTakenToday }) {
               </div>
               {/* Recommendation */}
               <div style={{ marginTop: '14px', padding: '16px', borderRadius: '12px', background: recView.bg, border: `1px solid ${recView.border}`, textAlign: 'center' }}>
-                <div style={{ fontSize: '20px', fontWeight: 900, color: recView.color, letterSpacing: '-0.3px' }}>{recView.icon} {recView.main}</div>
+                <div style={{ fontSize: '20px', fontWeight: 900, color: recView.color, letterSpacing: '-0.3px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}><recView.Icon size={20} /> {recView.main}</div>
                 {recView.sub && <div style={{ fontSize: '12px', color: '#999', marginTop: '6px', lineHeight: 1.5 }}>{recView.sub}</div>}
               </div>
             </div>
@@ -888,6 +987,27 @@ function RiskEngine({ lossTakenToday }) {
                 Gains reflect the rounded position ({rec && !tooSmall ? `${rec.contracts} × ${stop || '—'} pts × $${rec.pointValue}/pt` : 'no valid size yet'}), not the raw target risk.
               </div>
             </div>
+
+            {/* Advanced (Pro) */}
+            {pro && (
+              <div style={card}>
+                <SectionTitle Icon={Sparkles}>Advanced (Pro)</SectionTitle>
+                {[
+                  { l: 'Kelly optimal risk', v: decided.length ? `${kellyPct.toFixed(1)}%` : '—', sub: decided.length ? `half-Kelly ${(kellyPct / 2).toFixed(1)}% (safer)` : 'log trades', c: kellyPct > 0 ? GOLD : RED },
+                  { l: 'Break-even win rate', v: avgWinR > 0 ? `${beWR.toFixed(0)}%` : '—', sub: avgWinR > 0 ? `at ${avgWinR.toFixed(2)}R avg winner` : 'no winners yet', c: W * 100 >= beWR ? GREEN : ORANGE },
+                  { l: 'Account heat', v: `${effPct.toFixed(1)}%`, sub: `2 open ${(effPct * 2).toFixed(1)}% · 3 open ${(effPct * 3).toFixed(1)}%`, c: effPct * 3 > 6 ? ORANGE : GREEN },
+                  { l: 'Full-risk losses to -6% day', v: maxLossesToDaily || '—', sub: 'enforce a 2-loss daily stop', c: BLUE },
+                ].map((row, i) => (
+                  <div key={row.l} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderTop: i === 0 ? 'none' : '1px solid #161616', gap: '12px' }}>
+                    <div>
+                      <div style={{ fontSize: '12.5px', color: '#ccc', fontWeight: 600 }}>{row.l}</div>
+                      <div style={{ fontSize: '10.5px', color: '#666', marginTop: '2px' }}>{row.sub}</div>
+                    </div>
+                    <div style={{ fontSize: '17px', fontWeight: 800, color: row.c, flexShrink: 0 }}>{row.v}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -898,7 +1018,7 @@ function RiskEngine({ lossTakenToday }) {
 // ════════════════════════════════════════════════════════════════════════════
 //  PAGE 4 — PERFORMANCE DASHBOARD
 // ════════════════════════════════════════════════════════════════════════════
-function Performance({ trades, tableMissing }) {
+function Performance({ trades, tableMissing, pro = false }) {
   const oneR = getOneR()
   const accountSize = parseFloat(getRisk().accountSize) || 10000
 
@@ -1040,7 +1160,7 @@ function Performance({ trades, tableMissing }) {
         <div style={card}>
           <div style={{ ...lbl, marginBottom: '14px' }}>Loss Analysis</div>
           {lossByReason.total === 0 ? (
-            <div style={{ padding: '40px 16px', textAlign: 'center', color: '#555', fontSize: '13px' }}>No losses recorded 🎯</div>
+            <div style={{ padding: '40px 16px', textAlign: 'center', color: '#555', fontSize: '13px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}><CheckCircle size={22} color={GREEN} />No losses recorded</div>
           ) : (
             <>
               <ResponsiveContainer width="100%" height={200}>
@@ -1116,7 +1236,312 @@ function Performance({ trades, tableMissing }) {
           <AlertTriangle size={12} color="#777" /> Statistical expectancy only — not a prediction. Past performance ≠ future results.
         </div>
       </div>
+
+      {/* ── Advanced analytics (both modes) ── */}
+      <GoalSystem trades={trades} oneR={oneR} />
+      <EdgeTracker trades={trades} />
+      <StreakAnalytics trades={trades} />
+      <PsychPatterns trades={trades} oneR={oneR} />
+
+      {/* ── Pro-only charts ── */}
+      {pro && <ProCharts trades={trades} oneR={oneR} />}
     </div>
+  )
+}
+
+// ─── Goal system (inside Performance, both modes) ───────────────────────────
+const GOALS_KEY = 'tos_goals'
+const defaultGoals = { targetR: '15', targetWinRate: '60', targetTrades: '40', maxLosses: '15' }
+function GoalSystem({ trades, oneR }) {
+  const [g, setG] = useState(() => ({ ...defaultGoals, ...lsGet(GOALS_KEY, {}) }))
+  useEffect(() => { lsSet(GOALS_KEY, g) }, [g])
+  const set = (k) => (e) => setG(prev => ({ ...prev, [k]: e.target.value }))
+
+  const month = trades.filter(t => isThisMonth(t.trade_date))
+  const monthR = month.reduce((s, t) => s + tradeR(t), 0)
+  const wr = winRateOf(month)
+  const monthLosses = month.filter(t => t.result === 'Loss').length
+  const tR = parseFloat(g.targetR) || 0
+  const tWR = parseFloat(g.targetWinRate) || 0
+  const tTrades = parseFloat(g.targetTrades) || 0
+  const tMaxL = parseFloat(g.maxLosses) || 0
+
+  const now = new Date()
+  const weeks = {}
+  for (const t of month) {
+    if (!t.trade_date) continue
+    const wi = Math.floor((new Date(t.trade_date + 'T00:00:00').getDate() - 1) / 7)
+    weeks[wi] = (weeks[wi] || 0) + tradeR(t)
+  }
+  const curWeekIdx = Math.floor((now.getDate() - 1) / 7)
+  const maxWeek = Math.max(curWeekIdx, ...Object.keys(weeks).map(Number))
+  const weekRows = Array.from({ length: Math.max(4, maxWeek + 1) }, (_, i) => ({ i, r: weeks[i] || 0, current: i === curWeekIdx, started: i <= curWeekIdx }))
+
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+  const projR = now.getDate() > 0 ? monthR / now.getDate() * daysInMonth : monthR
+
+  return (
+    <div style={card}>
+      <SectionTitle Icon={Target}>Monthly Goals</SectionTitle>
+      <div className="tos-grid-4" style={{ marginBottom: '18px' }}>
+        <div><div style={lbl}>Target R</div><input value={g.targetR} onChange={set('targetR')} type="number" step="1" inputMode="decimal" style={inp} /></div>
+        <div><div style={lbl}>Target Win Rate %</div><input value={g.targetWinRate} onChange={set('targetWinRate')} type="number" step="1" inputMode="decimal" style={inp} /></div>
+        <div><div style={lbl}>Target Trades</div><input value={g.targetTrades} onChange={set('targetTrades')} type="number" step="1" inputMode="decimal" style={inp} /></div>
+        <div><div style={lbl}>Max Losses Allowed</div><input value={g.maxLosses} onChange={set('maxLosses')} type="number" step="1" inputMode="decimal" style={inp} /></div>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <ProgressBar label="R Progress" value={Math.max(0, monthR)} max={tR} dangerHigh={false} valueText={`${monthR.toFixed(1)}R / ${tR}R target (${tR > 0 ? Math.round(monthR / tR * 100) : 0}%)`} />
+        <ProgressBar label="Win Rate" value={wr.wr} max={tWR} dangerHigh={false} valueText={`${Math.round(wr.wr)}% / ${tWR}% target`} />
+        <ProgressBar label="Trades Taken" value={month.length} max={tTrades} dangerHigh={false} valueText={`${month.length} / ${tTrades}`} />
+        <ProgressBar label="Losses (cap)" value={monthLosses} max={tMaxL} dangerHigh valueText={`${monthLosses} / ${tMaxL} max`} />
+      </div>
+
+      <div style={{ marginTop: '20px' }}>
+        <div style={{ ...lbl, marginBottom: '10px' }}>Weekly Breakdown</div>
+        <div className="tos-grid-4">
+          {weekRows.map(w => (
+            <div key={w.i} style={{ padding: '12px', borderRadius: '10px', background: BG, border: `1px solid ${w.current ? GOLD_LINE : CARD_BORD}` }}>
+              <div style={{ ...lbl, marginBottom: '4px' }}>Week {w.i + 1}{w.current ? ' (now)' : ''}</div>
+              <div style={{ fontSize: '17px', fontWeight: 800, color: !w.started ? '#444' : w.r >= 0 ? GREEN : RED }}>
+                {!w.started ? '—' : `${w.r >= 0 ? '+' : ''}${w.r.toFixed(1)}R`}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ marginTop: '16px', padding: '14px 16px', borderRadius: '10px', background: BG, border: `1px solid ${CARD_BORD}`, display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+        <Rocket size={16} color={GOLD} />
+        <span style={{ fontSize: '13px', color: '#ccc' }}>End-of-month projection at current pace:</span>
+        <span style={{ fontSize: '15px', fontWeight: 800, color: projR >= 0 ? GREEN : RED }}>{projR >= 0 ? '+' : ''}{projR.toFixed(1)}R</span>
+        <span style={{ fontSize: '12px', color: '#666' }}>({usd(projR * oneR)}) · {projR >= tR ? 'on track for target' : 'behind target'}</span>
+      </div>
+    </div>
+  )
+}
+
+// ─── Edge tracker — which confluences actually matter ───────────────────────
+function EdgeTracker({ trades }) {
+  return (
+    <div style={card}>
+      <SectionTitle Icon={Crosshair}>Edge Tracker</SectionTitle>
+      <div style={{ fontSize: '12px', color: '#777', marginBottom: '6px' }}>Win rate by condition — find which confluences pay in YOUR data.</div>
+      <SplitBar label="Confluences present" a={winRateOf(trades.filter(t => confluenceCount(t) === 4))} b={winRateOf(trades.filter(t => confluenceCount(t) < 4))} aLabel="All 4" bLabel="Partial" />
+      <SplitBar label="Bias" a={winRateOf(trades.filter(t => t.bias === 'PxH'))} b={winRateOf(trades.filter(t => t.bias === 'PxL'))} aLabel="PxH" bLabel="PxL" />
+      <SplitBar label="Entry trigger" a={winRateOf(trades.filter(t => t.rejection_block))} b={winRateOf(trades.filter(t => t.wick_ce))} aLabel="Rej. Block" bLabel="Wick CE" />
+      <SplitBar label="OTE" a={winRateOf(trades.filter(t => t.ote_present))} b={winRateOf(trades.filter(t => !t.ote_present))} aLabel="Present" bLabel="Absent" />
+      <SplitBar label="Key Open" a={winRateOf(trades.filter(t => t.key_open))} b={winRateOf(trades.filter(t => !t.key_open))} aLabel="Present" bLabel="Absent" />
+      <SplitBar label="Session" a={winRateOf(trades.filter(t => t.session === 'London'))} b={winRateOf(trades.filter(t => t.session === 'NY'))} aLabel="London" bLabel="NY" />
+    </div>
+  )
+}
+
+// ─── Streak analytics ───────────────────────────────────────────────────────
+function StreakAnalytics({ trades }) {
+  const seq = chronoDecided(trades)
+  let curWin = 0, curLoss = 0
+  for (let i = seq.length - 1; i >= 0; i--) {
+    if (seq[i].result === 'Win') { if (curLoss > 0) break; curWin++ }
+    else { if (curWin > 0) break; curLoss++ }
+  }
+  let longWin = 0, longLoss = 0, rw = 0, rl = 0
+  for (const t of seq) {
+    if (t.result === 'Win') { rw++; rl = 0; longWin = Math.max(longWin, rw) }
+    else { rl++; rw = 0; longLoss = Math.max(longLoss, rl) }
+  }
+  let after2 = 0, after2win = 0
+  for (let i = 2; i < seq.length; i++) {
+    if (seq[i - 1].result === 'Loss' && seq[i - 2].result === 'Loss') { after2++; if (seq[i].result === 'Win') after2win++ }
+  }
+  const after2wr = after2 ? Math.round(after2win / after2 * 100) : null
+
+  return (
+    <div style={card}>
+      <SectionTitle Icon={Flame}>Streak Analytics</SectionTitle>
+      <div className="tos-grid-4">
+        <StatCard label="Current Win Streak" value={curWin} color={curWin > 0 ? GREEN : '#888'} Icon={TrendingUp} />
+        <StatCard label="Current Loss Streak" value={curLoss} color={curLoss > 0 ? RED : '#888'} Icon={TrendingDown} />
+        <StatCard label="Longest Win Streak" value={longWin} color={GREEN} Icon={Flame} />
+        <StatCard label="Max Consecutive Losses" value={longLoss} color={RED} Icon={AlertTriangle} />
+      </div>
+      <div style={{ marginTop: '14px', padding: '13px 16px', borderRadius: '10px', background: BG, border: `1px solid ${CARD_BORD}`, fontSize: '13px', color: '#ccc', display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <Activity size={16} color={GOLD} />
+        {after2wr != null
+          ? <span>After 2 losses you win <b style={{ color: after2wr >= 50 ? GREEN : RED }}>{after2wr}%</b> of the next trade <span style={{ color: '#666' }}>(n={after2})</span>.</span>
+          : <span style={{ color: '#888' }}>Not enough back-to-back losses yet to measure bounce-back rate.</span>}
+      </div>
+    </div>
+  )
+}
+
+// ─── Psychological patterns ─────────────────────────────────────────────────
+function PsychPatterns({ trades, oneR }) {
+  const seq = chronoDecided(trades)
+  const firstByDay = {}
+  for (const t of seq) { if (!firstByDay[t.trade_date]) firstByDay[t.trade_date] = t }
+  const wrFirst = winRateOf(Object.values(firstByDay))
+  const afterLoss = []
+  for (let i = 1; i < seq.length; i++) { if (seq[i - 1].result === 'Loss') afterLoss.push(seq[i]) }
+  const wrAfterLoss = winRateOf(afterLoss)
+  const mon = winRateOf(trades.filter(t => weekdayOf(t.trade_date) === 1))
+  const fri = winRateOf(trades.filter(t => weekdayOf(t.trade_date) === 5))
+
+  const hourMap = {}
+  for (const t of trades) { const h = tradeHour(t); if (h == null) continue; if (!hourMap[h]) hourMap[h] = { r: 0, n: 0 }; hourMap[h].r += tradeR(t); hourMap[h].n++ }
+  const hours = Object.entries(hourMap).map(([h, d]) => ({ h: +h, ...d })).filter(d => d.n >= 2).sort((a, b) => b.r - a.r)
+  const best = hours[0]
+  const hourLabel = (h) => `${String(h).padStart(2, '0')}:00`
+
+  const cell = (label, d) => (
+    <div style={{ padding: '14px 12px', borderRadius: '11px', background: BG, border: `1px solid ${CARD_BORD}`, textAlign: 'center' }}>
+      <div style={{ fontSize: '22px', fontWeight: 800, color: d.n ? (d.wr >= 50 ? GREEN : d.wr > 0 ? YELLOW : RED) : '#444' }}>{d.n ? `${Math.round(d.wr)}%` : '—'}</div>
+      <div style={{ ...lbl, marginTop: '6px', marginBottom: 0 }}>{label}</div>
+      <div style={{ fontSize: '10px', color: '#555', marginTop: '3px' }}>{d.n} trades</div>
+    </div>
+  )
+
+  return (
+    <div style={card}>
+      <SectionTitle Icon={Brain}>Psychological Patterns</SectionTitle>
+      <div className="tos-grid-4">
+        {cell('First Trade of Day', wrFirst)}
+        {cell('After a Loss', wrAfterLoss)}
+        {cell('Monday', mon)}
+        {cell('Friday', fri)}
+      </div>
+      <div style={{ marginTop: '14px', padding: '13px 16px', borderRadius: '10px', background: BG, border: `1px solid ${CARD_BORD}`, fontSize: '13px', color: '#ccc', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+        <Clock size={16} color={GOLD} />
+        {best
+          ? <span>Best performing hour: <b style={{ color: GOLD }}>{hourLabel(best.h)}</b> — <b style={{ color: best.r >= 0 ? GREEN : RED }}>{best.r >= 0 ? '+' : ''}{best.r.toFixed(1)}R</b> ({usd(best.r * oneR)}) over {best.n} trades.</span>
+          : <span style={{ color: '#888' }}>Log more trades to surface your best hour of day (by entry-log time).</span>}
+      </div>
+    </div>
+  )
+}
+
+// ─── Pro-only charts ────────────────────────────────────────────────────────
+function ProCharts({ trades, oneR }) {
+  const seq = chronoDecided(trades)
+  // rolling win rate
+  const roll = []
+  for (let i = 0; i < seq.length; i++) {
+    const p = { i: i + 1 }
+    for (const w of [10, 20, 50]) {
+      if (i >= w - 1) { const s = seq.slice(i - w + 1, i + 1); p['w' + w] = Math.round(s.filter(t => t.result === 'Win').length / w * 100) }
+    }
+    roll.push(p)
+  }
+  // R distribution
+  const bins = [
+    { label: '≤ -1R', test: r => r <= -1, color: RED },
+    { label: 'BE', test: r => r > -1 && r < 0.001 && r > -0.001, color: '#888' },
+    { label: '0–1R', test: r => r > 0 && r < 1, color: '#9acd6b' },
+    { label: '1–2R', test: r => r >= 1 && r < 2, color: GREEN },
+    { label: '2–3R', test: r => r >= 2 && r < 3, color: '#5bd1a0' },
+    { label: '3–5R', test: r => r >= 3 && r < 5, color: BLUE },
+    { label: '5R+', test: r => r >= 5, color: GOLD },
+  ]
+  const rVals = trades.map(tradeR)
+  const hist = bins.map(b => ({ label: b.label, count: rVals.filter(b.test).length, color: b.color }))
+  // sessions
+  const sess = ['London', 'NY', 'Asian'].map(s => {
+    const arr = trades.filter(t => t.session === s)
+    const w = winRateOf(arr)
+    const r = arr.reduce((a, t) => a + tradeR(t), 0)
+    return { name: s, wr: Math.round(w.wr), r: +r.toFixed(1), n: w.n }
+  }).filter(d => d.n > 0)
+  // time-of-day net R
+  const hourMap = {}
+  for (const t of trades) { const h = tradeHour(t); if (h == null) continue; if (!hourMap[h]) hourMap[h] = { r: 0, n: 0 }; hourMap[h].r += tradeR(t); hourMap[h].n++ }
+  const hourCells = Object.entries(hourMap).map(([h, d]) => ({ h: +h, ...d })).sort((a, b) => a.h - b.h)
+  const maxAbsR = hourCells.reduce((m, c) => Math.max(m, Math.abs(c.r)), 1)
+
+  return (
+    <>
+      <div style={card}>
+        <SectionTitle Icon={Activity}>Rolling Win Rate (Pro)</SectionTitle>
+        {seq.length < 10 ? (
+          <div style={{ padding: '30px', textAlign: 'center', color: '#555', fontSize: '13px' }}>Need 10+ decided trades to plot rolling win rate.</div>
+        ) : (
+          <ResponsiveContainer width="100%" height={220}>
+            <ComposedChart data={roll} margin={{ top: 6, right: 8, bottom: 0, left: -8 }}>
+              <CartesianGrid stroke="#161616" vertical={false} />
+              <XAxis dataKey="i" tick={axTick} {...noAxis} />
+              <YAxis tick={axTick} {...noAxis} domain={[0, 100]} tickFormatter={v => `${v}%`} />
+              <Tooltip contentStyle={chartTooltip} labelFormatter={l => `Trade #${l}`} formatter={(v, n) => [`${v}%`, n.replace('w', 'last ')]} />
+              <ReferenceLine y={50} stroke="#333" strokeDasharray="4 4" />
+              <Line type="monotone" dataKey="w10" stroke={BLUE} strokeWidth={1.6} dot={false} connectNulls name="w10" />
+              <Line type="monotone" dataKey="w20" stroke={GOLD} strokeWidth={1.6} dot={false} connectNulls name="w20" />
+              <Line type="monotone" dataKey="w50" stroke={GREEN} strokeWidth={2.2} dot={false} connectNulls name="w50" />
+              <Legend wrapperStyle={{ fontSize: '11px' }} formatter={v => v.replace('w', 'last ')} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      <div className="tos-grid-2">
+        <div style={card}>
+          <SectionTitle Icon={BarChart2}>R Distribution</SectionTitle>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={hist} margin={{ top: 6, right: 8, bottom: 0, left: -10 }}>
+              <CartesianGrid stroke="#161616" vertical={false} />
+              <XAxis dataKey="label" tick={{ ...axTick, fontSize: 9 }} {...noAxis} interval={0} />
+              <YAxis tick={axTick} {...noAxis} allowDecimals={false} />
+              <Tooltip contentStyle={chartTooltip} cursor={{ fill: 'rgba(255,255,255,0.03)' }} formatter={v => [v, 'trades']} />
+              <Bar dataKey="count" radius={[3, 3, 0, 0]} maxBarSize={34}>
+                {hist.map((d, i) => <Cell key={i} fill={d.color} fillOpacity={0.85} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div style={card}>
+          <SectionTitle Icon={Clock}>Best / Worst Sessions</SectionTitle>
+          {sess.length === 0 ? (
+            <div style={{ padding: '30px', textAlign: 'center', color: '#555', fontSize: '13px' }}>No session data yet.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '4px' }}>
+              {sess.map(s => (
+                <div key={s.name}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px', fontSize: '12px' }}>
+                    <span style={{ color: '#ccc', fontWeight: 600 }}>{s.name} <span style={{ color: '#666' }}>({s.n})</span></span>
+                    <span style={{ color: s.r >= 0 ? GREEN : RED, fontWeight: 700 }}>{s.wr}% WR · {s.r >= 0 ? '+' : ''}{s.r}R</span>
+                  </div>
+                  <div style={{ height: '8px', borderRadius: '5px', background: '#161616', overflow: 'hidden' }}>
+                    <div style={{ width: `${s.wr}%`, height: '100%', background: s.r >= 0 ? GREEN : RED, borderRadius: '5px' }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={card}>
+        <SectionTitle Icon={Clock}>Time-of-Day Performance</SectionTitle>
+        {hourCells.length === 0 ? (
+          <div style={{ padding: '24px', textAlign: 'center', color: '#555', fontSize: '13px' }}>No timed trades yet (uses entry-log time).</div>
+        ) : (
+          <>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {hourCells.map(c => {
+                const intensity = Math.min(1, Math.abs(c.r) / maxAbsR)
+                const base = c.r >= 0 ? '126,231,135' : '255,107,107'
+                return (
+                  <div key={c.h} style={{ width: '58px', padding: '10px 4px', borderRadius: '8px', textAlign: 'center', background: `rgba(${base},${0.12 + intensity * 0.55})`, border: `1px solid rgba(${base},0.3)` }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#fff' }}>{String(c.h).padStart(2, '0')}h</div>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: c.r >= 0 ? GREEN : RED }}>{c.r >= 0 ? '+' : ''}{c.r.toFixed(1)}R</div>
+                    <div style={{ fontSize: '9px', color: '#888' }}>{c.n}t</div>
+                  </div>
+                )
+              })}
+            </div>
+            <div style={{ fontSize: '11px', color: '#666', marginTop: '10px' }}>Net R by hour of entry-log time ({usd(oneR)} = 1R). Greener = stronger.</div>
+          </>
+        )}
+      </div>
+    </>
   )
 }
 
@@ -1130,7 +1555,7 @@ const blankAccount = () => ({
   dailyLimit: '', maxLimit: '', profitTarget: '', todayPnl: '', payoutDate: '',
 })
 
-function Funded() {
+function Funded({ pro = false, trades = [] }) {
   const [accounts, setAccounts] = useState(() => lsGet(FUNDED_KEY, []))
   const [activeId, setActiveId] = useState(() => { const a = lsGet(FUNDED_KEY, []); return a[0]?.id || null })
   const [editing, setEditing] = useState(null) // account object being edited (or new)
@@ -1196,12 +1621,12 @@ function Funded() {
       )}
 
       {/* Active account dashboard */}
-      {active && !editing && <FundedCard account={active} onEdit={() => setEditing({ ...active })} onDelete={() => remove(active.id)} />}
+      {active && !editing && <FundedCard account={active} onEdit={() => setEditing({ ...active })} onDelete={() => remove(active.id)} trades={trades} pro={pro} />}
     </div>
   )
 }
 
-function FundedCard({ account: a, onEdit, onDelete }) {
+function FundedCard({ account: a, onEdit, onDelete, trades = [], pro = false }) {
   const start = parseFloat(a.startingBalance) || 0
   const cur   = parseFloat(a.currentBalance) || 0
   const maxLimit = parseFloat(a.maxLimit) || 0
@@ -1221,6 +1646,21 @@ function FundedCard({ account: a, onEdit, onDelete }) {
   const daysToPayout = a.payoutDate ? Math.ceil((new Date(a.payoutDate + 'T00:00:00') - new Date(todayKey() + 'T00:00:00')) / 86400000) : null
 
   const statusColor = a.status === 'Funded' ? GREEN : GOLD
+
+  // Pro: equity & drawdown curve from logged TOS trades
+  const oneR = getOneR()
+  const dayMap = {}
+  for (const t of trades) { if (!t.trade_date) continue; dayMap[t.trade_date] = (dayMap[t.trade_date] || 0) + tradeR(t) * oneR }
+  const days = Object.entries(dayMap).map(([date, v]) => ({ date, v })).sort((x, y) => x.date.localeCompare(y.date))
+  const curve = days.reduce((acc, d) => {
+    const prev = acc[acc.length - 1]
+    const eqRaw = (prev ? prev.eqRaw : 0) + d.v
+    const peakRaw = Math.max(prev ? prev.peakRaw : 0, eqRaw)
+    return [...acc, { date: d.date, label: d.date.slice(5), pnl: Math.round(d.v), eqRaw, peakRaw, equity: Math.round(eqRaw), dd: Math.round(eqRaw - peakRaw) }]
+  }, [])
+  const recentDays = days.slice(-10)
+  const avgDaily = recentDays.length ? recentDays.reduce((s, d) => s + d.v, 0) / recentDays.length : 0
+  const projDays = avgDaily > 0 && profitRemaining > 0 ? Math.ceil(profitRemaining / avgDaily) : null
 
   return (
     <div style={card}>
@@ -1244,7 +1684,7 @@ function FundedCard({ account: a, onEdit, onDelete }) {
         <StatCard label="Current Drawdown" value={pct(drawdownPct)} color={drawdownPct >= 4 ? RED : drawdownPct >= 2 ? YELLOW : GREEN} />
         <StatCard label="Daily DD Remaining" value={dailyLimit > 0 ? usd(dailyRemaining) : '—'} color={dailyLimit > 0 && dailyRemaining <= dailyLimit * 0.2 ? RED : GREEN} sub={dailyLimit > 0 ? `of ${usd(dailyLimit)}` : 'set a limit'} />
         <StatCard label="Max DD Remaining" value={maxLimit > 0 ? usd(maxDDRemaining) : '—'} color={maxLimit > 0 && maxDDRemaining <= maxLimit * 0.2 ? RED : GREEN} sub={maxLimit > 0 ? `of ${usd(maxLimit)}` : 'set a limit'} />
-        <StatCard label="Profit Remaining" value={profitRemaining <= 0 ? 'Hit ✓' : usd(profitRemaining)} color={profitRemaining <= 0 ? GREEN : GOLD} />
+        <StatCard label="Profit Remaining" value={profitRemaining <= 0 ? 'Reached' : usd(profitRemaining)} color={profitRemaining <= 0 ? GREEN : GOLD} />
         <StatCard label="Days to Payout" value={daysToPayout == null ? '—' : daysToPayout < 0 ? 'Passed' : daysToPayout} color={BLUE} sub={a.payoutDate || 'set a date'} />
       </div>
 
@@ -1259,6 +1699,53 @@ function FundedCard({ account: a, onEdit, onDelete }) {
           <AlertTriangle size={17} /> Near max drawdown breach — protect the account.
         </div>
       )}
+
+      {pro && (
+        <div style={{ marginTop: '22px', paddingTop: '20px', borderTop: `1px solid ${CARD_BORD}` }}>
+          <SectionTitle Icon={BarChart2}>Pro Analytics <span style={{ fontWeight: 500, textTransform: 'none', letterSpacing: 0, color: '#666', fontSize: '11px' }}>· from your logged TOS trades</span></SectionTitle>
+          {days.length === 0 ? (
+            <div style={{ padding: '30px', textAlign: 'center', color: '#555', fontSize: '13px' }}>Log trades to see your equity & drawdown curve.</div>
+          ) : (
+            <>
+              <div className="tos-grid-3" style={{ marginBottom: '16px' }}>
+                <StatCard label="Projected Days to Target" value={projDays == null ? '—' : projDays} color={BLUE} sub={avgDaily > 0 ? `target ÷ logged pace (${usd(avgDaily)}/day)` : 'need positive pace'} Icon={Hourglass} />
+                <StatCard label="Avg Daily (last 10)" value={usd(avgDaily)} color={avgDaily >= 0 ? GREEN : RED} Icon={Calendar} />
+                <StatCard label="Max Equity Drawdown" value={usd(Math.min(0, ...curve.map(c => c.dd), 0))} color={RED} Icon={TrendingDown} />
+              </div>
+              <div className="tos-grid-2">
+                <div>
+                  <div style={{ ...lbl, marginBottom: '10px' }}>Daily P&L</div>
+                  <ResponsiveContainer width="100%" height={170}>
+                    <BarChart data={curve} margin={{ top: 4, right: 6, bottom: 0, left: -10 }}>
+                      <CartesianGrid stroke="#161616" vertical={false} />
+                      <XAxis dataKey="label" tick={{ ...axTick, fontSize: 9 }} {...noAxis} />
+                      <YAxis tick={axTick} {...noAxis} tickFormatter={usdK} />
+                      <Tooltip contentStyle={chartTooltip} formatter={v => [usd(v), 'P&L']} />
+                      <ReferenceLine y={0} stroke="#333" />
+                      <Bar dataKey="pnl" radius={[3, 3, 0, 0]} maxBarSize={26}>
+                        {curve.map((d, i) => <Cell key={i} fill={d.pnl >= 0 ? GREEN : RED} fillOpacity={0.85} />)}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div>
+                  <div style={{ ...lbl, marginBottom: '10px' }}>Drawdown Curve</div>
+                  <ResponsiveContainer width="100%" height={170}>
+                    <ComposedChart data={curve} margin={{ top: 4, right: 6, bottom: 0, left: -10 }}>
+                      <CartesianGrid stroke="#161616" vertical={false} />
+                      <XAxis dataKey="label" tick={{ ...axTick, fontSize: 9 }} {...noAxis} />
+                      <YAxis tick={axTick} {...noAxis} tickFormatter={usdK} />
+                      <Tooltip contentStyle={chartTooltip} formatter={v => [usd(v), 'Drawdown']} />
+                      <ReferenceLine y={0} stroke="#333" />
+                      <Area type="monotone" dataKey="dd" stroke={RED} strokeWidth={1.5} fill={RED} fillOpacity={0.14} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -1266,7 +1753,7 @@ function FundedCard({ account: a, onEdit, onDelete }) {
 // ════════════════════════════════════════════════════════════════════════════
 //  PAGE 6 — TRADE REVIEW
 // ════════════════════════════════════════════════════════════════════════════
-function Review({ trades, tableMissing, onUpdated }) {
+function Review({ trades, tableMissing, onUpdated, pro = false }) {
   const [saving, setSaving] = useState(null)
 
   const setAgain = async (t, val) => {
@@ -1303,6 +1790,25 @@ function Review({ trades, tableMissing, onUpdated }) {
     }
   }, [trades])
 
+  // Pro: pattern recognition over "would take again" data
+  const patterns = useMemo(() => {
+    const out = []
+    const regret = (arr) => { const r = arr.filter(t => t.would_take_again != null); const no = r.filter(t => t.would_take_again === false).length; return { pct: r.length ? Math.round(no / r.length * 100) : 0, n: r.length } }
+    for (const s of ['London', 'NY', 'Asian']) {
+      const d = regret(trades.filter(t => t.session === s && t.result === 'Loss'))
+      if (d.n >= 2 && d.pct >= 50) out.push({ text: `You avoid taking trades again after ${s} losses`, detail: `${d.pct}% of reviewed ${s} losses flagged "wouldn't take again" (n=${d.n})`, color: RED, score: d.pct })
+    }
+    const ls = regret(trades.filter(t => t.liquidity_swept === false))
+    if (ls.n >= 2 && ls.pct >= 50) out.push({ text: 'You regret trading without a liquidity sweep', detail: `${ls.pct}% of no-sweep trades you wouldn't repeat (n=${ls.n})`, color: ORANGE, score: ls.pct })
+    const ote = regret(trades.filter(t => t.ote_present === false))
+    if (ote.n >= 2 && ote.pct >= 50) out.push({ text: 'You regret entries taken without OTE', detail: `${ote.pct}% of non-OTE trades flagged (n=${ote.n})`, color: ORANGE, score: ote.pct })
+    for (const dir of ['Long', 'Short']) {
+      const dd = regret(trades.filter(t => t.direction === dir && t.result === 'Loss'))
+      if (dd.n >= 3 && dd.pct >= 60) out.push({ text: `You second-guess ${dir} trades`, detail: `${dd.pct}% of ${dir} losses you wouldn't repeat (n=${dd.n})`, color: BLUE, score: dd.pct })
+    }
+    return out.sort((a, b) => b.score - a.score).slice(0, 4)
+  }, [trades])
+
   if (tableMissing) return <SqlNotice />
   if (trades.length === 0) return <EmptyState Icon={RefreshCw} title="Nothing to review" sub="Once you log trades, review each one here and be honest: would you take it again?" />
 
@@ -1318,6 +1824,27 @@ function Review({ trades, tableMissing, onUpdated }) {
       {stats.chasedLosingPct > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 18px', borderRadius: '12px', background: 'rgba(255,159,67,0.1)', border: `1px solid ${ORANGE}44`, color: ORANGE, fontWeight: 700, fontSize: '13.5px' }}>
           <AlertTriangle size={18} /> You chased entry on {stats.chasedLosingPct}% of losing trades.
+        </div>
+      )}
+
+      {pro && (
+        <div style={card}>
+          <SectionTitle Icon={Brain}>Pattern Recognition (Pro)</SectionTitle>
+          {patterns.length === 0 ? (
+            <div style={{ fontSize: '13px', color: '#666', lineHeight: 1.6 }}>No strong patterns yet — mark more trades "would take again / not" to surface behavioural tendencies.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {patterns.map((p, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '11px', padding: '13px 15px', borderRadius: '11px', background: BG, border: `1px solid ${p.color}33` }}>
+                  <Activity size={16} color={p.color} style={{ marginTop: '1px', flexShrink: 0 }} />
+                  <div>
+                    <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#eee' }}>{p.text}</div>
+                    <div style={{ fontSize: '11.5px', color: '#777', marginTop: '3px' }}>{p.detail}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -1395,6 +1922,322 @@ function Review({ trades, tableMissing, onUpdated }) {
   )
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+//  CHALLENGE PASS SYSTEM
+// ════════════════════════════════════════════════════════════════════════════
+// Rule sets are auto-calculated estimates expressed as % of account size.
+// profit = per-phase profit target %, daily = max daily loss %, total = max
+// total/trailing drawdown %, minDays = minimum trading days. Verify with firm.
+const CHALLENGE_FIRMS = {
+  Apex:    { label: 'Apex',              profit: { P1: 6,  P2: 6 }, daily: 0, total: 5,  minDays: 7, trailing: true, note: 'Trailing threshold · no daily limit' },
+  FTMO:    { label: 'FTMO',              profit: { P1: 10, P2: 5 }, daily: 5, total: 10, minDays: 4, note: 'Two-phase evaluation' },
+  TFT:     { label: 'The Funded Trader', profit: { P1: 10, P2: 5 }, daily: 5, total: 10, minDays: 5, note: 'Two-phase evaluation' },
+  MFF:     { label: 'MyForexFunds',      profit: { P1: 8,  P2: 5 }, daily: 5, total: 12, minDays: 5, note: 'Estimate — verify program' },
+  TopStep: { label: 'TopStep',           profit: { P1: 6,  P2: 6 }, daily: 2, total: 4,  minDays: 5, trailing: true, note: 'Trailing max loss · daily limit' },
+  Other:   { label: 'Other',             profit: { P1: 8,  P2: 5 }, daily: 5, total: 10, minDays: 5, note: 'Generic defaults — verify' },
+}
+const ACCOUNT_SIZES = [10000, 25000, 50000, 100000, 200000]
+const CH_KEY = 'tos_challenge'
+const blankChallenge = () => ({ firm: 'Apex', accountSize: 50000, phase: 'P1', startDate: todayKey(), currentPnl: '', riskPct: '1', celebrated: [], peakPnl: 0 })
+
+function Challenge({ trades, pro = false }) {
+  const [ch, setCh] = useState(() => ({ ...blankChallenge(), ...lsGet(CH_KEY, {}) }))
+  const [confettiRun, setConfettiRun] = useState(false)
+  useEffect(() => { lsSet(CH_KEY, ch) }, [ch])
+  const setC = (k, v) => setCh(c => ({ ...c, [k]: v }))
+
+  const f = CHALLENGE_FIRMS[ch.firm] || CHALLENGE_FIRMS.Other
+  const accountSize = Number(ch.accountSize) || 0
+  const phaseProfitPct = ch.phase === 'Funded' ? 0 : (f.profit[ch.phase] ?? f.profit.P1)
+  const profitTarget = accountSize * phaseProfitPct / 100
+  const dailyDD = accountSize * f.daily / 100
+  const totalDD = accountSize * f.total / 100
+  const minDays = f.minDays
+
+  const pnl = parseFloat(ch.currentPnl) || 0
+  // Funded phase has no profit target → never "passes" / celebrates.
+  const profitProgress = (phaseProfitPct > 0 && profitTarget > 0) ? clamp(pnl / profitTarget, 0, 1) : 0
+  const profitPct = Math.round(profitProgress * 100)
+
+  // days traded (distinct dates) since start
+  const sinceStart = (t) => !ch.startDate || (t.trade_date && t.trade_date >= ch.startDate)
+  const chTrades = trades.filter(sinceStart)
+  const tradedDays = new Set(chTrades.map(t => t.trade_date)).size
+  const start = ch.startDate ? new Date(ch.startDate + 'T00:00:00') : null
+  // weekday count (Mon–Fri) between start and today — "trading day consistency"
+  // should not be diluted by weekends.
+  const weekdaysElapsed = (() => {
+    if (!start) return Math.max(1, tradedDays)
+    let n = 0
+    const end = new Date(todayKey() + 'T00:00:00')
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) { const wd = d.getDay(); if (wd >= 1 && wd <= 5) n++ }
+    return Math.max(1, n)
+  })()
+
+  // P&L derived from logged TOS trades (since start) — used for pace & consistency
+  // so those agree with the Daily P&L chart even when Current P&L is left blank.
+  const oneR = getOneR()
+  const dayPnl = {}
+  for (const t of chTrades) { dayPnl[t.trade_date] = (dayPnl[t.trade_date] || 0) + tradeR(t) * oneR }
+  const loggedPnl = Object.values(dayPnl).reduce((s, v) => s + v, 0)
+  const pacePnl = ch.currentPnl !== '' && !Number.isNaN(parseFloat(ch.currentPnl)) ? pnl : loggedPnl
+
+  // pace
+  const neededPerDay = minDays > 0 ? profitTarget / minDays : profitTarget
+  const currentPerDay = tradedDays > 0 ? pacePnl / tradedDays : 0
+  const onPace = currentPerDay >= neededPerDay
+
+  // sizing recommendations (uses risk-engine stop + challenge risk %)
+  const stop = parseFloat(getRisk().stopLoss) || 20
+  const riskPctNum = parseFloat(ch.riskPct) || 1
+  const dollarRisk = accountSize * riskPctNum / 100
+  const sizeText = (dr) => {
+    const nq = stop > 0 ? dr / (stop * 20) : 0
+    const mnq = stop > 0 ? dr / (stop * 2) : 0
+    if (nq >= 1) return `${Math.floor(nq)} NQ or ${Math.floor(mnq)} MNQ`
+    return `${nq.toFixed(2)} NQ → ${Math.floor(mnq)} MNQ`
+  }
+
+  // daily-limit calculator
+  const tradesBeforeLimit = dailyDD > 0 && dollarRisk > 0 ? Math.floor(dailyDD / dollarRisk) : null
+
+  // consistency — per-day $ from logged R × 1R (dayPnl computed above)
+  const dayVals = Object.entries(dayPnl).map(([date, v]) => ({ date, v })).sort((a, b) => a.date.localeCompare(b.date))
+  const profitDays = dayVals.filter(d => d.v > 0)
+  const totalProfit = profitDays.reduce((s, d) => s + d.v, 0)
+  const largestDay = dayVals.reduce((mx, d) => Math.max(mx, d.v), 0)
+  const largestPct = totalProfit > 0 ? Math.round(largestDay / totalProfit * 100) : 0
+  const dayConsistency = Math.min(100, Math.round(tradedDays / weekdaysElapsed * 100))
+  // Trailing-DD firms (Apex/TopStep) erode the buffer from the equity peak, not
+  // just from negative P&L. Use a high-water mark for those.
+  const totalDDUsed = f.trailing ? Math.max(0, (Number(ch.peakPnl) || 0) - pnl) : Math.max(0, -pnl)
+
+  // track equity high-water mark for trailing-DD firms
+  useEffect(() => {
+    if (pnl > (Number(ch.peakPnl) || 0)) setCh(c => ({ ...c, peakPnl: pnl }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pnl])
+
+  // milestone confetti — `celebrated` tracks the CURRENT hit set (pruned on the
+  // way down) so a brand-new challenge climbing back through 25/50/75/100% fires
+  // again, while a single forward run never double-celebrates.
+  const MILES = [25, 50, 75, 100]
+  const hitMs = MILES.filter(m => profitPct >= m)
+  const hitKey = hitMs.join(',')
+  useEffect(() => {
+    const prev = ch.celebrated || []
+    const fresh = hitMs.some(m => !prev.includes(m))
+    const changed = hitMs.length !== prev.length || hitMs.some(m => !prev.includes(m))
+    if (changed) setCh(c => ({ ...c, celebrated: hitMs }))
+    if (!fresh) return
+    setConfettiRun(true)
+    const t = setTimeout(() => setConfettiRun(false), 4200)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hitKey])
+
+  const firmBtn = (key) => {
+    const info = CHALLENGE_FIRMS[key]
+    const on = ch.firm === key
+    return (
+      <button key={key} type="button" onClick={() => setC('firm', key)} style={{
+        padding: '10px 12px', borderRadius: '9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12.5px', fontWeight: on ? 700 : 500, minHeight: 0, transition: 'all .15s',
+        border: `1px solid ${on ? GOLD_LINE : CARD_BORD}`, background: on ? GOLD_SOFT : 'transparent', color: on ? GOLD : '#999',
+      }}>{info.label}</button>
+    )
+  }
+
+  const passed = profitPct >= 100
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      <Confetti run={confettiRun} />
+
+      {/* Setup */}
+      <div style={card}>
+        <SectionTitle Icon={Trophy}>Challenge Tracker</SectionTitle>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div>
+            <div style={lbl}>Prop Firm</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px' }}>
+              {Object.keys(CHALLENGE_FIRMS).map(firmBtn)}
+            </div>
+            <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>{f.note}</div>
+          </div>
+          <div className="tos-grid-2">
+            <div>
+              <div style={lbl}>Account Size</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(74px, 1fr))', gap: '8px' }}>
+                {ACCOUNT_SIZES.map(sz => {
+                  const on = Number(ch.accountSize) === sz
+                  return (
+                    <button key={sz} type="button" onClick={() => setC('accountSize', sz)} style={{
+                      padding: '10px 6px', borderRadius: '9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12.5px', fontWeight: on ? 700 : 500, minHeight: 0, transition: 'all .15s',
+                      border: `1px solid ${on ? GOLD_LINE : CARD_BORD}`, background: on ? GOLD_SOFT : 'transparent', color: on ? GOLD : '#999',
+                    }}>${sz / 1000}K</button>
+                  )
+                })}
+              </div>
+            </div>
+            <div>
+              <div style={lbl}>Phase</div>
+              <Seg options={[{ label: 'Phase 1', value: 'P1' }, { label: 'Phase 2', value: 'P2' }, { label: 'Funded', value: 'Funded' }]} value={ch.phase} onChange={v => setC('phase', v || 'P1')} />
+            </div>
+          </div>
+          <div className="tos-grid-3">
+            <div><div style={lbl}>Start Date</div><input type="date" className="tos-date" max={todayKey()} value={ch.startDate} onChange={e => setC('startDate', e.target.value)} style={{ ...inp, colorScheme: 'dark' }} /></div>
+            <div><div style={lbl}>Current P&L ($)</div><input value={ch.currentPnl} onChange={e => setC('currentPnl', e.target.value)} type="number" step="50" inputMode="decimal" style={inp} placeholder="0" /></div>
+            <div><div style={lbl}>Risk % per trade</div><input value={ch.riskPct} onChange={e => setC('riskPct', e.target.value)} type="number" step="0.1" min="0.1" inputMode="decimal" style={inp} placeholder="1" /></div>
+          </div>
+        </div>
+      </div>
+
+      {passed && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '18px 22px', borderRadius: '14px', background: 'linear-gradient(135deg, rgba(126,231,135,0.18), rgba(234,179,8,0.12))', border: `1px solid ${GREEN}66`, color: GREEN, fontWeight: 900, fontSize: '18px' }}>
+          <Award size={24} /> CHALLENGE PASSED — profit target reached. Lock it in.
+        </div>
+      )}
+
+      {/* Auto-calculated rules */}
+      <div>
+        <SectionTitle Icon={Shield}>Auto-Calculated Rules — {f.label} ${accountSize / 1000}K · {ch.phase === 'Funded' ? 'Funded' : ch.phase === 'P2' ? 'Phase 2' : 'Phase 1'}</SectionTitle>
+        <div className="tos-grid-4">
+          <StatCard label="Profit Target" value={phaseProfitPct > 0 ? usd(profitTarget) : 'Maintain'} color={GOLD} sub={phaseProfitPct > 0 ? `${phaseProfitPct}% of account` : 'no target — funded'} Icon={Target} />
+          <StatCard label="Max Daily Drawdown" value={f.daily > 0 ? usd(dailyDD) : 'None'} color={f.daily > 0 ? ORANGE : '#888'} sub={f.daily > 0 ? `${f.daily}% of account` : 'trailing only'} Icon={TrendingDown} />
+          <StatCard label="Max Total Drawdown" value={usd(totalDD)} color={RED} sub={`${f.total}% of account`} Icon={AlertTriangle} />
+          <StatCard label="Min Trading Days" value={minDays} color={BLUE} sub={`${tradedDays} done`} Icon={Calendar} />
+        </div>
+      </div>
+
+      {/* Progress tracking */}
+      <div style={card}>
+        <SectionTitle Icon={Activity}>Progress Tracking</SectionTitle>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          {phaseProfitPct > 0 && <ProgressBar label="Profit Target" value={Math.max(0, pnl)} max={profitTarget} dangerHigh={false} valueText={`${usd(pnl)} / ${usd(profitTarget)} (${profitPct}%)`} />}
+          <ProgressBar label="Min Trading Days" value={tradedDays} max={minDays} dangerHigh={false} valueText={`${tradedDays} / ${minDays} days`} />
+          {totalDD > 0 && <ProgressBar label="Total Drawdown Used" value={totalDDUsed} max={totalDD} dangerHigh valueText={`${usd(totalDDUsed)} / ${usd(totalDD)}`} />}
+        </div>
+        {phaseProfitPct > 0 && (
+          <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: onPace ? GREEN : ORANGE, fontWeight: 600 }}>
+            {onPace ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+            Pace: need {usd(neededPerDay)}/day · current {usd(currentPerDay)}/day — {onPace ? 'on track' : 'slightly behind'}
+          </div>
+        )}
+      </div>
+
+      {/* Milestones */}
+      {phaseProfitPct > 0 && (
+      <div style={card}>
+        <SectionTitle Icon={Award}>Milestones</SectionTitle>
+        <div className="tos-grid-4">
+          {MILES.map(m => {
+            const hit = profitPct >= m
+            const c = m === 100 ? GREEN : GOLD
+            return (
+              <div key={m} style={{ padding: '16px 12px', borderRadius: '12px', textAlign: 'center', background: hit ? `${c}14` : BG, border: `1px solid ${hit ? c + '55' : CARD_BORD}`, transition: 'all .3s' }}>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px' }}>
+                  {hit ? <CheckCircle size={22} color={c} /> : <Target size={22} color="#444" />}
+                </div>
+                <div style={{ fontSize: '18px', fontWeight: 900, color: hit ? c : '#555' }}>{m}%</div>
+                <div style={{ fontSize: '10px', color: '#666', marginTop: '3px' }}>{m === 100 ? 'PASSED' : usd(profitTarget * m / 100)}</div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+      )}
+
+      {/* Smart sizing + daily limit */}
+      <div className="tos-grid-2">
+        <div style={card}>
+          <SectionTitle Icon={Zap}>Smart Sizing</SectionTitle>
+          <div style={{ fontSize: '12px', color: '#999', marginBottom: '12px', lineHeight: 1.6 }}>
+            With ${accountSize / 1000}K {f.label} at {riskPctNum}% risk ({usd(dollarRisk)}), {stop}pt stop:
+          </div>
+          {[
+            { l: 'Normal days', v: sizeText(dollarRisk), c: GREEN, Icon: CheckCircle },
+            { l: 'After 1 loss (half risk)', v: sizeText(dollarRisk / 2), c: ORANGE, Icon: AlertTriangle },
+          ].map(row => (
+            <div key={row.l} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 0', borderTop: `1px solid #161616`, gap: '10px' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#aaa' }}><row.Icon size={14} color={row.c} /> {row.l}</span>
+              <span style={{ fontSize: '13px', fontWeight: 700, color: row.c, textAlign: 'right' }}>{row.v}</span>
+            </div>
+          ))}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 0', borderTop: `1px solid #161616` }}>
+            <span style={{ fontSize: '12px', color: '#aaa' }}>Daily target pace</span>
+            <span style={{ fontSize: '13px', fontWeight: 700, color: GOLD }}>{usd(neededPerDay)}/day</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 0', borderTop: `1px solid #161616` }}>
+            <span style={{ fontSize: '12px', color: '#aaa' }}>Current pace</span>
+            <span style={{ fontSize: '13px', fontWeight: 700, color: onPace ? GREEN : ORANGE }}>{usd(currentPerDay)}/day</span>
+          </div>
+        </div>
+
+        <div style={card}>
+          <SectionTitle Icon={Crosshair}>Daily Limit Calculator</SectionTitle>
+          {f.daily > 0 ? (
+            <>
+              <div style={{ fontSize: '13px', color: '#ccc', lineHeight: 1.7 }}>
+                Daily drawdown limit: <b style={{ color: ORANGE }}>{usd(dailyDD)}</b>.<br />
+                At {riskPctNum}% risk ({usd(dollarRisk)}/trade) that's <b style={{ color: '#fff' }}>{tradesBeforeLimit}</b> full-risk losses before you hit the limit.
+              </div>
+              <div style={{ marginTop: '14px', padding: '12px 14px', borderRadius: '10px', background: BG, border: `1px solid ${GOLD_LINE}`, color: GOLD, fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ShieldCheck size={16} /> Recommended: max 2 trades per day
+              </div>
+            </>
+          ) : (
+            <div style={{ fontSize: '13px', color: '#999', lineHeight: 1.7 }}>
+              {f.label} uses a <b style={{ color: '#ccc' }}>trailing</b> drawdown with no fixed daily limit. Protect the <b style={{ color: RED }}>{usd(totalDD)}</b> total buffer — recommended max 2 trades per day.
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Consistency */}
+      <div style={card}>
+        <SectionTitle Icon={Gem}>Consistency Score</SectionTitle>
+        <div className="tos-grid-3" style={{ marginBottom: '14px' }}>
+          <StatCard label="Trading Day Consistency" value={`${dayConsistency}%`} color={dayConsistency >= 50 ? GREEN : YELLOW} sub={`${tradedDays} of ${weekdaysElapsed} weekdays`} Icon={Calendar} />
+          <StatCard label="Largest Single Day" value={totalProfit > 0 ? usd(largestDay) : '—'} color={largestPct > 40 ? RED : GREEN} sub={totalProfit > 0 ? `${largestPct}% of profit` : 'no profit data'} Icon={Flame} />
+          <StatCard label="Active Days" value={tradedDays} color={BLUE} sub="logged in tos_trades" Icon={Activity} />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '12px 14px', borderRadius: '10px', background: largestPct > 40 ? 'rgba(255,107,107,0.08)' : BG, border: `1px solid ${largestPct > 40 ? RED + '44' : CARD_BORD}`, fontSize: '12.5px', color: largestPct > 40 ? RED : '#999', lineHeight: 1.5 }}>
+          {largestPct > 40 ? <AlertTriangle size={15} /> : <CheckCircle size={15} color={GREEN} />}
+          {totalProfit > 0
+            ? `Your largest single day is ${largestPct}% of total profit — firms flag above 40%.`
+            : 'Log winning days in the Trade Log to measure P&L consistency.'}
+        </div>
+      </div>
+
+      {pro && (
+        <div style={card}>
+          <SectionTitle Icon={BarChart2}>Daily P&L Since Start (Pro)</SectionTitle>
+          {dayVals.length === 0 ? (
+            <div style={{ padding: '30px', textAlign: 'center', color: '#555', fontSize: '13px' }}>No trades logged since the start date.</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={dayVals.map(d => ({ ...d, label: d.date.slice(5) }))} margin={{ top: 6, right: 8, bottom: 0, left: -8 }}>
+                <CartesianGrid stroke="#161616" vertical={false} />
+                <XAxis dataKey="label" tick={axTick} {...noAxis} />
+                <YAxis tick={axTick} {...noAxis} tickFormatter={usdK} />
+                <Tooltip contentStyle={chartTooltip} formatter={(v) => [usd(v), 'P&L']} />
+                <ReferenceLine y={0} stroke="#333" />
+                <Bar dataKey="v" radius={[3, 3, 0, 0]} maxBarSize={30}>
+                  {dayVals.map((d, i) => <Cell key={i} fill={d.v >= 0 ? GREEN : RED} fillOpacity={0.85} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      )}
+
+      <div style={{ fontSize: '11px', color: '#555', textAlign: 'center', lineHeight: 1.6 }}>
+        Rule sets are auto-calculated estimates (% of account). Always verify the exact numbers with your prop firm's program.
+      </div>
+    </div>
+  )
+}
+
 // ─── SQL setup notice (shown when tos_trades table is absent) ───────────────
 const TOS_SQL = `CREATE TABLE tos_trades (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1427,7 +2270,7 @@ function SqlNotice() {
         The <code style={{ color: GOLD }}>tos_trades</code> table doesn't exist in Supabase yet. Run this SQL in your Supabase project (SQL Editor) once, then reload. The Daily Plan, Risk Engine and Funded pages work without it (they use local storage).
       </div>
       <pre style={{ background: BG, border: `1px solid ${CARD_BORD}`, borderRadius: '10px', padding: '16px', fontSize: '11.5px', color: '#bbb', overflowX: 'auto', lineHeight: 1.6, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{TOS_SQL}</pre>
-      <button onClick={copy} style={{ ...goldBtn, marginTop: '14px' }}>{copied ? '✓ Copied' : 'Copy SQL'}</button>
+      <button onClick={copy} style={{ ...goldBtn, marginTop: '14px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>{copied ? <><Check size={14} strokeWidth={3} /> Copied</> : 'Copy SQL'}</button>
     </div>
   )
 }
@@ -1435,12 +2278,14 @@ function SqlNotice() {
 // ════════════════════════════════════════════════════════════════════════════
 //  TOS SHELL — sub-navigation + shared data
 // ════════════════════════════════════════════════════════════════════════════
+const UI_KEY = 'tos_ui_mode'
 const TABS = [
   { id: 'plan',        label: 'Daily Plan',  Icon: ClipboardList },
   { id: 'log',         label: 'Trade Log',   Icon: BookOpen },
   { id: 'risk',        label: 'Risk Engine', Icon: Shield },
   { id: 'performance', label: 'Performance', Icon: BarChart2 },
   { id: 'funded',      label: 'Funded',      Icon: Wallet },
+  { id: 'challenge',   label: 'Challenge',   Icon: Trophy },
   { id: 'review',      label: 'Review',      Icon: RefreshCw },
 ]
 
@@ -1448,11 +2293,14 @@ const TOS_CSS = `
 @keyframes tosEnter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes tosBannerPulse { 0%,100% { box-shadow: 0 0 0 0 transparent; } 50% { box-shadow: 0 0 20px 1px currentColor; } }
 @keyframes tosSpin { to { transform: rotate(360deg); } }
+@keyframes tosConfetti { 0% { transform: translateY(0) rotate(0deg); opacity: 1; } 100% { transform: translateY(110vh) rotate(720deg); opacity: 0; } }
+@keyframes tosMeter { from { width: 0; } }
 .tos-spin { animation: tosSpin .9s linear infinite; }
 .tos-tabs::-webkit-scrollbar { height: 0; display: none; }
 .tos-chipgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
 .tos-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .tos-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.tos-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .tos-grid-plan { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
 .tos-grid-log { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 14px; align-items: start; }
 .tos-grid-risk { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 14px; align-items: start; }
@@ -1461,7 +2309,7 @@ const TOS_CSS = `
   .tos-grid-plan, .tos-grid-log, .tos-grid-risk { grid-template-columns: 1fr !important; }
 }
 @media (max-width: 768px) {
-  .tos-grid-3 { grid-template-columns: 1fr 1fr !important; }
+  .tos-grid-3, .tos-grid-4 { grid-template-columns: 1fr 1fr !important; }
   .tos-chipgrid { grid-template-columns: 1fr 1fr !important; }
 }
 @media (max-width: 480px) {
@@ -1470,11 +2318,65 @@ const TOS_CSS = `
 }
 `
 
+// Lightweight CSS confetti burst — fired on challenge milestones.
+function Confetti({ run }) {
+  if (!run) return null
+  const colors = [GOLD, GREEN, BLUE, '#ff6eb4', '#a78bfa', ORANGE]
+  return (
+    <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 9998, overflow: 'hidden' }}>
+      {Array.from({ length: 40 }).map((_, i) => {
+        const left = (i * 2.5 + (i % 3) * 7) % 100
+        const delay = (i % 10) * 0.09
+        const dur = 2.4 + (i % 5) * 0.35
+        const size = 7 + (i % 4) * 2
+        return <span key={i} style={{ position: 'absolute', top: '-24px', left: `${left}%`, width: `${size}px`, height: `${size}px`, background: colors[i % colors.length], borderRadius: i % 2 ? '50%' : '2px', animation: `tosConfetti ${dur}s ${delay}s ease-in forwards` }} />
+      })}
+    </div>
+  )
+}
+
+// Section header used across the new analytics blocks.
+function SectionTitle({ Icon, children, action }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', gap: '10px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
+        {Icon && <Icon size={16} color={GOLD} />}
+        <div style={{ fontSize: '14px', fontWeight: 800, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{children}</div>
+      </div>
+      {action}
+    </div>
+  )
+}
+
+// Win-rate split bar used by the Edge Tracker.
+function SplitBar({ label, a, b, aLabel = 'A', bLabel = 'B' }) {
+  // a / b = { wr, n } objects
+  const row = (lab, d, color) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+      <span style={{ fontSize: '11px', color: '#888', width: '92px', flexShrink: 0 }}>{lab}</span>
+      <div style={{ flex: 1, height: '8px', borderRadius: '5px', background: '#161616', overflow: 'hidden' }}>
+        <div style={{ width: `${d.n ? d.wr : 0}%`, height: '100%', background: color, borderRadius: '5px', transition: 'width .4s' }} />
+      </div>
+      <span style={{ fontSize: '12px', fontWeight: 700, color: d.n ? color : '#444', width: '64px', textAlign: 'right', flexShrink: 0 }}>{d.n ? `${Math.round(d.wr)}%` : '—'}<span style={{ color: '#555', fontWeight: 400 }}> ({d.n})</span></span>
+    </div>
+  )
+  return (
+    <div style={{ padding: '12px 0', borderTop: `1px solid #161616` }}>
+      <div style={{ fontSize: '12px', color: '#ccc', fontWeight: 600, marginBottom: '9px' }}>{label}</div>
+      {row(aLabel, a, GREEN)}
+      {row(bLabel, b, BLUE)}
+    </div>
+  )
+}
+
 export function TOSPage({ session }) {
   const [tab, setTab] = useState('plan')
+  const [uiMode, setUiMode] = useState(() => (lsGet(UI_KEY, 'standard') === 'pro' ? 'pro' : 'standard'))
   const [trades, setTrades] = useState([])
   const [loading, setLoading] = useState(true)
   const [tableMissing, setTableMissing] = useState(false)
+  const pro = uiMode === 'pro'
+  const setMode = (m) => { setUiMode(m); lsSet(UI_KEY, m) }
 
   useEffect(() => {
     let cancelled = false
@@ -1521,13 +2423,29 @@ export function TOSPage({ session }) {
         boxShadow: `0 0 0 1px ${GOLD}11 inset`,
       }}>
         <div style={{ position: 'absolute', top: '-45%', right: '-8%', width: '300px', height: '300px', borderRadius: '50%', background: `radial-gradient(circle, ${GOLD}44 0%, transparent 65%)`, filter: 'blur(60px)', pointerEvents: 'none' }} />
-        <div style={{ position: 'relative' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '8px' }}>
-            <Brain size={20} color={GOLD} />
-            <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.2em', color: GOLD, textTransform: 'uppercase' }}>Private System</div>
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '8px' }}>
+              <Brain size={20} color={GOLD} />
+              <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.2em', color: GOLD, textTransform: 'uppercase' }}>Private System</div>
+            </div>
+            <h1 style={{ fontSize: '38px', fontWeight: 900, letterSpacing: '-1.5px', color: '#fff', lineHeight: 1, marginBottom: '8px' }}>Trading OS</h1>
+            <div style={{ fontSize: '13.5px', color: '#999' }}>Plan → execute → enforce → measure → improve. Your edge, operationalised.</div>
           </div>
-          <h1 style={{ fontSize: '38px', fontWeight: 900, letterSpacing: '-1.5px', color: '#fff', lineHeight: 1, marginBottom: '8px' }}>Trading OS</h1>
-          <div style={{ fontSize: '13.5px', color: '#999' }}>Plan → execute → enforce → measure → improve. Your edge, operationalised.</div>
+          {/* UI version switcher */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px', borderRadius: '11px', background: 'rgba(0,0,0,0.35)', border: `1px solid ${CARD_BORD}`, flexShrink: 0 }}>
+            {[{ id: 'standard', label: 'Standard', Icon: Layers }, { id: 'pro', label: 'Pro', Icon: Gem }].map(m => {
+              const on = uiMode === m.id
+              return (
+                <button key={m.id} onClick={() => setMode(m.id)} style={{
+                  display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', cursor: 'pointer', fontFamily: 'inherit', minHeight: 0,
+                  border: 'none', background: on ? GOLD : 'transparent', color: on ? '#000' : '#999', fontSize: '12.5px', fontWeight: on ? 800 : 600, transition: 'all .15s',
+                }}>
+                  <m.Icon size={14} /> {m.label}
+                </button>
+              )
+            })}
+          </div>
         </div>
       </div>
 
@@ -1557,12 +2475,13 @@ export function TOSPage({ session }) {
         </div>
       ) : (
         <>
-          {tab === 'plan'        && <DailyPlan />}
-          {tab === 'log'         && <TradeLog session={session} trades={trades} tableMissing={tableMissing} onAdded={onAdded} onDeleted={onDeleted} />}
-          {tab === 'risk'        && <RiskEngine lossTakenToday={lossTakenToday} />}
-          {tab === 'performance' && <Performance trades={trades} tableMissing={tableMissing} />}
-          {tab === 'funded'      && <Funded />}
-          {tab === 'review'      && <Review trades={trades} tableMissing={tableMissing} onUpdated={onUpdated} />}
+          {tab === 'plan'        && <DailyPlan pro={pro} />}
+          {tab === 'log'         && <TradeLog session={session} trades={trades} tableMissing={tableMissing} onAdded={onAdded} onDeleted={onDeleted} pro={pro} />}
+          {tab === 'risk'        && <RiskEngine lossTakenToday={lossTakenToday} trades={trades} pro={pro} />}
+          {tab === 'performance' && <Performance trades={trades} tableMissing={tableMissing} pro={pro} />}
+          {tab === 'funded'      && <Funded pro={pro} trades={trades} />}
+          {tab === 'challenge'   && <Challenge session={session} trades={trades} tableMissing={tableMissing} pro={pro} />}
+          {tab === 'review'      && <Review trades={trades} tableMissing={tableMissing} onUpdated={onUpdated} pro={pro} />}
         </>
       )}
     </div>
