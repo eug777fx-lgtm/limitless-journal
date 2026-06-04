@@ -57,8 +57,16 @@ const pct   = (n) => `${Math.round(Number(n) || 0)}%`
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
 
 // ─── Risk settings (shared between Risk Engine + Performance) ───────────────
+// Futures contracts the Risk Engine sizes for. `micro` points to the smaller
+// sibling the engine auto-switches to when raw size < 1 (NQ→MNQ, ES→MES, ×10).
+const RISK_INSTRUMENTS = {
+  NQ:  { label: 'NQ',  name: 'E-mini NASDAQ', pointValue: 20, micro: 'MNQ' },
+  MNQ: { label: 'MNQ', name: 'Micro NASDAQ',  pointValue: 2,  micro: null },
+  ES:  { label: 'ES',  name: 'E-mini S&P',    pointValue: 50, micro: 'MES' },
+  MES: { label: 'MES', name: 'Micro S&P',     pointValue: 5,  micro: null },
+}
 const RISK_KEY = 'tos_risk_settings'
-const defaultRisk = { accountSize: '10000', riskPct: '1', stopLoss: '20', valuePerPoint: '20' }
+const defaultRisk = { accountSize: '10000', riskPct: '1', stopLoss: '20', instrument: 'NQ' }
 const getRisk = () => ({ ...defaultRisk, ...lsGet(RISK_KEY, {}) })
 const getOneR = () => {
   const r = getRisk()
@@ -725,15 +733,53 @@ function RiskEngine({ lossTakenToday }) {
   const halfActive = halfManual || lossTakenToday
   const set = (k) => (e) => setR(prev => ({ ...prev, [k]: e.target.value }))
 
+  const inst  = RISK_INSTRUMENTS[r.instrument] || RISK_INSTRUMENTS.NQ
   const acc   = parseFloat(r.accountSize) || 0
   const pctV  = parseFloat(r.riskPct) || 0
   const stop  = parseFloat(r.stopLoss) || 0
-  const vpp   = parseFloat(r.valuePerPoint) || 0
   const effPct = halfActive ? pctV / 2 : pctV
   const dollarRisk = acc * effPct / 100
-  const perContractRisk = stop * vpp
-  const positionSize = perContractRisk > 0 ? dollarRisk / perContractRisk : 0
-  const maxContracts = Math.floor(positionSize)
+  const perContractRisk = stop * inst.pointValue
+  const rawContracts = perContractRisk > 0 ? dollarRisk / perContractRisk : 0
+
+  // Contract recommendation with automatic micro-switch.
+  //  ≥1 whole contract → round down, trade the selected instrument.
+  //  <1 contract       → switch to the micro sibling (×10 size: NQ→MNQ, ES→MES).
+  let rec = null
+  if (perContractRisk > 0 && dollarRisk > 0) {
+    if (rawContracts >= 1) {
+      rec = { instrument: inst.label, pointValue: inst.pointValue, contracts: Math.floor(rawContracts), micro: false }
+    } else if (inst.micro) {
+      const micro = RISK_INSTRUMENTS[inst.micro]
+      const microRaw = dollarRisk / (stop * micro.pointValue) // == rawContracts × (inst.pointValue / micro.pointValue)
+      rec = { instrument: micro.label, pointValue: micro.pointValue, contracts: Math.floor(microRaw), micro: true, from: inst.label }
+    } else {
+      // already the micro — nothing smaller to switch to
+      rec = { instrument: inst.label, pointValue: inst.pointValue, contracts: Math.floor(rawContracts), micro: false }
+    }
+  }
+  const tooSmall = rec && rec.contracts < 1
+  const actualRisk = rec && !tooSmall ? rec.contracts * stop * rec.pointValue : 0
+
+  // Recommendation banner appearance
+  let recView
+  if (!rec) {
+    recView = { color: '#777', bg: BG, border: CARD_BORD, icon: '◷', main: 'Enter account size, risk % and stop', sub: '' }
+  } else if (tooSmall) {
+    recView = { color: ORANGE, bg: 'rgba(255,159,67,0.10)', border: `${ORANGE}55`, icon: '⚠️', main: `Below 1 ${rec.instrument} contract`, sub: 'Reduce the stop or increase risk % to size up' }
+  } else if (rec.micro) {
+    recView = { color: GOLD, bg: GOLD_SOFT, border: GOLD_LINE, icon: '⚡', main: `Trade ${rec.contracts} ${rec.instrument}`, sub: `${rawContracts.toFixed(2)} ${rec.from} (under 1) → auto-switched to micro ${rec.instrument}` }
+  } else {
+    recView = { color: GREEN, bg: 'rgba(126,231,135,0.10)', border: 'rgba(126,231,135,0.4)', icon: '✅', main: `Trade ${rec.contracts} ${rec.instrument} contract${rec.contracts !== 1 ? 's' : ''}`, sub: `${rawContracts.toFixed(2)} raw → rounded down` }
+  }
+
+  const specRows = [
+    { l: 'Dollar Risk', v: dollarRisk > 0 ? usd(dollarRisk) : '—', c: GOLD },
+    { l: 'Instrument', v: `${inst.label} @ $${inst.pointValue}/pt` },
+    { l: 'Stop Loss', v: stop > 0 ? `${stop} pts` : '—' },
+    { l: 'Per-Contract Risk', v: perContractRisk > 0 ? usd(perContractRisk) : '—' },
+    { l: 'Raw Size', v: perContractRisk > 0 ? `${rawContracts.toFixed(2)} ${inst.label} contracts` : '—' },
+  ]
 
   const rrRows = [3, 5, 10, 20]
 
@@ -757,10 +803,28 @@ function RiskEngine({ lossTakenToday }) {
               <Shield size={16} color={GOLD} /> Inputs
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div><div style={lbl}>Account Size ($)</div><input value={r.accountSize} onChange={set('accountSize')} inputMode="decimal" style={inp} placeholder="10000" /></div>
+              <div><div style={lbl}>Account Size ($)</div><input value={r.accountSize} onChange={set('accountSize')} type="number" step="100" min="0" inputMode="decimal" style={inp} placeholder="10000" /></div>
               <div><div style={lbl}>Risk % per trade</div><input value={r.riskPct} onChange={set('riskPct')} type="number" step="0.1" min="0.1" inputMode="decimal" style={inp} placeholder="1" /></div>
-              <div><div style={lbl}>Stop Loss (points / pips)</div><input value={r.stopLoss} onChange={set('stopLoss')} inputMode="decimal" style={inp} placeholder="20" /></div>
-              <div><div style={lbl}>Value per point ($ / contract)</div><input value={r.valuePerPoint} onChange={set('valuePerPoint')} inputMode="decimal" style={inp} placeholder="20" /><div style={{ fontSize: '10px', color: '#555', marginTop: '5px' }}>NQ ≈ $20 · ES ≈ $50 · MNQ ≈ $2 · MES ≈ $5</div></div>
+              <div><div style={lbl}>Stop Loss (points)</div><input value={r.stopLoss} onChange={set('stopLoss')} type="number" step="0.25" min="0" inputMode="decimal" style={inp} placeholder="20" /></div>
+
+              <div>
+                <div style={lbl}>Instrument</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  {Object.entries(RISK_INSTRUMENTS).map(([key, info]) => {
+                    const active = r.instrument === key
+                    return (
+                      <button key={key} type="button" onClick={() => setR(prev => ({ ...prev, instrument: key }))} style={{
+                        padding: '10px 12px', borderRadius: '9px', textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s', minHeight: 0,
+                        border: `1px solid ${active ? GOLD_LINE : CARD_BORD}`,
+                        background: active ? GOLD_SOFT : 'transparent',
+                      }}>
+                        <div style={{ fontSize: '14px', fontWeight: 800, color: active ? GOLD : '#ccc' }}>{info.label}</div>
+                        <div style={{ fontSize: '10px', color: active ? GOLD : '#666', marginTop: '2px' }}>{info.name} · ${info.pointValue}/pt</div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderRadius: '10px', background: BG, border: `1px solid ${halfActive ? ORANGE + '55' : CARD_BORD}` }}>
                 <div>
@@ -777,14 +841,33 @@ function RiskEngine({ lossTakenToday }) {
 
           {/* Outputs */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <div className="tos-grid-3">
-              <StatCard label="Dollar Risk" value={usd(dollarRisk)} color={GOLD} Icon={DollarSign} sub={halfActive ? 'half risk' : `${effPct}% of acct`} />
-              <StatCard label="Position Size" value={positionSize ? positionSize.toFixed(2) : '—'} sub="raw" Icon={Scale} />
-              <StatCard label="Max Contracts" value={perContractRisk > 0 ? maxContracts : '—'} color={GREEN} Icon={Crosshair} sub="rounded down" />
+            {/* Position sizing */}
+            <div style={card}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                <div style={{ ...lbl, marginBottom: 0 }}>Position Sizing</div>
+                {halfActive && <span style={{ fontSize: '10px', color: ORANGE, fontWeight: 700, letterSpacing: '0.08em' }}>HALF RISK</span>}
+              </div>
+              <div>
+                {specRows.map((row, i) => (
+                  <div key={row.l} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 0', borderTop: i === 0 ? 'none' : '1px solid #161616' }}>
+                    <span style={{ fontSize: '12px', color: '#888' }}>{row.l}</span>
+                    <span style={{ fontSize: '14px', fontWeight: 700, color: row.c || '#fff' }}>{row.v}</span>
+                  </div>
+                ))}
+              </div>
+              {/* Recommendation */}
+              <div style={{ marginTop: '14px', padding: '16px', borderRadius: '12px', background: recView.bg, border: `1px solid ${recView.border}`, textAlign: 'center' }}>
+                <div style={{ fontSize: '20px', fontWeight: 900, color: recView.color, letterSpacing: '-0.3px' }}>{recView.icon} {recView.main}</div>
+                {recView.sub && <div style={{ fontSize: '12px', color: '#999', marginTop: '6px', lineHeight: 1.5 }}>{recView.sub}</div>}
+              </div>
             </div>
 
+            {/* Expected gains */}
             <div style={card}>
-              <div style={{ ...lbl, marginBottom: '14px' }}>Expected Gains</div>
+              <div style={{ ...lbl, marginBottom: '6px' }}>Expected Gains</div>
+              <div style={{ fontSize: '11px', color: '#666', marginBottom: '12px' }}>
+                Based on {rec && !tooSmall ? `${rec.contracts} ${rec.instrument}` : '—'}{actualRisk > 0 ? ` · actual risk ${usd(actualRisk)}` : ''}
+              </div>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr>
@@ -796,13 +879,13 @@ function RiskEngine({ lossTakenToday }) {
                   {rrRows.map(rrV => (
                     <tr key={rrV}>
                       <td style={{ padding: '12px 0', borderTop: '1px solid #161616', fontSize: '13px', color: '#ddd', fontWeight: 600 }}>1 : {rrV}</td>
-                      <td style={{ padding: '12px 0', borderTop: '1px solid #161616', fontSize: '15px', color: GREEN, fontWeight: 800, textAlign: 'right' }}>{usd(dollarRisk * rrV)}</td>
+                      <td style={{ padding: '12px 0', borderTop: '1px solid #161616', fontSize: '15px', color: actualRisk > 0 ? GREEN : '#444', fontWeight: 800, textAlign: 'right' }}>{actualRisk > 0 ? usd(actualRisk * rrV) : '—'}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
               <div style={{ marginTop: '14px', fontSize: '11px', color: '#555', lineHeight: 1.6 }}>
-                Per-contract risk: {perContractRisk > 0 ? usd(perContractRisk) : '—'} ({stop || '—'} pts × {usd(vpp)}). Position size = dollar risk ÷ per-contract risk.
+                Gains reflect the rounded position ({rec && !tooSmall ? `${rec.contracts} × ${stop || '—'} pts × $${rec.pointValue}/pt` : 'no valid size yet'}), not the raw target risk.
               </div>
             </div>
           </div>
