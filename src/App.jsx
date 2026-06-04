@@ -16,9 +16,10 @@ import {
   Bell, Megaphone, Link2, Download, ChevronDown, RefreshCw,
   Mail, Ban, Flag, Activity, MessageSquare, Save,
   Globe, Video, Flame, Play, Clock, Award, Heart,
-  Trophy, FileText, ExternalLink, Calendar,
+  Trophy, FileText, ExternalLink, Calendar, Brain,
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
+import { TOSPage } from './TOS.jsx'
 
 // ─── Global CSS ───────────────────────────────────────────────
 const ANIM_CSS = `
@@ -7136,12 +7137,61 @@ export default function App() {
           </button>
         ))}
 
+        {/* TOS — private system, admin only, gold accent */}
+        {session?.user?.email === ADMIN_EMAIL && (
+          <button
+            onClick={() => setPage('tos')}
+            style={{
+              marginTop: '24px',
+              background: page === 'tos' ? 'rgba(234, 179, 8, 0.28)' : 'rgba(234, 179, 8, 0.15)',
+              border: page === 'tos' ? '1px solid rgba(234, 179, 8, 0.6)' : '1px solid rgba(234, 179, 8, 0.3)',
+              color: '#eab308',
+              borderRadius: '10px',
+              padding: '10px 14px',
+              cursor: 'pointer',
+              textAlign: 'left',
+              fontSize: '13px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              width: '100%',
+              fontFamily: 'inherit',
+              fontWeight: page === 'tos' ? '600' : '500',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => {
+              if (page !== 'tos') {
+                e.currentTarget.style.background = 'rgba(234, 179, 8, 0.22)'
+                e.currentTarget.style.border = '1px solid rgba(234, 179, 8, 0.45)'
+              }
+            }}
+            onMouseLeave={e => {
+              if (page !== 'tos') {
+                e.currentTarget.style.background = 'rgba(234, 179, 8, 0.15)'
+                e.currentTarget.style.border = '1px solid rgba(234, 179, 8, 0.3)'
+              }
+            }}
+          >
+            <Brain size={18} color="#eab308" />
+            <span style={{ flex: 1 }}>TOS</span>
+            <span style={{
+              fontSize: '9px',
+              background: '#eab308',
+              color: '#000',
+              padding: '2px 6px',
+              borderRadius: '99px',
+              fontWeight: 700,
+              letterSpacing: '0.05em',
+            }}>SYS</span>
+          </button>
+        )}
+
         {/* Network — admin only, accent purple, NEW badge */}
         {session?.user?.email === ADMIN_EMAIL && (
           <button
             onClick={() => setPage('network')}
             style={{
-              marginTop: '24px',
+              marginTop: '8px',
               background: page === 'network' ? 'rgba(139, 92, 246, 0.3)' : 'rgba(139, 92, 246, 0.12)',
               border: page === 'network' ? '1px solid rgba(139, 92, 246, 0.6)' : '1px solid rgba(139, 92, 246, 0.25)',
               color: page === 'network' ? '#c4b5fd' : '#a78bfa',
@@ -7274,6 +7324,7 @@ export default function App() {
         )}
         {page === 'news' && featureFlags.newsCalendar && <NewsCalendar />}
         {page === 'network'     && <NetworkPage session={session} setPage={setPage} profile={profile} />}
+        {page === 'tos'         && session?.user?.email === ADMIN_EMAIL && <TOSPage session={session} />}
         {page === 'plan'        && <TradingPlan flags={featureFlags} />}
         {page === 'settings'    && <Settings theme={theme} setTheme={handleSetTheme} session={session} profile={profile} setProfile={setProfile} glassMode={glassMode} setGlassMode={v => { setGlassMode(v); localStorage.setItem('glass_mode', v) }} onLogout={logout} trades={effectiveTrades} demoMode={demoMode} setDemoMode={setDemoMode} />}
         {page === 'admin'       && <AdminPanel session={session} setPage={setPage} />}
@@ -7346,12 +7397,43 @@ export default function App() {
               </button>
             ))}
 
+            {/* TOS — private system, admin only, gold accent */}
+            {session?.user?.email === ADMIN_EMAIL && (
+              <button
+                onClick={() => { setMobileSidebarOpen(false); setTimeout(() => setPage('tos'), 20) }}
+                style={{
+                  marginTop: '24px',
+                  background: page === 'tos' ? 'rgba(234, 179, 8, 0.28)' : 'rgba(234, 179, 8, 0.15)',
+                  border: page === 'tos' ? '1px solid rgba(234, 179, 8, 0.6)' : '1px solid rgba(234, 179, 8, 0.3)',
+                  color: '#eab308',
+                  borderRadius: '10px', padding: '11px 13px',
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  width: '100%', textAlign: 'left',
+                  cursor: 'pointer', fontFamily: 'inherit',
+                  fontSize: '13px', fontWeight: page === 'tos' ? '600' : '500',
+                  transition: 'all 0.15s', marginBottom: '2px', minHeight: '44px',
+                }}
+              >
+                <Brain size={16} color="#eab308" />
+                <span style={{ flex: 1 }}>TOS</span>
+                <span style={{
+                  fontSize: '9px',
+                  background: '#eab308',
+                  color: '#000',
+                  padding: '2px 6px',
+                  borderRadius: '99px',
+                  fontWeight: 700,
+                  letterSpacing: '0.05em',
+                }}>SYS</span>
+              </button>
+            )}
+
             {/* Network — admin only, accent purple, NEW badge */}
             {session?.user?.email === ADMIN_EMAIL && (
               <button
                 onClick={() => { setMobileSidebarOpen(false); setTimeout(() => setPage('network'), 20) }}
                 style={{
-                  marginTop: '24px',
+                  marginTop: '8px',
                   background: page === 'network' ? 'rgba(139, 92, 246, 0.3)' : 'rgba(139, 92, 246, 0.12)',
                   border: page === 'network' ? '1px solid rgba(139, 92, 246, 0.6)' : '1px solid rgba(139, 92, 246, 0.25)',
                   color: page === 'network' ? '#c4b5fd' : '#a78bfa',
