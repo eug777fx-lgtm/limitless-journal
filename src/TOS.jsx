@@ -104,7 +104,7 @@ const OTE_LEVELS       = ['0.62', '0.705', '0.79']
 const ENTRY_TRIGGERS   = ['Rejection Block', 'Wick CE']
 const LOSS_REASONS     = ['Bias Error', 'Entry Error', 'Risk Error', 'Psychology Error', 'Market Conditions']
 const NO_REASONS       = ['Wrong Bias', 'No Liquidity Sweep', 'No Rejection Block', 'No OTE', 'No Key Open', 'Chased Entry', 'Ignored Risk Rules', 'Emotional Trade', 'Revenge Trade']
-const FUNDED_STATUS    = ['Challenge', 'Verification', 'Funded']
+const FUNDED_STATUS    = ['Challenge', 'Funded']
 
 const INSTRUMENTS = {
   Futures: ['NQ', 'ES', 'YM', 'RTY', 'CL', 'GC', 'SI', 'ZB', 'ZN', 'MNQ', 'MES', 'MYM'],
@@ -276,17 +276,27 @@ const blankPlan = () => ({
   ote: [], entryTrigger: '',
 })
 
+// Weighted scoring — a strong setup can score high WITHOUT every box ticked.
+// Only Bias and Entry Trigger are required (0 or 10 each); the rest reward more
+// confluence. Key Opens + OTE are optional bonuses, so the raw max (58) is
+// capped at 50.
 function computeQuality(p) {
-  const biasQ       = (p.bias ? 5 : 0) + (p.biasReason.trim().length >= 15 ? 5 : p.biasReason.trim() ? 3 : 0)
-  const locationQ   = Math.round((p.targets.length / LIQ_TARGETS.length) * 5 + (p.poi.length / HTF_POI.length) * 5)
-  const timingQ     = Math.round((p.keyOpens.length / KEY_OPENS.length) * 10)
-  const riskQ       = Math.round((p.ote.length / OTE_LEVELS.length) * 6 + (p.entryTrigger ? 4 : 0))
-  const disciplineQ = Math.round((p.liqChecklist.length / LIQ_CHECKLIST.length) * 10)
-  const parts = {
-    bias: clamp(biasQ, 0, 10), location: clamp(locationQ, 0, 10), timing: clamp(timingQ, 0, 10),
-    risk: clamp(riskQ, 0, 10), discipline: clamp(disciplineQ, 0, 10),
-  }
-  return { parts, total: parts.bias + parts.location + parts.timing + parts.risk + parts.discipline }
+  // Bias — REQUIRED (PxH or PxL): 0 or 10
+  const bias = p.bias ? 10 : 0
+  // Liquidity Targets — more checked = better: 1→5, 2→8, 3+→10
+  const tc = p.targets.length
+  const targets = tc >= 3 ? 10 : tc === 2 ? 8 : tc === 1 ? 5 : 0
+  // HTF POI — at least one is good: 1→6, 2+→10
+  const pc = p.poi.length
+  const poi = pc >= 2 ? 10 : pc === 1 ? 6 : 0
+  // Key Opens — optional bonus: +2 each, max 10
+  const keyOpens = Math.min(10, p.keyOpens.length * 2)
+  // OTE — optional bonus: any checked → +8
+  const ote = p.ote.length > 0 ? 8 : 0
+  // Entry Trigger — REQUIRED (select one): 0 or 10
+  const entry = p.entryTrigger ? 10 : 0
+  const parts = { bias, targets, poi, keyOpens, ote, entry }
+  return { parts, total: Math.min(50, bias + targets + poi + keyOpens + ote + entry) }
 }
 
 function DailyPlan() {
@@ -305,7 +315,7 @@ function DailyPlan() {
   const set = (key, val) => setPlan(p => ({ ...p, [key]: val }))
 
   const { parts, total } = computeQuality(plan)
-  const scoreColor = total > 35 ? GREEN : total >= 20 ? YELLOW : RED
+  const scoreColor = total >= 35 ? GREEN : total >= 20 ? YELLOW : RED
   const shiftDate = (days) => {
     const d = new Date(date + 'T00:00:00'); d.setDate(d.getDate() + days); setDate(localKey(d))
   }
@@ -406,23 +416,31 @@ function DailyPlan() {
         <div style={{ height: '12px', borderRadius: '8px', background: '#161616', overflow: 'hidden', marginBottom: '18px' }}>
           <div style={{ width: `${(total / 50) * 100}%`, height: '100%', background: scoreColor, borderRadius: '8px', transition: 'width .4s ease, background .3s' }} />
         </div>
-        <div className="tos-grid-5">
+        <div className="tos-grid-3">
           {[
-            { k: 'bias', l: 'Bias' }, { k: 'location', l: 'Location' }, { k: 'timing', l: 'Timing' },
-            { k: 'risk', l: 'Risk' }, { k: 'discipline', l: 'Discipline' },
-          ].map(({ k, l }) => {
+            { k: 'bias',     l: 'Bias',              max: 10, req: true },
+            { k: 'targets',  l: 'Liquidity Targets', max: 10 },
+            { k: 'poi',      l: 'HTF POI',           max: 10 },
+            { k: 'keyOpens', l: 'Key Opens',         max: 10 },
+            { k: 'ote',      l: 'OTE',               max: 8 },
+            { k: 'entry',    l: 'Entry Trigger',     max: 10, req: true },
+          ].map(({ k, l, max, req }) => {
             const v = parts[k]
-            const c = v >= 7 ? GREEN : v >= 4 ? YELLOW : RED
+            const ratio = max > 0 ? v / max : 0
+            const c = ratio >= 0.7 ? GREEN : ratio >= 0.4 ? YELLOW : RED
             return (
-              <div key={k} style={{ textAlign: 'center', padding: '12px 8px', borderRadius: '10px', background: BG, border: `1px solid ${CARD_BORD}` }}>
-                <div style={{ fontSize: '22px', fontWeight: 800, color: c, lineHeight: 1 }}>{v}<span style={{ fontSize: '11px', color: '#555' }}>/10</span></div>
-                <div style={{ ...lbl, marginBottom: 0, marginTop: '7px' }}>{l}</div>
+              <div key={k} style={{ textAlign: 'center', padding: '12px 8px', borderRadius: '10px', background: BG, border: `1px solid ${req && v === 0 ? 'rgba(255,107,107,0.4)' : CARD_BORD}` }}>
+                <div style={{ fontSize: '22px', fontWeight: 800, color: c, lineHeight: 1 }}>{v}<span style={{ fontSize: '11px', color: '#555' }}>/{max}</span></div>
+                <div style={{ ...lbl, marginBottom: 0, marginTop: '7px' }}>{l}{req && <span style={{ color: RED, marginLeft: '3px' }}>*</span>}</div>
               </div>
             )
           })}
         </div>
         <div style={{ marginTop: '14px', fontSize: '11px', color: '#666', textAlign: 'center' }}>
-          {total > 35 ? '✅ A+ setup — conditions aligned' : total >= 20 ? '⚠️ Mediocre — wait for more confluence' : '🛑 Low quality — likely no-trade'}
+          {(!plan.bias || !plan.entryTrigger)
+            ? `⚠️ Missing required: ${[!plan.bias && 'Bias', !plan.entryTrigger && 'Entry Trigger'].filter(Boolean).join(' + ')}`
+            : total >= 35 ? '✅ A+ setup — conditions aligned' : total >= 20 ? '⚠️ Mediocre — wait for more confluence' : '🛑 Low quality — likely no-trade'}
+          <span style={{ color: '#444' }}>{'  ·  '}* required</span>
         </div>
       </div>
     </div>
@@ -740,7 +758,7 @@ function RiskEngine({ lossTakenToday }) {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div><div style={lbl}>Account Size ($)</div><input value={r.accountSize} onChange={set('accountSize')} inputMode="decimal" style={inp} placeholder="10000" /></div>
-              <div><div style={lbl}>Risk % per trade</div><input value={r.riskPct} onChange={set('riskPct')} inputMode="decimal" style={inp} placeholder="1" /></div>
+              <div><div style={lbl}>Risk % per trade</div><input value={r.riskPct} onChange={set('riskPct')} type="number" step="0.1" min="0.1" inputMode="decimal" style={inp} placeholder="1" /></div>
               <div><div style={lbl}>Stop Loss (points / pips)</div><input value={r.stopLoss} onChange={set('stopLoss')} inputMode="decimal" style={inp} placeholder="20" /></div>
               <div><div style={lbl}>Value per point ($ / contract)</div><input value={r.valuePerPoint} onChange={set('valuePerPoint')} inputMode="decimal" style={inp} placeholder="20" /><div style={{ fontSize: '10px', color: '#555', marginTop: '5px' }}>NQ ≈ $20 · ES ≈ $50 · MNQ ≈ $2 · MES ≈ $5</div></div>
 
@@ -1119,7 +1137,7 @@ function FundedCard({ account: a, onEdit, onDelete }) {
 
   const daysToPayout = a.payoutDate ? Math.ceil((new Date(a.payoutDate + 'T00:00:00') - new Date(todayKey() + 'T00:00:00')) / 86400000) : null
 
-  const statusColor = a.status === 'Funded' ? GREEN : a.status === 'Verification' ? BLUE : GOLD
+  const statusColor = a.status === 'Funded' ? GREEN : GOLD
 
   return (
     <div style={card}>
@@ -1352,7 +1370,6 @@ const TOS_CSS = `
 .tos-chipgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
 .tos-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .tos-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.tos-grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
 .tos-grid-plan { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
 .tos-grid-log { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 14px; align-items: start; }
 .tos-grid-risk { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 14px; align-items: start; }
@@ -1361,12 +1378,11 @@ const TOS_CSS = `
   .tos-grid-plan, .tos-grid-log, .tos-grid-risk { grid-template-columns: 1fr !important; }
 }
 @media (max-width: 768px) {
-  .tos-grid-3, .tos-grid-5 { grid-template-columns: 1fr 1fr !important; }
+  .tos-grid-3 { grid-template-columns: 1fr 1fr !important; }
   .tos-chipgrid { grid-template-columns: 1fr 1fr !important; }
 }
 @media (max-width: 480px) {
   .tos-grid-2, .tos-grid-3 { grid-template-columns: 1fr !important; }
-  .tos-grid-5 { grid-template-columns: 1fr 1fr !important; }
   .tos-chipgrid { grid-template-columns: 1fr !important; }
 }
 `
