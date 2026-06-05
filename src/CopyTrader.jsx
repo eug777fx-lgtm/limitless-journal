@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════
-//  COPY TRADER  —  Private prop-firm command center for eug777fx@gmail.com
+//  TRADESYNC  —  Private prop-firm command center for eug777fx@gmail.com
 //  7 tabs: Accounts · Overview · Risk · Payouts · Scaling · Mission · Copier
 //  Self-contained module — mounted from App.jsx when page === 'copy'.
 //  All data stored in localStorage (no Supabase tables required).
@@ -20,15 +20,15 @@ import {
   Percent, Coins, Signal, Radio, Network,
 } from 'lucide-react'
 
-// ─── Palette (fixed dark/blue — independent of app theme) ───────────────────
-const BLUE       = '#3b82f6'
-const BLUE_SOFT  = 'rgba(59,130,246,0.15)'
-const BLUE_LINE  = 'rgba(59,130,246,0.40)'
-const BLUE_DIM   = 'rgba(59,130,246,0.20)'
-const BG         = '#080808'
-const CARD_BG    = '#0a0f1a'
-const CARD_BG2   = '#0c1322'
-const CARD_BORD  = 'rgba(59,130,246,0.20)'
+// ─── Palette (fixed dark/cyan — independent of app theme) ───────────────────
+const BLUE       = '#06b6d4'
+const BLUE_SOFT  = 'rgba(6,182,212,0.15)'
+const BLUE_LINE  = 'rgba(6,182,212,0.40)'
+const BLUE_DIM   = 'rgba(6,182,212,0.20)'
+const BG         = '#040b0d'
+const CARD_BG    = '#060f12'
+const CARD_BG2   = '#0a1620'
+const CARD_BORD  = 'rgba(6,182,212,0.15)'
 const GREEN      = '#34d399'
 const RED        = '#f87171'
 const YELLOW     = '#fbbf24'
@@ -40,11 +40,11 @@ const TEXT_LO    = '#64748b'
 // ─── Shared style tokens ────────────────────────────────────────────────────
 const card    = { background: CARD_BG, border: `1px solid ${CARD_BORD}`, borderRadius: '16px', padding: '22px' }
 const lbl     = { fontSize: '10px', color: TEXT_LO, textTransform: 'uppercase', letterSpacing: '0.12em', fontWeight: 600, marginBottom: '6px' }
-const inp     = { width: '100%', background: '#070b14', border: `1px solid ${CARD_BORD}`, borderRadius: '9px', padding: '10px 12px', color: TEXT_HI, fontSize: '13px', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', transition: 'border-color .15s' }
+const inp     = { width: '100%', background: '#0a1a1f', border: `1px solid ${BLUE_DIM}`, borderRadius: '9px', padding: '10px 12px', color: TEXT_HI, fontSize: '13px', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', transition: 'border-color .15s' }
 const ta      = { ...inp, minHeight: '90px', resize: 'vertical', lineHeight: 1.6 }
-const blueBtn = { background: BLUE, color: '#fff', border: 'none', borderRadius: '10px', padding: '11px 18px', cursor: 'pointer', fontWeight: 700, fontSize: '13px', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: '7px', transition: 'opacity .15s, transform .15s' }
-const ghostBtn= { background: 'transparent', color: TEXT_MD, border: `1px solid ${CARD_BORD}`, borderRadius: '10px', padding: '11px 18px', cursor: 'pointer', fontWeight: 600, fontSize: '13px', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: '7px' }
-const gradText= { background: `linear-gradient(90deg, #93c5fd 0%, ${BLUE} 60%, #2563eb 100%)`, WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent', color: 'transparent' }
+const blueBtn = { background: BLUE, color: '#00161c', border: 'none', borderRadius: '10px', padding: '11px 18px', cursor: 'pointer', fontWeight: 700, fontSize: '13px', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: '7px', transition: 'opacity .15s, transform .15s' }
+const ghostBtn= { background: 'transparent', color: TEXT_HI, border: `1px solid ${BLUE_DIM}`, borderRadius: '10px', padding: '11px 18px', cursor: 'pointer', fontWeight: 600, fontSize: '13px', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: '7px' }
+const gradText= { background: `linear-gradient(90deg, #67e8f9 0%, ${BLUE} 60%, #0891b2 100%)`, WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent', color: 'transparent' }
 
 // ─── localStorage helpers ───────────────────────────────────────────────────
 const ACCOUNTS_KEY = 'copy_trader_accounts'
@@ -117,7 +117,7 @@ function Select({ value, onChange, options, style }) {
   return (
     <div style={{ position: 'relative' }}>
       <select value={value} onChange={onChange} style={{ ...inp, appearance: 'none', WebkitAppearance: 'none', paddingRight: '34px', cursor: 'pointer', ...style }}>
-        {options.map(o => <option key={o} value={o} style={{ background: '#0a0f1a' }}>{o}</option>)}
+        {options.map(o => <option key={o} value={o} style={{ background: '#060f12' }}>{o}</option>)}
       </select>
       <ChevronDown size={15} color={TEXT_LO} style={{ position: 'absolute', right: '11px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
     </div>
@@ -164,18 +164,18 @@ function Modal({ title, onClose, children, wide }) {
   }, [onClose])
   return (
     <div onMouseDown={onClose} style={{
-      position: 'fixed', inset: 0, zIndex: 9000, background: 'rgba(2,6,15,0.78)',
+      position: 'fixed', inset: 0, zIndex: 9000, background: 'rgba(0,0,0,0.85)',
       backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
       display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 16px', overflowY: 'auto',
     }}>
       <div onMouseDown={e => e.stopPropagation()} className="ct-modal" style={{
-        width: '100%', maxWidth: wide ? '720px' : '520px', background: '#0a0f1a',
-        border: `1px solid ${BLUE_LINE}`, borderRadius: '18px', padding: '24px',
+        width: '100%', maxWidth: wide ? '720px' : '520px', background: '#060f12',
+        border: '1px solid rgba(6,182,212,0.3)', borderRadius: '16px', padding: '24px',
         boxShadow: `0 24px 80px rgba(0,0,0,0.6), 0 0 0 1px ${BLUE}11 inset`,
         animation: 'ctPop .22s ease-out both',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
-          <h3 style={{ fontSize: '18px', fontWeight: 800, color: TEXT_HI, letterSpacing: '-0.3px' }}>{title}</h3>
+          <h3 style={{ fontSize: '18px', fontWeight: 800, color: BLUE, letterSpacing: '-0.3px' }}>{title}</h3>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: TEXT_LO, cursor: 'pointer', padding: '4px', display: 'flex' }}><X size={20} /></button>
         </div>
         {children}
@@ -210,7 +210,7 @@ function EmptyState({ Icon, title, sub }) {
 const chartTip = (formatter) => ({ active, payload, label }) => {
   if (!active || !payload || !payload.length) return null
   return (
-    <div style={{ background: '#0a0f1a', border: `1px solid ${BLUE_LINE}`, borderRadius: '10px', padding: '9px 12px', fontSize: '12px' }}>
+    <div style={{ background: '#060f12', border: `1px solid ${BLUE_LINE}`, borderRadius: '10px', padding: '9px 12px', fontSize: '12px' }}>
       <div style={{ color: TEXT_MD, marginBottom: '3px', fontWeight: 600 }}>{label}</div>
       {payload.map((p, i) => <div key={i} style={{ color: p.color || BLUE, fontWeight: 700 }}>{formatter ? formatter(p.value, p) : p.value}</div>)}
     </div>
@@ -262,7 +262,7 @@ function AccountForm({ initial, onSave, onClose }) {
 
 function MiniStat({ label, value, color = TEXT_HI }) {
   return (
-    <div style={{ background: '#070b14', border: `1px solid rgba(59,130,246,0.10)`, borderRadius: '11px', padding: '11px 13px' }}>
+    <div style={{ background: '#0a1a1f', border: `1px solid rgba(6,182,212,0.10)`, borderRadius: '11px', padding: '11px 13px' }}>
       <div style={{ fontSize: '9.5px', color: TEXT_LO, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600, marginBottom: '5px' }}>{label}</div>
       <div style={{ fontSize: '17px', fontWeight: 800, color, letterSpacing: '-0.4px' }}>{value}</div>
     </div>
@@ -470,7 +470,7 @@ function OverviewTab({ accounts, overview, setOverview }) {
                 const c = computeAccount(a)
                 const tc = a.accountType === 'Funded' ? GREEN : a.accountType === 'Evaluation' ? BLUE : PURPLE
                 return (
-                  <div key={a.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', background: '#070b14', border: '1px solid rgba(59,130,246,0.10)', borderRadius: '11px', padding: '11px 13px' }}>
+                  <div key={a.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', background: '#0a1a1f', border: '1px solid rgba(6,182,212,0.10)', borderRadius: '11px', padding: '11px 13px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '9px', minWidth: 0 }}>
                       <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: a.status === 'Active' ? GREEN : RED, flexShrink: 0 }} />
                       <div style={{ minWidth: 0 }}>
@@ -569,7 +569,7 @@ function RiskTab({ accounts, risk, setRisk }) {
             </div>
           </div>
           {/* positions check */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '14px', padding: '11px 13px', background: '#070b14', borderRadius: '11px', border: '1px solid rgba(59,130,246,0.10)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '14px', padding: '11px 13px', background: '#0a1a1f', borderRadius: '11px', border: '1px solid rgba(6,182,212,0.10)' }}>
             <span style={{ fontSize: '12.5px', color: TEXT_MD }}>Concurrent positions</span>
             <span style={{ fontSize: '14px', fontWeight: 800, color: num(risk.openPositions) > num(risk.maxConcurrent) ? RED : GREEN }}>
               {num(risk.openPositions)} / {num(risk.maxConcurrent) || '—'}
@@ -600,10 +600,10 @@ function RiskTab({ accounts, risk, setRisk }) {
           <div style={{ width: '100%', height: 280 }}>
             <ResponsiveContainer>
               <BarChart data={distData} margin={{ top: 8, right: 8, left: -8, bottom: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(59,130,246,0.08)" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(6,182,212,0.08)" vertical={false} />
                 <XAxis dataKey="name" tick={{ fill: TEXT_LO, fontSize: 11 }} axisLine={{ stroke: CARD_BORD }} tickLine={false} />
                 <YAxis tick={{ fill: TEXT_LO, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => usdK(v)} />
-                <Tooltip content={chartTip((v, p) => `${p.name === 'budget' ? 'Daily budget' : 'Used'}: ${usd(v)}`)} cursor={{ fill: 'rgba(59,130,246,0.06)' }} />
+                <Tooltip content={chartTip((v, p) => `${p.name === 'budget' ? 'Daily budget' : 'Used'}: ${usd(v)}`)} cursor={{ fill: 'rgba(6,182,212,0.06)' }} />
                 <Bar dataKey="budget" name="budget" fill={BLUE_DIM} radius={[6, 6, 0, 0]} />
                 <Bar dataKey="used" name="used" fill={BLUE} radius={[6, 6, 0, 0]} />
               </BarChart>
@@ -702,7 +702,7 @@ function PayoutsTab({ accounts, payouts, setPayouts, overview, setOverview }) {
               </thead>
               <tbody>
                 {sorted.map(p => (
-                  <tr key={p.id} style={{ borderBottom: '1px solid rgba(59,130,246,0.08)' }}>
+                  <tr key={p.id} style={{ borderBottom: '1px solid rgba(6,182,212,0.08)' }}>
                     <td style={{ padding: '10px', color: TEXT_MD, whiteSpace: 'nowrap' }}>{fmtDate(p.date)}</td>
                     <td style={{ padding: '10px', color: TEXT_HI, fontWeight: 600 }}>{p.account || '—'}</td>
                     <td style={{ padding: '10px', color: TEXT_HI, fontWeight: 800 }}>{usd(p.amount)}</td>
@@ -799,8 +799,8 @@ function ScalingTab({ accounts, scaling, setScaling }) {
             return (
               <div key={m} style={{
                 display: 'flex', alignItems: 'center', gap: '14px', padding: '13px 16px', borderRadius: '13px',
-                background: isCurrent ? BLUE_SOFT : '#070b14',
-                border: `1px solid ${isCurrent ? BLUE_LINE : reached ? 'rgba(52,211,153,0.3)' : 'rgba(59,130,246,0.10)'}`,
+                background: isCurrent ? BLUE_SOFT : '#0a1a1f',
+                border: `1px solid ${isCurrent ? BLUE_LINE : reached ? 'rgba(52,211,153,0.3)' : 'rgba(6,182,212,0.10)'}`,
               }}>
                 <div style={{ flexShrink: 0 }}>
                   {reached
@@ -858,7 +858,7 @@ function ScalingTab({ accounts, scaling, setScaling }) {
                       <stop offset="100%" stopColor={BLUE} stopOpacity={0.3} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(59,130,246,0.08)" vertical={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(6,182,212,0.08)" vertical={false} />
                   <XAxis dataKey="month" tick={{ fill: TEXT_LO, fontSize: 11 }} axisLine={{ stroke: CARD_BORD }} tickLine={false} />
                   <YAxis tick={{ fill: TEXT_LO, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => usdK(v)} />
                   <Tooltip content={chartTip(v => usd(v))} cursor={{ stroke: BLUE_LINE }} />
@@ -868,7 +868,7 @@ function ScalingTab({ accounts, scaling, setScaling }) {
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '10px' }}>
               {entries.map(e => (
-                <span key={e.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', background: '#070b14', border: '1px solid rgba(59,130,246,0.12)', borderRadius: '99px', padding: '5px 10px', fontSize: '11.5px', color: TEXT_MD }}>
+                <span key={e.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', background: '#0a1a1f', border: '1px solid rgba(6,182,212,0.12)', borderRadius: '99px', padding: '5px 10px', fontSize: '11.5px', color: TEXT_MD }}>
                   {e.month} · <span style={{ color: TEXT_HI, fontWeight: 700 }}>{usdK(e.capital)}</span>
                   <button onClick={() => delEntry(e.id)} style={{ background: 'transparent', border: 'none', color: TEXT_LO, cursor: 'pointer', display: 'flex', padding: 0 }}><X size={12} /></button>
                 </span>
@@ -891,7 +891,7 @@ function ScalingTab({ accounts, scaling, setScaling }) {
               const passProb = clamp(c.targetProgressPct * 0.6 + (100 - c.maxUsedPct) * 0.4, 0, 99)
               const pc = passProb >= 66 ? GREEN : passProb >= 40 ? YELLOW : RED
               return (
-                <div key={a.id} style={{ background: '#070b14', border: '1px solid rgba(59,130,246,0.12)', borderRadius: '13px', padding: '15px 17px' }}>
+                <div key={a.id} style={{ background: '#0a1a1f', border: '1px solid rgba(6,182,212,0.12)', borderRadius: '13px', padding: '15px 17px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', marginBottom: '10px', flexWrap: 'wrap' }}>
                     <span style={{ fontSize: '14px', fontWeight: 800, color: TEXT_HI }}>{a.name}</span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 700, color: pc }}>
@@ -1087,11 +1087,11 @@ function CopierTab() {
       <div className="ct-grid-2">
         <div style={card}>
           <SectionTitle Icon={Server} right={<ComingBadge />}>Master Account</SectionTitle>
-          <div style={{ background: '#070b14', border: '1px dashed rgba(59,130,246,0.25)', borderRadius: '13px', padding: '20px', textAlign: 'center' }}>
+          <div style={{ background: '#0a1a1f', border: '1px dashed rgba(6,182,212,0.25)', borderRadius: '13px', padding: '20px', textAlign: 'center' }}>
             <Radio size={26} color={TEXT_LO} style={{ marginBottom: '10px' }} />
             <div style={{ fontSize: '13px', color: TEXT_MD, marginBottom: '14px' }}>No master account connected</div>
             <button disabled style={disabledBtn}><Link2 size={14} /> Connect Master Account</button>
-            <div style={{ display: 'flex', justifyContent: 'space-around', marginTop: '18px', paddingTop: '16px', borderTop: '1px solid rgba(59,130,246,0.10)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-around', marginTop: '18px', paddingTop: '16px', borderTop: '1px solid rgba(6,182,212,0.10)' }}>
               {['Account', 'Balance', 'Status', 'Health'].map(x => (
                 <div key={x} style={{ textAlign: 'center' }}>
                   <div style={{ fontSize: '9.5px', color: TEXT_LO, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>{x}</div>
@@ -1106,7 +1106,7 @@ function CopierTab() {
           <SectionTitle Icon={Network} right={<button disabled style={{ ...disabledBtn, padding: '7px 12px' }}><Plus size={13} /> Add Slave</button>}>Slave Accounts</SectionTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {[1, 2, 3, 4, 5].map(i => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#070b14', border: '1px dashed rgba(59,130,246,0.16)', borderRadius: '11px', padding: '12px 14px', opacity: 0.7 }}>
+              <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#0a1a1f', border: '1px dashed rgba(6,182,212,0.16)', borderRadius: '11px', padding: '12px 14px', opacity: 0.7 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <span style={{ width: '24px', height: '24px', borderRadius: '7px', background: BLUE_SOFT, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 800, color: BLUE }}>{i}</span>
                   <span style={{ fontSize: '12.5px', color: TEXT_LO }}>Slave account slot {i}</span>
@@ -1123,7 +1123,7 @@ function CopierTab() {
         <SectionTitle Icon={Activity}>Sync Status</SectionTitle>
         <div className="ct-grid-3">
           {SYNC.map(s => (
-            <div key={s.label} style={{ background: '#070b14', border: '1px solid rgba(59,130,246,0.12)', borderRadius: '13px', padding: '16px' }}>
+            <div key={s.label} style={{ background: '#0a1a1f', border: '1px solid rgba(6,182,212,0.12)', borderRadius: '13px', padding: '16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
                 <s.Icon size={15} color={TEXT_LO} />
                 <span style={{ fontSize: '11px', color: TEXT_LO, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>{s.label}</span>
@@ -1139,7 +1139,7 @@ function CopierTab() {
         <SectionTitle Icon={Zap}>Copy Engine Features</SectionTitle>
         <div className="ct-feat-grid">
           {COPY_FEATURES.map(f => (
-            <div key={f.label} style={{ display: 'flex', alignItems: 'center', gap: '11px', background: '#070b14', border: '1px solid rgba(59,130,246,0.12)', borderRadius: '12px', padding: '14px 16px' }}>
+            <div key={f.label} style={{ display: 'flex', alignItems: 'center', gap: '11px', background: '#0a1a1f', border: '1px solid rgba(6,182,212,0.12)', borderRadius: '12px', padding: '14px 16px' }}>
               <div style={{ flexShrink: 0, width: '34px', height: '34px', borderRadius: '9px', background: BLUE_SOFT, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <f.Icon size={16} color={BLUE} />
               </div>
@@ -1218,10 +1218,10 @@ export function CopyTraderPage() {
         <div style={{ position: 'absolute', top: '-45%', right: '-8%', width: '300px', height: '300px', borderRadius: '50%', background: `radial-gradient(circle, ${BLUE}44 0%, transparent 65%)`, filter: 'blur(60px)', pointerEvents: 'none' }} />
         <div style={{ position: 'relative' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '8px' }}>
-            <Copy size={20} color={BLUE} />
+            <RefreshCw size={20} color={BLUE} />
             <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.2em', color: BLUE, textTransform: 'uppercase' }}>Private Module</div>
           </div>
-          <h1 style={{ fontSize: '38px', fontWeight: 900, letterSpacing: '-1.5px', lineHeight: 1, marginBottom: '8px', ...gradText }}>Copy Trader</h1>
+          <h1 style={{ fontSize: '38px', fontWeight: 900, letterSpacing: '-1.5px', lineHeight: 1, marginBottom: '8px', ...gradText }}>TradeSync</h1>
           <div style={{ fontSize: '13.5px', color: TEXT_MD }}>Multi-account prop-firm command center · accounts, risk, payouts &amp; scaling in one cockpit.</div>
         </div>
       </div>
@@ -1231,14 +1231,17 @@ export function CopyTraderPage() {
         {TABS.map(t => {
           const active = tab === t.id
           return (
-            <button key={t.id} onClick={() => setTab(t.id)} style={{
-              display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '99px', whiteSpace: 'nowrap',
-              border: `1px solid ${active ? BLUE_LINE : CARD_BORD}`,
-              background: active ? BLUE_SOFT : 'transparent',
-              color: active ? BLUE : TEXT_MD, fontSize: '13px', fontWeight: active ? 700 : 500,
-              cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s', flexShrink: 0, minHeight: 0,
-            }}>
-              <t.Icon size={15} color={active ? BLUE : TEXT_LO} />
+            <button key={t.id} onClick={() => setTab(t.id)}
+              onMouseEnter={e => { if (!active) { e.currentTarget.style.background = BLUE_SOFT; e.currentTarget.style.color = BLUE } }}
+              onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = TEXT_MD } }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '99px', whiteSpace: 'nowrap',
+                border: `1px solid ${active ? BLUE : CARD_BORD}`,
+                background: active ? BLUE : 'transparent',
+                color: active ? '#00161c' : TEXT_MD, fontSize: '13px', fontWeight: active ? 800 : 500,
+                cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s', flexShrink: 0, minHeight: 0,
+              }}>
+              <t.Icon size={15} color={active ? '#00161c' : TEXT_LO} />
               {t.label}
             </button>
           )

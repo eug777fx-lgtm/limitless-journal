@@ -16,7 +16,7 @@ import {
   Bell, Megaphone, Link2, Download, ChevronDown, RefreshCw,
   Mail, Ban, Flag, Activity, MessageSquare, Save,
   Globe, Video, Flame, Play, Clock, Award, Heart,
-  Trophy, FileText, ExternalLink, Calendar, Brain, Copy,
+  Trophy, FileText, ExternalLink, Calendar, Brain,
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import { TOSPage } from './TOS.jsx'
@@ -7187,15 +7187,15 @@ export default function App() {
           </button>
         )}
 
-        {/* COPY TRADER — private module, admin only, blue accent */}
+        {/* TRADESYNC — private module, admin only, cyan accent */}
         {session?.user?.email === ADMIN_EMAIL && (
           <button
             onClick={() => setPage('copy')}
             style={{
               marginTop: '8px',
-              background: page === 'copy' ? 'rgba(59, 130, 246, 0.28)' : 'rgba(59, 130, 246, 0.15)',
-              border: page === 'copy' ? '1px solid rgba(59, 130, 246, 0.6)' : '1px solid rgba(59, 130, 246, 0.4)',
-              color: '#3b82f6',
+              background: page === 'copy' ? 'rgba(6, 182, 212, 0.25)' : 'rgba(6, 182, 212, 0.12)',
+              border: page === 'copy' ? '1px solid rgba(6, 182, 212, 0.6)' : '1px solid rgba(6, 182, 212, 0.35)',
+              color: '#06b6d4',
               borderRadius: '10px',
               padding: '10px 14px',
               cursor: 'pointer',
@@ -7211,23 +7211,23 @@ export default function App() {
             }}
             onMouseEnter={e => {
               if (page !== 'copy') {
-                e.currentTarget.style.background = 'rgba(59, 130, 246, 0.22)'
-                e.currentTarget.style.border = '1px solid rgba(59, 130, 246, 0.5)'
+                e.currentTarget.style.background = 'rgba(6, 182, 212, 0.18)'
+                e.currentTarget.style.border = '1px solid rgba(6, 182, 212, 0.5)'
               }
             }}
             onMouseLeave={e => {
               if (page !== 'copy') {
-                e.currentTarget.style.background = 'rgba(59, 130, 246, 0.15)'
-                e.currentTarget.style.border = '1px solid rgba(59, 130, 246, 0.4)'
+                e.currentTarget.style.background = 'rgba(6, 182, 212, 0.12)'
+                e.currentTarget.style.border = '1px solid rgba(6, 182, 212, 0.35)'
               }
             }}
           >
-            <Copy size={18} color="#3b82f6" />
-            <span style={{ flex: 1 }}>COPY</span>
+            <RefreshCw size={18} color="#06b6d4" />
+            <span style={{ flex: 1 }}>SYNC</span>
             <span style={{
               fontSize: '9px',
-              background: '#3b82f6',
-              color: '#fff',
+              background: '#06b6d4',
+              color: '#00161c',
               padding: '2px 6px',
               borderRadius: '99px',
               fontWeight: 700,
@@ -7479,15 +7479,15 @@ export default function App() {
               </button>
             )}
 
-            {/* COPY TRADER — private module, admin only, blue accent */}
+            {/* TRADESYNC — private module, admin only, cyan accent */}
             {session?.user?.email === ADMIN_EMAIL && (
               <button
                 onClick={() => { setMobileSidebarOpen(false); setTimeout(() => setPage('copy'), 20) }}
                 style={{
                   marginTop: '8px',
-                  background: page === 'copy' ? 'rgba(59, 130, 246, 0.28)' : 'rgba(59, 130, 246, 0.15)',
-                  border: page === 'copy' ? '1px solid rgba(59, 130, 246, 0.6)' : '1px solid rgba(59, 130, 246, 0.4)',
-                  color: '#3b82f6',
+                  background: page === 'copy' ? 'rgba(6, 182, 212, 0.25)' : 'rgba(6, 182, 212, 0.12)',
+                  border: page === 'copy' ? '1px solid rgba(6, 182, 212, 0.6)' : '1px solid rgba(6, 182, 212, 0.35)',
+                  color: '#06b6d4',
                   borderRadius: '10px', padding: '11px 13px',
                   display: 'flex', alignItems: 'center', gap: '10px',
                   width: '100%', textAlign: 'left',
@@ -7496,12 +7496,12 @@ export default function App() {
                   transition: 'all 0.15s', marginBottom: '2px', minHeight: '44px',
                 }}
               >
-                <Copy size={16} color="#3b82f6" />
-                <span style={{ flex: 1 }}>COPY</span>
+                <RefreshCw size={16} color="#06b6d4" />
+                <span style={{ flex: 1 }}>SYNC</span>
                 <span style={{
                   fontSize: '9px',
-                  background: '#3b82f6',
-                  color: '#fff',
+                  background: '#06b6d4',
+                  color: '#00161c',
                   padding: '2px 6px',
                   borderRadius: '99px',
                   fontWeight: 700,
