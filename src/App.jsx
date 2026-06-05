@@ -16,10 +16,11 @@ import {
   Bell, Megaphone, Link2, Download, ChevronDown, RefreshCw,
   Mail, Ban, Flag, Activity, MessageSquare, Save,
   Globe, Video, Flame, Play, Clock, Award, Heart,
-  Trophy, FileText, ExternalLink, Calendar, Brain,
+  Trophy, FileText, ExternalLink, Calendar, Brain, Copy,
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import { TOSPage } from './TOS.jsx'
+import { CopyTraderPage } from './CopyTrader.jsx'
 
 // ─── Global CSS ───────────────────────────────────────────────
 const ANIM_CSS = `
@@ -7186,6 +7187,55 @@ export default function App() {
           </button>
         )}
 
+        {/* COPY TRADER — private module, admin only, blue accent */}
+        {session?.user?.email === ADMIN_EMAIL && (
+          <button
+            onClick={() => setPage('copy')}
+            style={{
+              marginTop: '8px',
+              background: page === 'copy' ? 'rgba(59, 130, 246, 0.28)' : 'rgba(59, 130, 246, 0.15)',
+              border: page === 'copy' ? '1px solid rgba(59, 130, 246, 0.6)' : '1px solid rgba(59, 130, 246, 0.4)',
+              color: '#3b82f6',
+              borderRadius: '10px',
+              padding: '10px 14px',
+              cursor: 'pointer',
+              textAlign: 'left',
+              fontSize: '13px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              width: '100%',
+              fontFamily: 'inherit',
+              fontWeight: page === 'copy' ? '600' : '500',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => {
+              if (page !== 'copy') {
+                e.currentTarget.style.background = 'rgba(59, 130, 246, 0.22)'
+                e.currentTarget.style.border = '1px solid rgba(59, 130, 246, 0.5)'
+              }
+            }}
+            onMouseLeave={e => {
+              if (page !== 'copy') {
+                e.currentTarget.style.background = 'rgba(59, 130, 246, 0.15)'
+                e.currentTarget.style.border = '1px solid rgba(59, 130, 246, 0.4)'
+              }
+            }}
+          >
+            <Copy size={18} color="#3b82f6" />
+            <span style={{ flex: 1 }}>COPY</span>
+            <span style={{
+              fontSize: '9px',
+              background: '#3b82f6',
+              color: '#fff',
+              padding: '2px 6px',
+              borderRadius: '99px',
+              fontWeight: 700,
+              letterSpacing: '0.05em',
+            }}>NEW</span>
+          </button>
+        )}
+
         {/* Network — admin only, accent purple, NEW badge */}
         {session?.user?.email === ADMIN_EMAIL && (
           <button
@@ -7325,6 +7375,7 @@ export default function App() {
         {page === 'news' && featureFlags.newsCalendar && <NewsCalendar />}
         {page === 'network'     && <NetworkPage session={session} setPage={setPage} profile={profile} />}
         {page === 'tos'         && session?.user?.email === ADMIN_EMAIL && <TOSPage session={session} />}
+        {page === 'copy'        && session?.user?.email === ADMIN_EMAIL && <CopyTraderPage />}
         {page === 'plan'        && <TradingPlan flags={featureFlags} />}
         {page === 'settings'    && <Settings theme={theme} setTheme={handleSetTheme} session={session} profile={profile} setProfile={setProfile} glassMode={glassMode} setGlassMode={v => { setGlassMode(v); localStorage.setItem('glass_mode', v) }} onLogout={logout} trades={effectiveTrades} demoMode={demoMode} setDemoMode={setDemoMode} />}
         {page === 'admin'       && <AdminPanel session={session} setPage={setPage} />}
@@ -7425,6 +7476,37 @@ export default function App() {
                   fontWeight: 700,
                   letterSpacing: '0.05em',
                 }}>SYS</span>
+              </button>
+            )}
+
+            {/* COPY TRADER — private module, admin only, blue accent */}
+            {session?.user?.email === ADMIN_EMAIL && (
+              <button
+                onClick={() => { setMobileSidebarOpen(false); setTimeout(() => setPage('copy'), 20) }}
+                style={{
+                  marginTop: '8px',
+                  background: page === 'copy' ? 'rgba(59, 130, 246, 0.28)' : 'rgba(59, 130, 246, 0.15)',
+                  border: page === 'copy' ? '1px solid rgba(59, 130, 246, 0.6)' : '1px solid rgba(59, 130, 246, 0.4)',
+                  color: '#3b82f6',
+                  borderRadius: '10px', padding: '11px 13px',
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  width: '100%', textAlign: 'left',
+                  cursor: 'pointer', fontFamily: 'inherit',
+                  fontSize: '13px', fontWeight: page === 'copy' ? '600' : '500',
+                  transition: 'all 0.15s', marginBottom: '2px', minHeight: '44px',
+                }}
+              >
+                <Copy size={16} color="#3b82f6" />
+                <span style={{ flex: 1 }}>COPY</span>
+                <span style={{
+                  fontSize: '9px',
+                  background: '#3b82f6',
+                  color: '#fff',
+                  padding: '2px 6px',
+                  borderRadius: '99px',
+                  fontWeight: 700,
+                  letterSpacing: '0.05em',
+                }}>NEW</span>
               </button>
             )}
 
