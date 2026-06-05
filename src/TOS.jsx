@@ -18,7 +18,7 @@ import {
   Target, Activity, ChevronLeft, ChevronRight, ChevronDown, DollarSign, Loader2,
   ThumbsUp, ThumbsDown, Gauge, Scale, ShieldCheck, Crosshair, Trophy,
   CheckCircle, XCircle, Zap, Award, Calendar, Clock, Flame,
-  Sparkles, Hourglass, Layers, Gem, Rocket,
+  Sparkles, Hourglass, Layers, Gem, Rocket, GitBranch, Eye,
 } from 'lucide-react'
 
 // ─── Palette ──────────────────────────────────────────────────────────────
@@ -2238,6 +2238,343 @@ function Challenge({ trades, pro = false }) {
   )
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+//  DELIVERY SEQUENCE ENGINE  (pre-trade gate, page 0)
+// ════════════════════════════════════════════════════════════════════════════
+const D_GREEN = '#22c55e'
+const D_RED   = '#ef4444'
+const D_AMBER = '#f59e0b'
+const DELIV_ABOVE = ['Midnight Open', 'London High', 'Session High', 'PDH', 'Equal Highs', 'Data High', 'NWOG', 'Gap Fill']
+const DELIV_BELOW = ['Session Low', 'PDL', 'Equal Lows', 'Data Low', 'Gap Fill']
+const DELIV_RB = [
+  'Liquidity sweep occurred before the block',
+  'Strong rejection candle exists at the level',
+  'Opposing candle confirms the rejection',
+  'Market structure supports the direction',
+  'This is NOT simply a wick',
+  'Aligns with higher timeframe narrative',
+]
+const DELIV_SESSION = [
+  { k: 'londonHigh', l: 'London High' },
+  { k: 'londonLow', l: 'London Low' },
+  { k: 'sessionHigh', l: 'Session High' },
+  { k: 'sessionLow', l: 'Session Low' },
+]
+const blankDelivery = () => ({
+  liqAbove: [], liqAboveOther: '', liqBelow: [], liqBelowOther: '',
+  q1: '', q2: '', q3: '', againstFirst: '', againstConfirm: false, q5: '',
+  moPosition: '', moTested: '',
+  londonHigh: null, londonLow: null, sessionHigh: null, sessionLow: null, sessionIgnoreReason: '',
+  rb: [false, false, false, false, false, false],
+  oppositeArg: '', oppositeStronger: '',
+  finalGate: '',
+})
+
+// Delivery section shell: card + gold uppercase header
+function DSection({ n, title, sub, children }) {
+  return (
+    <div style={card}>
+      <div style={{ marginBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '10px', fontWeight: 800, color: GOLD, letterSpacing: '0.18em', textTransform: 'uppercase', background: GOLD_SOFT, border: `1px solid ${GOLD_LINE}`, borderRadius: '6px', padding: '3px 8px' }}>Section {n}</span>
+          <span style={{ fontSize: '14px', fontWeight: 800, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{title}</span>
+        </div>
+        {sub && <div style={{ fontSize: '12px', color: '#777', marginTop: '7px' }}>{sub}</div>}
+      </div>
+      {children}
+    </div>
+  )
+}
+// Delivery banner — full width, hard to ignore
+function DBanner({ Icon, color, big = false, children }) {
+  const Glyph = Icon
+  const rgb = color === D_RED ? '239,68,68' : color === D_GREEN ? '34,197,94' : color === D_AMBER ? '245,158,11' : '234,179,8'
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: big ? '16px 20px' : '12px 16px', borderRadius: '12px', background: `rgba(${rgb},0.12)`, border: `1px solid rgba(${rgb},0.5)`, color, fontWeight: big ? 800 : 700, fontSize: big ? '14px' : '13px', lineHeight: 1.45 }}>
+      <Glyph size={big ? 22 : 18} style={{ flexShrink: 0 }} />
+      <span style={{ flex: 1 }}>{children}</span>
+    </div>
+  )
+}
+// Delivery checkbox row
+function DCheck({ label, on, onClick, color = GOLD }) {
+  return (
+    <button type="button" onClick={onClick} style={{
+      display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: '9px', width: '100%', textAlign: 'left', minHeight: 0,
+      border: `1px solid ${on ? color + '88' : CARD_BORD}`, background: on ? `${color}14` : 'transparent', color: on ? '#fff' : '#999', fontSize: '12.5px', fontWeight: on ? 600 : 500, cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s',
+    }}>
+      <span style={{ width: '17px', height: '17px', borderRadius: '5px', flexShrink: 0, border: `1.5px solid ${on ? color : '#333'}`, background: on ? color : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {on && <Check size={11} strokeWidth={3.5} color="#000" />}
+      </span>
+      {label}
+    </button>
+  )
+}
+
+function DeliverySequence() {
+  const [d, setD] = useState(() => ({ ...blankDelivery(), ...lsGet(`tos_delivery_${todayKey()}`, {}) }))
+  const [shake, setShake] = useState(false)
+  useEffect(() => { lsSet(`tos_delivery_${todayKey()}`, d) }, [d])
+  const set = (k, v) => setD(p => ({ ...p, [k]: v }))
+  const toggleArr = (k, val) => setD(p => ({ ...p, [k]: p[k].includes(val) ? p[k].filter(x => x !== val) : [...p[k], val] }))
+  const toggleRb = (i) => setD(p => { const rb = p.rb.map((v, idx) => idx === i ? !v : v); return { ...p, rb } })
+  const resetTrade = () => setD(blankDelivery())
+  const resetDay = () => { try { localStorage.removeItem(`tos_delivery_${todayKey()}`) } catch { /* ignore */ } setD(blankDelivery()) }
+
+  const ta2 = { ...inp, minHeight: '72px', resize: 'vertical', lineHeight: 1.6 }
+
+  // ── Section 1: conflicting liquidity ──
+  const aboveActive = d.liqAbove.length > 0 || d.liqAboveOther.trim().length > 0
+  const belowActive = d.liqBelow.length > 0 || d.liqBelowOther.trim().length > 0
+  const conflict = aboveActive && belowActive
+
+  // ── Section 3: midnight open ──
+  let moView = null
+  if (d.moTested === 'no' && d.moPosition === 'below') moView = { type: 'amber', text: 'WARNING: MIDNIGHT OPEN MAY BE THE FIRST OBJECTIVE — Price below an untouched Midnight Open. Consider whether MO needs to be swept first.' }
+  else if (d.moTested === 'no' && d.moPosition === 'above') moView = { type: 'amber', text: 'WARNING: MIDNIGHT OPEN MAY STILL ATTRACT PRICE — Untouched MO below could pull price back before continuing higher.' }
+  else if (d.moTested === 'yes') moView = { type: 'green', text: 'Midnight Open addressed' }
+
+  // ── Section 4: session liquidity ──
+  const untouched = DELIV_SESSION.filter(s => d[s.k] === false)
+  const sessionAnswered = DELIV_SESSION.every(s => d[s.k] !== null)
+
+  // ── Section 5: rejection block ──
+  const rbPass = d.rb.every(Boolean)
+
+  // ── Section 7 validity ──
+  const finalLen = d.finalGate.trim().length
+  const finalValid = finalLen >= 20
+
+  // ── Section 8: authorization ──
+  const plan = lsGet(`tos_plan_${todayKey()}`, {})
+  const rawRisk = lsGet(RISK_KEY, null) // null until the Risk Engine has been configured
+  const deliveryAnswered = !!(d.q1.trim() && d.q2.trim() && d.q3.trim() && d.againstFirst && d.q5.trim() && (d.againstFirst !== 'YES' || d.againstConfirm))
+  const liquidityPass = sessionAnswered && (untouched.length < 2 || d.sessionIgnoreReason.trim().length > 0)
+  const criteria = [
+    { key: 'BIAS', pass: plan.bias === 'PxH' || plan.bias === 'PxL', missing: 'Select PxH or PxL in Daily Plan' },
+    { key: 'TARGET', pass: finalValid, missing: 'Answer the Final Gate (20+ chars)' },
+    { key: 'DELIVERY', pass: deliveryAnswered, missing: 'Answer all 5 delivery sequence questions' },
+    { key: 'LIQUIDITY', pass: liquidityPass, missing: 'Answer session levels (justify if 2+ untouched)' },
+    { key: 'REJECTION BLOCK', pass: rbPass, missing: 'Check all 6 rejection block criteria' },
+    { key: 'RISK', pass: !!rawRisk && parseFloat(rawRisk.accountSize) > 0 && parseFloat(rawRisk.riskPct) > 0, missing: 'Enter account size + risk % in Risk Engine' },
+  ]
+  const fails = criteria.filter(c => !c.pass)
+  const authorized = fails.length === 0
+
+  const radioOpt = (opts, value, onChange) => <Seg options={opts} value={value} onChange={v => onChange(v || '')} />
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      {/* Intro / reset */}
+      <div style={{ ...card, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '14px', border: `1px solid ${GOLD_LINE}`, background: 'linear-gradient(135deg, rgba(234,179,8,0.07), #0d0d0d)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <GitBranch size={22} color={GOLD} />
+          <div>
+            <div style={{ fontSize: '16px', fontWeight: 800, color: '#fff', letterSpacing: '-0.2px' }}>Delivery Sequence Engine</div>
+            <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>Mandatory pre-trade gate — complete before a trade is authorized.</div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button onClick={resetTrade} style={{ ...ghostBtn, padding: '9px 14px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}><RefreshCw size={14} /> Reset for New Trade</button>
+          <button onClick={resetDay} style={{ ...ghostBtn, padding: '9px 14px', fontSize: '12px', color: D_RED, borderColor: 'rgba(239,68,68,0.3)', display: 'flex', alignItems: 'center', gap: '6px' }}><Trash2 size={14} /> Reset Day</button>
+        </div>
+      </div>
+
+      {/* SECTION 1 — UNFINISHED BUSINESS */}
+      <DSection n={1} title="Unfinished Business Check">
+        <div className="tos-grid-2">
+          <div>
+            <div style={{ ...lbl, color: D_GREEN }}>Liquidity Above Price</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', marginTop: '8px' }}>
+              {DELIV_ABOVE.map(o => <DCheck key={o} label={o} on={d.liqAbove.includes(o)} onClick={() => toggleArr('liqAbove', o)} color={D_GREEN} />)}
+              <input value={d.liqAboveOther} onChange={e => set('liqAboveOther', e.target.value)} style={{ ...inp, marginTop: '2px' }} placeholder="Other (specify)…" />
+            </div>
+          </div>
+          <div>
+            <div style={{ ...lbl, color: D_RED }}>Liquidity Below Price</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', marginTop: '8px' }}>
+              {DELIV_BELOW.map(o => <DCheck key={o} label={o} on={d.liqBelow.includes(o)} onClick={() => toggleArr('liqBelow', o)} color={D_RED} />)}
+              <input value={d.liqBelowOther} onChange={e => set('liqBelowOther', e.target.value)} style={{ ...inp, marginTop: '2px' }} placeholder="Other (specify)…" />
+            </div>
+          </div>
+        </div>
+        {conflict && (
+          <div style={{ marginTop: '14px' }}>
+            <DBanner Icon={AlertTriangle} color={D_AMBER}>CONFLICTING LIQUIDITY — Price cannot seek both simultaneously. Identify the PRIMARY draw.</DBanner>
+          </div>
+        )}
+      </DSection>
+
+      {/* SECTION 2 — DELIVERY SEQUENCE ANALYSIS */}
+      <DSection n={2} title="Delivery Sequence Analysis" sub="All questions must be answered.">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {[
+            { k: 'q1', q: 'What liquidity is closest to current price?', ph: 'e.g. Equal highs at 21,450 — 30 points away' },
+            { k: 'q2', q: 'What liquidity is most likely attacked FIRST?', ph: 'e.g. PDH at 21,480 — highest probability first draw' },
+            { k: 'q3', q: 'What liquidity is most likely attacked SECOND?', ph: 'e.g. Data High at 21,620 — after PDH is swept' },
+          ].map((it, i) => (
+            <div key={it.k}>
+              <div style={{ fontSize: '13px', color: '#ddd', fontWeight: 600, marginBottom: '7px' }}>{i + 1}. {it.q}</div>
+              <input value={d[it.k]} onChange={e => set(it.k, e.target.value)} style={{ ...inp, borderColor: d[it.k].trim() ? CARD_BORD : 'rgba(239,68,68,0.35)' }} placeholder={it.ph} />
+            </div>
+          ))}
+          <div>
+            <div style={{ fontSize: '13px', color: '#ddd', fontWeight: 600, marginBottom: '8px' }}>4. Am I trading AGAINST the first objective?</div>
+            {radioOpt([{ label: 'YES', value: 'YES' }, { label: 'NO', value: 'NO' }], d.againstFirst, v => set('againstFirst', v))}
+            {d.againstFirst === 'YES' && (
+              <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <DBanner Icon={XCircle} color={D_RED}>TRADING AGAINST FIRST OBJECTIVE — HIGH RISK. Are you certain price has already completed this draw?</DBanner>
+                <DCheck label="I confirm price has already addressed this liquidity" on={d.againstConfirm} onClick={() => set('againstConfirm', !d.againstConfirm)} color={D_RED} />
+              </div>
+            )}
+          </div>
+          <div>
+            <div style={{ fontSize: '13px', color: '#ddd', fontWeight: 600, marginBottom: '7px' }}>5. What unfinished business still exists after my target?</div>
+            <input value={d.q5} onChange={e => set('q5', e.target.value)} style={{ ...inp, borderColor: d.q5.trim() ? CARD_BORD : 'rgba(239,68,68,0.35)' }} placeholder="e.g. Data High remains — will monitor after TP hit" />
+          </div>
+        </div>
+      </DSection>
+
+      {/* SECTION 3 — MIDNIGHT OPEN FILTER */}
+      <DSection n={3} title="Midnight Open Filter">
+        <div className="tos-grid-2">
+          <div>
+            <div style={lbl}>Where is price relative to Midnight Open?</div>
+            <div style={{ marginTop: '8px' }}>{radioOpt([{ label: 'Above Midnight Open', value: 'above' }, { label: 'Below Midnight Open', value: 'below' }], d.moPosition, v => set('moPosition', v))}</div>
+          </div>
+          <div>
+            <div style={lbl}>Has Midnight Open been touched/tested today?</div>
+            <div style={{ marginTop: '8px' }}>{radioOpt([{ label: 'Yes — tested', value: 'yes' }, { label: 'No — untouched', value: 'no' }], d.moTested, v => set('moTested', v))}</div>
+          </div>
+        </div>
+        {moView && (
+          <div style={{ marginTop: '14px' }}>
+            {moView.type === 'green'
+              ? <DBanner Icon={CheckCircle} color={D_GREEN}>{moView.text}</DBanner>
+              : <DBanner Icon={AlertTriangle} color={GOLD}>{moView.text}</DBanner>}
+          </div>
+        )}
+      </DSection>
+
+      {/* SECTION 4 — SESSION LIQUIDITY FILTER */}
+      <DSection n={4} title="Session Liquidity Filter">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {DELIV_SESSION.map(s => (
+            <div key={s.k}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '13px', color: '#ddd', fontWeight: 600 }}>Has {s.l} been taken?</span>
+                <div style={{ width: '160px' }}><YesNo value={d[s.k]} onChange={v => set(s.k, v)} /></div>
+              </div>
+              {d[s.k] === false && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '7px', fontSize: '12px', color: D_AMBER }}>
+                  <Eye size={14} /> {s.l} remains untouched
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+        {untouched.length >= 2 && (
+          <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <DBanner Icon={AlertTriangle} color={D_AMBER} big>MULTIPLE UNTOUCHED SESSION LEVELS EXIST</DBanner>
+            <div>
+              <div style={{ ...lbl, color: D_RED }}>Why should price ignore these untouched levels? (required)</div>
+              <textarea value={d.sessionIgnoreReason} onChange={e => set('sessionIgnoreReason', e.target.value)} style={{ ...ta2, borderColor: d.sessionIgnoreReason.trim() ? CARD_BORD : 'rgba(239,68,68,0.4)' }} placeholder="Justify ignoring the untouched session liquidity…" />
+            </div>
+          </div>
+        )}
+      </DSection>
+
+      {/* SECTION 5 — REJECTION BLOCK VALIDATION */}
+      <DSection n={5} title="Rejection Block Validation" sub="A rejection block ONLY exists if ALL criteria are met.">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {DELIV_RB.map((c, i) => <DCheck key={i} label={c} on={d.rb[i]} onClick={() => toggleRb(i)} />)}
+        </div>
+        <div style={{ marginTop: '14px' }}>
+          {rbPass
+            ? <DBanner Icon={CheckCircle} color={D_GREEN}>VALID REJECTION BLOCK</DBanner>
+            : <DBanner Icon={XCircle} color={D_RED}>INVALID REJECTION BLOCK — DO NOT TRADE</DBanner>}
+        </div>
+        <div style={{ marginTop: '14px', padding: '14px 16px', borderRadius: '10px', background: BG, borderLeft: `3px solid ${D_RED}`, border: `1px solid ${CARD_BORD}`, borderLeftWidth: '3px', borderLeftColor: D_RED }}>
+          <div style={{ fontSize: '13px', fontWeight: 800, color: D_RED, letterSpacing: '0.04em' }}>WICK ≠ REJECTION BLOCK</div>
+          <div style={{ fontSize: '12px', color: '#999', marginTop: '5px', lineHeight: 1.5 }}>A wick alone does not constitute a rejection block. All 6 criteria must be satisfied.</div>
+        </div>
+      </DSection>
+
+      {/* SECTION 6 — OPPOSITE SIDE TEST */}
+      <DSection n={6} title="Opposite Side Test" sub="If you had to take the OPPOSITE direction — what is your argument?">
+        <textarea value={d.oppositeArg} onChange={e => set('oppositeArg', e.target.value)} style={{ ...ta2, borderColor: d.oppositeArg.trim() ? CARD_BORD : 'rgba(239,68,68,0.35)' }} placeholder="e.g. Untouched Midnight Open above, London High not yet swept, stronger HTF rejection block overhead" />
+        <div style={{ marginTop: '14px' }}>
+          <div style={{ fontSize: '13px', color: '#ddd', fontWeight: 600, marginBottom: '8px' }}>Is the opposite side argument stronger than your current bias?</div>
+          {radioOpt([{ label: 'No — my bias is stronger', value: 'no' }, { label: 'Yes — opposite side is stronger', value: 'yes' }], d.oppositeStronger, v => set('oppositeStronger', v))}
+        </div>
+        {d.oppositeStronger === 'yes' && (
+          <div style={{ marginTop: '12px' }}>
+            <DBanner Icon={XCircle} color={D_RED} big>RECONSIDER BIAS — Your opposite side argument may be stronger. Re-evaluate before entering.</DBanner>
+          </div>
+        )}
+      </DSection>
+
+      {/* SECTION 7 — FINAL QUESTION GATE */}
+      <div style={{ ...card, border: `1px solid ${GOLD_LINE}`, background: 'linear-gradient(135deg, rgba(234,179,8,0.06), #0d0d0d)' }}>
+        <div style={{ fontSize: '11px', fontWeight: 800, color: GOLD, letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: '10px' }}>Final Gate</div>
+        <div style={{ fontSize: '20px', fontWeight: 800, color: '#fff', letterSpacing: '-0.4px', marginBottom: '14px', lineHeight: 1.3 }}>What must price do FIRST before reaching your target?</div>
+        <input
+          value={d.finalGate}
+          onChange={e => set('finalGate', e.target.value)}
+          onBlur={() => { if (d.finalGate.trim().length > 0 && !finalValid) { setShake(true); setTimeout(() => setShake(false), 450) } }}
+          className={shake ? 'tos-shake' : ''}
+          style={{ ...inp, fontSize: '14px', padding: '13px 14px', borderColor: finalValid ? D_GREEN + '88' : (finalLen > 0 ? 'rgba(239,68,68,0.5)' : CARD_BORD) }}
+          placeholder="e.g. Price must sweep equal lows at 21,180 before reaching my long target at 21,450"
+        />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px' }}>
+          <span style={{ fontSize: '11px', color: !finalValid && finalLen > 0 ? D_RED : '#666' }}>
+            {finalValid ? 'Specific enough.' : 'Answer must be specific — where must price go FIRST?'}
+          </span>
+          <span style={{ fontSize: '11px', color: finalValid ? D_GREEN : '#666', fontWeight: 600 }}>{finalLen}/20</span>
+        </div>
+      </div>
+
+      {/* SECTION 8 — TRADE AUTHORIZATION PANEL */}
+      <div style={{ ...card, border: `1px solid ${authorized ? D_GREEN + '66' : CARD_BORD}` }}>
+        <div style={{ fontSize: '11px', fontWeight: 800, color: GOLD, letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: '16px' }}>Trade Authorization</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginBottom: '18px' }}>
+          {criteria.map(c => (
+            <div key={c.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '11px 0', borderBottom: `1px solid #161616` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                {c.pass ? <CheckCircle size={17} color={D_GREEN} /> : <XCircle size={17} color={D_RED} />}
+                <span style={{ fontSize: '13px', fontWeight: 700, color: '#eee', letterSpacing: '0.04em' }}>{c.key}</span>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <span style={{ fontSize: '13px', fontWeight: 800, color: c.pass ? D_GREEN : D_RED }}>{c.pass ? 'PASS' : 'FAIL'}</span>
+                {!c.pass && <div style={{ fontSize: '10.5px', color: '#777', marginTop: '2px' }}>{c.missing}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+        {authorized ? (
+          <div style={{ padding: '24px', borderRadius: '14px', textAlign: 'center', background: 'rgba(34,197,94,0.12)', border: `1px solid ${D_GREEN}66` }}>
+            <CheckCircle size={32} color={D_GREEN} style={{ marginBottom: '10px' }} />
+            <div style={{ fontSize: '22px', fontWeight: 900, color: D_GREEN, letterSpacing: '-0.5px' }}>TRADE AUTHORIZED</div>
+            <div style={{ fontSize: '13px', color: '#9fdca8', marginTop: '6px' }}>All criteria satisfied. Execute with discipline.</div>
+          </div>
+        ) : (
+          <div style={{ padding: '24px', borderRadius: '14px', textAlign: 'center', background: 'rgba(239,68,68,0.10)', border: `1px solid ${D_RED}55` }}>
+            <XCircle size={32} color={D_RED} style={{ marginBottom: '10px' }} />
+            <div style={{ fontSize: '22px', fontWeight: 900, color: D_RED, letterSpacing: '-0.5px' }}>TRADE NOT AUTHORIZED</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginTop: '12px', maxWidth: '420px', margin: '12px auto 0' }}>
+              {fails.map(c => (
+                <div key={c.key} style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center', fontSize: '12px', color: '#e9a' }}>
+                  <XCircle size={13} color={D_RED} /> <b style={{ color: '#fff' }}>{c.key}</b> — {c.missing}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── SQL setup notice (shown when tos_trades table is absent) ───────────────
 const TOS_SQL = `CREATE TABLE tos_trades (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -2280,6 +2617,7 @@ function SqlNotice() {
 // ════════════════════════════════════════════════════════════════════════════
 const UI_KEY = 'tos_ui_mode'
 const TABS = [
+  { id: 'delivery',    label: 'Delivery',    Icon: GitBranch },
   { id: 'plan',        label: 'Daily Plan',  Icon: ClipboardList },
   { id: 'log',         label: 'Trade Log',   Icon: BookOpen },
   { id: 'risk',        label: 'Risk Engine', Icon: Shield },
@@ -2295,6 +2633,8 @@ const TOS_CSS = `
 @keyframes tosSpin { to { transform: rotate(360deg); } }
 @keyframes tosConfetti { 0% { transform: translateY(0) rotate(0deg); opacity: 1; } 100% { transform: translateY(110vh) rotate(720deg); opacity: 0; } }
 @keyframes tosMeter { from { width: 0; } }
+@keyframes tosShake { 0%,100% { transform: translateX(0); } 20%,60% { transform: translateX(-7px); } 40%,80% { transform: translateX(7px); } }
+.tos-shake { animation: tosShake 0.4s ease; }
 .tos-spin { animation: tosSpin .9s linear infinite; }
 .tos-tabs::-webkit-scrollbar { height: 0; display: none; }
 .tos-chipgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
@@ -2370,7 +2710,7 @@ function SplitBar({ label, a, b, aLabel = 'A', bLabel = 'B' }) {
 }
 
 export function TOSPage({ session }) {
-  const [tab, setTab] = useState('plan')
+  const [tab, setTab] = useState('delivery')
   const [uiMode, setUiMode] = useState(() => (lsGet(UI_KEY, 'standard') === 'pro' ? 'pro' : 'standard'))
   const [trades, setTrades] = useState([])
   const [loading, setLoading] = useState(true)
@@ -2469,12 +2809,13 @@ export function TOSPage({ session }) {
       </div>
 
       {/* Pages */}
-      {loading && tab !== 'plan' && tab !== 'risk' && tab !== 'funded' ? (
+      {loading && tab !== 'plan' && tab !== 'risk' && tab !== 'funded' && tab !== 'delivery' ? (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px', color: '#555', gap: '10px' }}>
           <Loader2 size={18} className="tos-spin" /> Loading…
         </div>
       ) : (
         <>
+          {tab === 'delivery'    && <DeliverySequence />}
           {tab === 'plan'        && <DailyPlan pro={pro} />}
           {tab === 'log'         && <TradeLog session={session} trades={trades} tableMissing={tableMissing} onAdded={onAdded} onDeleted={onDeleted} pro={pro} />}
           {tab === 'risk'        && <RiskEngine lossTakenToday={lossTakenToday} trades={trades} pro={pro} />}
