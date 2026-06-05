@@ -5,6 +5,7 @@
 //  All data stored in localStorage (no Supabase tables required).
 // ═══════════════════════════════════════════════════════════════════════════
 import { useState, useEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import toast from 'react-hot-toast'
 import {
   ResponsiveContainer, PieChart, Pie, Cell,
@@ -160,17 +161,27 @@ function Modal({ title, onClose, children, wide }) {
   useEffect(() => {
     const h = (e) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', h)
-    return () => window.removeEventListener('keydown', h)
+    // Lock body scroll while the modal is open
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { window.removeEventListener('keydown', h); document.body.style.overflow = prevOverflow }
   }, [onClose])
-  return (
+
+  // Rendered into document.body via a portal so it escapes any transformed /
+  // overflow-clipped ancestor (the page-wrap keeps a translateY(0) transform
+  // after its enter animation, which otherwise clips this fixed overlay).
+  const overlay = (
     <div onMouseDown={onClose} style={{
-      position: 'fixed', inset: 0, zIndex: 9000, background: 'rgba(0,0,0,0.85)',
-      backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
-      display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 16px', overflowY: 'auto',
+      position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+      background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
+      zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      overflowY: 'auto', padding: '24px 16px', boxSizing: 'border-box',
     }}>
       <div onMouseDown={e => e.stopPropagation()} className="ct-modal" style={{
-        width: '100%', maxWidth: wide ? '720px' : '520px', background: '#060f12',
-        border: '1px solid rgba(6,182,212,0.3)', borderRadius: '16px', padding: '24px',
+        position: 'relative', width: '90%', maxWidth: wide ? '600px' : '520px',
+        maxHeight: '90vh', overflowY: 'auto', zIndex: 10000,
+        background: '#060f12', border: '1px solid rgba(6,182,212,0.3)', borderRadius: '16px',
+        padding: '32px', boxSizing: 'border-box',
         boxShadow: `0 24px 80px rgba(0,0,0,0.6), 0 0 0 1px ${BLUE}11 inset`,
         animation: 'ctPop .22s ease-out both',
       }}>
@@ -182,6 +193,7 @@ function Modal({ title, onClose, children, wide }) {
       </div>
     </div>
   )
+  return typeof document !== 'undefined' ? createPortal(overlay, document.body) : overlay
 }
 
 function SectionTitle({ Icon, children, right }) {
