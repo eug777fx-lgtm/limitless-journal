@@ -232,8 +232,18 @@ const chartTip = (formatter) => ({ active, payload, label }) => {
 // ════════════════════════════════════════════════════════════════════════════
 //  TAB 1 — ACCOUNTS
 // ════════════════════════════════════════════════════════════════════════════
+// ─── Futures prop-firm config ───────────────────────────────────────────────
+const PLATFORMS      = ['Tradovate', 'Rithmic', 'NinjaTrader', 'Sierra Chart', 'Quantower', 'Other']
+const FIRMS          = ['Apex Trader Funding', 'TopStep', 'Earn2Trade', 'MyFundedFutures', 'TradeDay', 'Bulenox', 'Take Profit Trader', 'Personal/Live', 'Other']
+const INSTRUMENTS    = ['NQ (E-mini NASDAQ)', 'MNQ (Micro NASDAQ)', 'ES (E-mini S&P)', 'MES (Micro S&P)', 'YM', 'MYM', 'RTY', 'M2K', 'CL (Oil)', 'GC (Gold)', 'SI (Silver)', 'Multiple', 'Other']
+const ACCOUNT_TYPES  = ['Evaluation (Phase 1)', 'Evaluation (Phase 2)', 'Funded', 'Personal/Live']
+const PAYOUT_METHODS = ['Wire Transfer', 'Check', 'ACH']
+// Map any account-type label (incl. legacy values) to a category for math/colors.
+const acctCat = (t) => t === 'Funded' ? 'Funded' : (t || '').startsWith('Evaluation') ? 'Evaluation' : 'Personal'
+
 const blankAccount = () => ({
-  id: makeId(), name: '', broker: '', platform: 'MT5', accountType: 'Evaluation',
+  id: makeId(), name: '', broker: 'Apex Trader Funding', platform: 'Tradovate', accountType: 'Evaluation (Phase 1)',
+  instrument: 'NQ (E-mini NASDAQ)',
   startingBalance: '', currentBalance: '', currentEquity: '',
   dailyDDLimit: '5', maxDDLimit: '10', profitTarget: '8', status: 'Active', notes: '',
 })
@@ -249,20 +259,21 @@ function AccountForm({ initial, onSave, onClose }) {
   return (
     <Modal title={initial ? 'Edit Account' : 'Add Account'} onClose={onClose} wide>
       <div className="ct-form-grid">
-        <Field label="Account Name"><TextInput value={f.name} onChange={set('name')} placeholder="e.g. FTMO 100K #1" /></Field>
-        <Field label="Broker"><TextInput value={f.broker} onChange={set('broker')} placeholder="e.g. FTMO" /></Field>
-        <Field label="Platform"><Select value={f.platform} onChange={set('platform')} options={['MT5', 'MT4', 'cTrader', 'Other']} /></Field>
-        <Field label="Account Type"><Select value={f.accountType} onChange={set('accountType')} options={['Evaluation', 'Funded', 'Personal']} /></Field>
-        <Field label="Starting Balance ($)"><TextInput type="number" value={f.startingBalance} onChange={set('startingBalance')} placeholder="100000" /></Field>
-        <Field label="Current Balance ($)"><TextInput type="number" value={f.currentBalance} onChange={set('currentBalance')} placeholder="100000" /></Field>
-        <Field label="Current Equity ($)"><TextInput type="number" value={f.currentEquity} onChange={set('currentEquity')} placeholder="100000" /></Field>
-        <Field label="Daily Drawdown Limit %"><TextInput type="number" value={f.dailyDDLimit} onChange={set('dailyDDLimit')} placeholder="5" /></Field>
+        <Field label="Account Name"><TextInput value={f.name} onChange={set('name')} placeholder="e.g. Apex 100K #1" /></Field>
+        <Field label="Prop Firm"><Select value={f.broker} onChange={set('broker')} options={FIRMS} /></Field>
+        <Field label="Platform"><Select value={f.platform} onChange={set('platform')} options={PLATFORMS} /></Field>
+        <Field label="Account Type"><Select value={f.accountType} onChange={set('accountType')} options={ACCOUNT_TYPES} /></Field>
+        <Field label="Primary Instrument"><Select value={f.instrument} onChange={set('instrument')} options={INSTRUMENTS} /></Field>
+        <Field label="Starting Balance ($)"><TextInput type="number" value={f.startingBalance} onChange={set('startingBalance')} placeholder="50000" /></Field>
+        <Field label="Current Balance ($)"><TextInput type="number" value={f.currentBalance} onChange={set('currentBalance')} placeholder="50000" /></Field>
+        <Field label="Current Equity ($)"><TextInput type="number" value={f.currentEquity} onChange={set('currentEquity')} placeholder="50000" /></Field>
+        <Field label="Trailing/Daily DD Limit %"><TextInput type="number" value={f.dailyDDLimit} onChange={set('dailyDDLimit')} placeholder="5" /></Field>
         <Field label="Max Drawdown Limit %"><TextInput type="number" value={f.maxDDLimit} onChange={set('maxDDLimit')} placeholder="10" /></Field>
         <Field label="Profit Target %"><TextInput type="number" value={f.profitTarget} onChange={set('profitTarget')} placeholder="8" /></Field>
         <Field label="Status"><Select value={f.status} onChange={set('status')} options={['Active', 'Inactive']} /></Field>
       </div>
       <div style={{ marginTop: '14px' }}>
-        <Field label="Notes"><textarea value={f.notes} onChange={set('notes')} style={ta} placeholder="Rules, broker quirks, reset dates…" /></Field>
+        <Field label="Notes"><textarea value={f.notes} onChange={set('notes')} style={ta} placeholder="Firm rules, trailing drawdown type, reset dates, contract limits, consistency rules…" /></Field>
       </div>
       <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '20px' }}>
         <button onClick={onClose} style={ghostBtn}>Cancel</button>
@@ -284,7 +295,7 @@ function MiniStat({ label, value, color = TEXT_HI }) {
 function AccountCard({ a, onEdit, onDelete }) {
   const c = computeAccount(a)
   const active = a.status === 'Active'
-  const typeColor = a.accountType === 'Funded' ? GREEN : a.accountType === 'Evaluation' ? BLUE : PURPLE
+  const typeColor = acctCat(a.accountType) === 'Funded' ? GREEN : acctCat(a.accountType) === 'Evaluation' ? BLUE : PURPLE
   return (
     <div style={{ ...card, padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* top row */}
@@ -300,7 +311,7 @@ function AccountCard({ a, onEdit, onDelete }) {
           <button onClick={onDelete} title="Delete" style={{ ...ghostBtn, padding: '7px', borderColor: 'rgba(248,113,113,0.3)', color: RED }}><Trash2 size={14} /></button>
         </div>
       </div>
-      {a.broker && <div style={{ fontSize: '11.5px', color: TEXT_LO, marginTop: '-8px' }}>{a.broker}</div>}
+      {(a.broker || a.instrument) && <div style={{ fontSize: '11.5px', color: TEXT_LO, marginTop: '-8px' }}>{[a.broker, a.instrument].filter(Boolean).join(' · ')}</div>}
 
       {/* stats grid 2x3 */}
       <div className="ct-acct-stats">
@@ -387,8 +398,8 @@ function OverviewTab({ accounts, overview, setOverview }) {
       const c = computeAccount(a)
       cap += c.bal
       profit += c.pnl
-      if (a.accountType === 'Funded') { funded += c.bal; breakdown.Funded += c.bal }
-      else if (a.accountType === 'Evaluation') { evalCap += c.bal; breakdown.Evaluation += c.bal }
+      if (acctCat(a.accountType) === 'Funded') { funded += c.bal; breakdown.Funded += c.bal }
+      else if (acctCat(a.accountType) === 'Evaluation') { evalCap += c.bal; breakdown.Evaluation += c.bal }
       else { personalCap += c.bal; breakdown.Personal += c.bal }
     })
     return { cap, funded, evalCap, personalCap, profit, breakdown }
@@ -480,7 +491,7 @@ function OverviewTab({ accounts, overview, setOverview }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '270px', overflowY: 'auto' }}>
               {accounts.map(a => {
                 const c = computeAccount(a)
-                const tc = a.accountType === 'Funded' ? GREEN : a.accountType === 'Evaluation' ? BLUE : PURPLE
+                const tc = acctCat(a.accountType) === 'Funded' ? GREEN : acctCat(a.accountType) === 'Evaluation' ? BLUE : PURPLE
                 return (
                   <div key={a.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', background: '#0a1a1f', border: '1px solid rgba(6,182,212,0.10)', borderRadius: '11px', padding: '11px 13px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '9px', minWidth: 0 }}>
@@ -631,7 +642,7 @@ function RiskTab({ accounts, risk, setRisk }) {
 // ════════════════════════════════════════════════════════════════════════════
 //  TAB 4 — PAYOUT CENTER
 // ════════════════════════════════════════════════════════════════════════════
-const blankPayout = () => ({ id: makeId(), account: '', amount: '', date: todayKey(), status: 'Requested', notes: '' })
+const blankPayout = () => ({ id: makeId(), account: '', amount: '', date: todayKey(), status: 'Requested', method: 'Wire Transfer', notes: '' })
 const payoutColor = (s) => s === 'Received' ? GREEN : s === 'Pending' ? YELLOW : BLUE
 
 function PayoutForm({ accounts, onSave, onClose }) {
@@ -653,8 +664,9 @@ function PayoutForm({ accounts, onSave, onClose }) {
         </Field>
         <Field label="Payout Amount ($)"><TextInput type="number" value={f.amount} onChange={set('amount')} placeholder="0" /></Field>
         <Field label="Payout Date"><TextInput type="date" value={f.date} onChange={set('date')} className="ct-date" /></Field>
+        <Field label="Payout Method"><Select value={f.method} onChange={set('method')} options={PAYOUT_METHODS} /></Field>
         <Field label="Status"><Select value={f.status} onChange={set('status')} options={['Requested', 'Pending', 'Received']} /></Field>
-        <Field label="Notes"><textarea value={f.notes} onChange={set('notes')} style={ta} placeholder="Method, processing time…" /></Field>
+        <Field label="Notes"><textarea value={f.notes} onChange={set('notes')} style={ta} placeholder="Processing time, consistency rule, profit split, min trading days…" /></Field>
       </div>
       <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '20px' }}>
         <button onClick={onClose} style={ghostBtn}>Cancel</button>
@@ -687,7 +699,7 @@ function PayoutsTab({ accounts, payouts, setPayouts, overview, setOverview }) {
 
       {/* stats */}
       <div className="ct-grid-4">
-        <StatCard label="Total Withdrawn" value={usdK(totalWithdrawn)} sub="Lifetime (received)" color={BLUE} Icon={Banknote} />
+        <StatCard label="Total Paid Out" value={usdK(totalWithdrawn)} sub="Lifetime (received)" color={BLUE} Icon={Banknote} />
         <StatCard label="This Month" value={usd(thisMonth)} sub="Received this month" color={GREEN} Icon={Calendar} />
         <StatCard label="Last Payout" value={last ? usd(last.amount) : '—'} sub={last ? fmtDate(last.date) : 'None yet'} Icon={Clock} />
         <div style={{ ...card, padding: '18px 20px', background: CARD_BG2 }}>
@@ -701,13 +713,13 @@ function PayoutsTab({ accounts, payouts, setPayouts, overview, setOverview }) {
       <div style={card}>
         <SectionTitle Icon={Layers}>Payout History</SectionTitle>
         {sorted.length === 0 ? (
-          <EmptyState Icon={Banknote} title="No payouts logged" sub="Log your first withdrawal to track your income." />
+          <EmptyState Icon={Banknote} title="No payouts logged" sub="Log your first payout request to track your income." />
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px' }}>
               <thead>
                 <tr style={{ textAlign: 'left', color: TEXT_LO }}>
-                  {['Date', 'Account', 'Amount', 'Status', 'Notes', ''].map((h, i) => (
+                  {['Date', 'Account', 'Amount', 'Method', 'Status', 'Notes', ''].map((h, i) => (
                     <th key={i} style={{ padding: '8px 10px', fontWeight: 600, fontSize: '10.5px', textTransform: 'uppercase', letterSpacing: '0.08em', borderBottom: `1px solid ${CARD_BORD}` }}>{h}</th>
                   ))}
                 </tr>
@@ -718,6 +730,7 @@ function PayoutsTab({ accounts, payouts, setPayouts, overview, setOverview }) {
                     <td style={{ padding: '10px', color: TEXT_MD, whiteSpace: 'nowrap' }}>{fmtDate(p.date)}</td>
                     <td style={{ padding: '10px', color: TEXT_HI, fontWeight: 600 }}>{p.account || '—'}</td>
                     <td style={{ padding: '10px', color: TEXT_HI, fontWeight: 800 }}>{usd(p.amount)}</td>
+                    <td style={{ padding: '10px', color: TEXT_MD, whiteSpace: 'nowrap' }}>{p.method || '—'}</td>
                     <td style={{ padding: '10px' }}><Badge color={payoutColor(p.status)}>{p.status}</Badge></td>
                     <td style={{ padding: '10px', color: TEXT_LO, maxWidth: '220px' }}>{p.notes || '—'}</td>
                     <td style={{ padding: '10px', textAlign: 'right' }}>
@@ -742,9 +755,21 @@ function PayoutsTab({ accounts, payouts, setPayouts, overview, setOverview }) {
         <div style={{ marginTop: '16px', padding: '14px 18px', background: `linear-gradient(90deg, ${BLUE_SOFT}, transparent)`, border: `1px solid ${BLUE_LINE}`, borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
           <Rocket size={18} color={BLUE} />
           <span style={{ fontSize: '13.5px', color: TEXT_HI, fontWeight: 600 }}>
-            At current pace you will withdraw <span style={{ ...gradText, fontWeight: 900 }}>{usd(monthlyAvg * 12)}</span> this year.
+            At current pace you will receive <span style={{ ...gradText, fontWeight: 900 }}>{usd(monthlyAvg * 12)}</span> in payouts this year.
           </span>
         </div>
+      </div>
+
+      {/* futures firm payout notes */}
+      <div style={card}>
+        <SectionTitle Icon={AlertTriangle}>Futures Firm Payout Notes</SectionTitle>
+        <ul style={{ margin: 0, paddingLeft: '18px', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12.5px', color: TEXT_MD, lineHeight: 1.55 }}>
+          <li>Most firms (Apex, TopStep, MyFundedFutures) require a minimum number of <b style={{ color: TEXT_HI }}>trading days</b> before a payout request is eligible.</li>
+          <li><b style={{ color: TEXT_HI }}>Consistency rules</b> often cap your best day at ~20–30% of total profit — avoid one outsized day.</li>
+          <li>Early payouts usually have a <b style={{ color: TEXT_HI }}>100% profit split</b> up to a threshold, then 90/10 on funded accounts.</li>
+          <li>Keep a buffer above the <b style={{ color: TEXT_HI }}>trailing drawdown</b> — withdrawing too aggressively can breach minimum balance rules.</li>
+          <li>Payout methods (Wire / Check / ACH) and processing times vary by firm — log them in each entry.</li>
+        </ul>
       </div>
 
       {modal && <PayoutForm accounts={accounts} onSave={save} onClose={() => setModal(false)} />}
@@ -755,11 +780,11 @@ function PayoutsTab({ accounts, payouts, setPayouts, overview, setOverview }) {
 // ════════════════════════════════════════════════════════════════════════════
 //  TAB 5 — SCALING CENTER
 // ════════════════════════════════════════════════════════════════════════════
-const MILESTONES = [25000, 50000, 100000, 200000, 500000, 1000000]
+const MILESTONES = [50000, 100000, 150000, 200000, 300000, 500000, 1000000]
 
 function ScalingTab({ accounts, scaling, setScaling }) {
-  const fundedAccts = accounts.filter(a => a.accountType === 'Funded')
-  const evalAccts   = accounts.filter(a => a.accountType === 'Evaluation')
+  const fundedAccts = accounts.filter(a => acctCat(a.accountType) === 'Funded')
+  const evalAccts   = accounts.filter(a => acctCat(a.accountType) === 'Evaluation')
   const activeEvals = evalAccts.filter(a => a.status === 'Active')
   const totalFunded = fundedAccts.reduce((s, a) => s + computeAccount(a).bal, 0)
   const totalAttempted = fundedAccts.length + evalAccts.length
@@ -1063,7 +1088,7 @@ function CopierTab() {
     { Icon: Shield, label: 'Break Even Management' },
     { Icon: Activity, label: 'Trailing Stop Sync' },
     { Icon: Gauge, label: 'Risk Scaling' },
-    { Icon: Percent, label: 'Lot Multipliers' },
+    { Icon: Percent, label: 'Contract Multipliers' },
     { Icon: Layers, label: 'Account Grouping' },
     { Icon: Network, label: 'One-to-Many Replication' },
   ]
@@ -1087,9 +1112,9 @@ function CopierTab() {
           <div style={{ display: 'inline-flex', padding: '16px', borderRadius: '18px', background: BLUE_SOFT, border: `1px solid ${BLUE_LINE}`, marginBottom: '14px', boxShadow: `0 0 30px ${BLUE}44` }}>
             <Copy size={28} color={BLUE} />
           </div>
-          <h1 style={{ fontSize: '28px', fontWeight: 900, letterSpacing: '-0.8px', marginBottom: '8px', ...gradText }}>Trade Copier Engine</h1>
-          <p style={{ fontSize: '13.5px', color: TEXT_MD, maxWidth: '520px', margin: '0 auto', lineHeight: 1.6 }}>
-            Real-time MT5 trade replication across master &amp; slave accounts. The architecture is wired — the live connection is on the way.
+          <h1 style={{ fontSize: '28px', fontWeight: 900, letterSpacing: '-0.8px', marginBottom: '8px', ...gradText }}>Trade Sync Engine — Coming Soon</h1>
+          <p style={{ fontSize: '13.5px', color: TEXT_MD, maxWidth: '560px', margin: '0 auto', lineHeight: 1.6 }}>
+            Future integration with Tradovate API and Rithmic for automated trade replication across multiple funded accounts.
           </p>
           <div style={{ marginTop: '14px' }}><ComingBadge /></div>
         </div>
@@ -1162,20 +1187,20 @@ function CopierTab() {
         </div>
       </div>
 
-      {/* MT5 integration */}
+      {/* Tradovate / Rithmic integration */}
       <div style={card}>
-        <SectionTitle Icon={Server} right={<ComingBadge />}>MT5 API Integration</SectionTitle>
+        <SectionTitle Icon={Server} right={<ComingBadge />}>Tradovate / Rithmic Integration</SectionTitle>
         <div className="ct-grid-3">
-          <Field label="Server"><input disabled placeholder="broker-server" style={disabledInp} /></Field>
-          <Field label="Login"><input disabled placeholder="account login" style={disabledInp} /></Field>
-          <Field label="Password"><input disabled type="password" placeholder="••••••••" style={disabledInp} /></Field>
+          <Field label="API Provider"><input disabled placeholder="Tradovate / Rithmic" style={disabledInp} /></Field>
+          <Field label="Account ID"><input disabled placeholder="funded account id" style={disabledInp} /></Field>
+          <Field label="API Key"><input disabled type="password" placeholder="••••••••" style={disabledInp} /></Field>
         </div>
         <div style={{ marginTop: '14px' }}>
           <button disabled style={disabledBtn}><Wifi size={14} /> Connect</button>
         </div>
         <div style={{ marginTop: '18px', padding: '13px 16px', background: BLUE_SOFT, border: `1px solid ${BLUE_DIM}`, borderRadius: '12px', fontSize: '12.5px', color: TEXT_MD, lineHeight: 1.6, display: 'flex', gap: '10px' }}>
           <Activity size={16} color={BLUE} style={{ flexShrink: 0, marginTop: '1px' }} />
-          This module will connect to MT5 via API for real-time trade copying and account management.
+          This module will connect to Tradovate &amp; Rithmic via API for real-time contract replication across your funded futures accounts.
         </div>
       </div>
     </div>
