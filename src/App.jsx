@@ -5590,6 +5590,10 @@ function NetworkPage({ session, setPage, profile }) {
 // ─── Admin Panel ──────────────────────────────────────────────
 const ADMIN_EMAIL = 'eug777fx@gmail.com'
 
+// Temporarily hide private/admin sidebar items (Admin, TOS, TradeSync, Network)
+// for all users — flip to false to show them again.
+const HIDE_FOR_CONTENT = true
+
 const relativeTime = (date) => {
   if (!date) return ''
   const d = new Date(date)
@@ -7139,7 +7143,7 @@ export default function App() {
         ))}
 
         {/* TOS — private system, admin only, gold accent */}
-        {session?.user?.email === ADMIN_EMAIL && (
+        {!HIDE_FOR_CONTENT && session?.user?.email === ADMIN_EMAIL && (
           <button
             onClick={() => setPage('tos')}
             style={{
@@ -7188,7 +7192,7 @@ export default function App() {
         )}
 
         {/* TRADESYNC — private module, admin only, cyan accent */}
-        {session?.user?.email === ADMIN_EMAIL && (
+        {!HIDE_FOR_CONTENT && session?.user?.email === ADMIN_EMAIL && (
           <button
             onClick={() => setPage('copy')}
             style={{
@@ -7237,7 +7241,7 @@ export default function App() {
         )}
 
         {/* Network — admin only, accent purple, NEW badge */}
-        {session?.user?.email === ADMIN_EMAIL && (
+        {!HIDE_FOR_CONTENT && session?.user?.email === ADMIN_EMAIL && (
           <button
             onClick={() => setPage('network')}
             style={{
@@ -7308,7 +7312,7 @@ export default function App() {
         </div>
 
         {/* Hidden admin link — only visible for the admin email */}
-        {session?.user?.email === ADMIN_EMAIL && (
+        {!HIDE_FOR_CONTENT && session?.user?.email === ADMIN_EMAIL && (
           <button
             onClick={() => setPage('admin')}
             style={{
@@ -7449,7 +7453,7 @@ export default function App() {
             ))}
 
             {/* TOS — private system, admin only, gold accent */}
-            {session?.user?.email === ADMIN_EMAIL && (
+            {!HIDE_FOR_CONTENT && session?.user?.email === ADMIN_EMAIL && (
               <button
                 onClick={() => { setMobileSidebarOpen(false); setTimeout(() => setPage('tos'), 20) }}
                 style={{
@@ -7480,7 +7484,7 @@ export default function App() {
             )}
 
             {/* TRADESYNC — private module, admin only, cyan accent */}
-            {session?.user?.email === ADMIN_EMAIL && (
+            {!HIDE_FOR_CONTENT && session?.user?.email === ADMIN_EMAIL && (
               <button
                 onClick={() => { setMobileSidebarOpen(false); setTimeout(() => setPage('copy'), 20) }}
                 style={{
@@ -7511,7 +7515,7 @@ export default function App() {
             )}
 
             {/* Network — admin only, accent purple, NEW badge */}
-            {session?.user?.email === ADMIN_EMAIL && (
+            {!HIDE_FOR_CONTENT && session?.user?.email === ADMIN_EMAIL && (
               <button
                 onClick={() => { setMobileSidebarOpen(false); setTimeout(() => setPage('network'), 20) }}
                 style={{
