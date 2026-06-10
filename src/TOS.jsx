@@ -19,6 +19,7 @@ import {
   ThumbsUp, ThumbsDown, Gauge, Scale, ShieldCheck, Crosshair, Trophy,
   CheckCircle, XCircle, Zap, Award, Calendar, Clock, Flame,
   Sparkles, Hourglass, Layers, Gem, Rocket, Eye,
+  Lock, Flag, SkipForward, EyeOff, Ban,
 } from 'lucide-react'
 
 // ─── Palette ──────────────────────────────────────────────────────────────
@@ -52,11 +53,52 @@ const localKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
 const todayKey = () => localKey(new Date())
 const makeId = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `id_${Date.now()}_${Math.random().toString(36).slice(2)}`
 
+// ─── Hide P&L mode (global) ─────────────────────────────────────────────────
+// Module-level flag so the pure usd()/usdK() formatters can mask every dollar
+// figure across TOS. The header toggle mirrors this into React state to force a
+// re-render; both are seeded from / written to the same localStorage key.
+const HIDE_PNL_KEY = 'tos_hide_pnl'
+const PNL_MASK = '•••'
+let HIDE_PNL = lsGet(HIDE_PNL_KEY, false)
+const setHidePnl = (v) => { HIDE_PNL = !!v; lsSet(HIDE_PNL_KEY, HIDE_PNL) }
+
 // ─── number formatting ──────────────────────────────────────────────────────
-const usd   = (n) => { const v = Number(n) || 0; return (v < 0 ? '-$' : '$') + Math.round(Math.abs(v)).toLocaleString() }
-const usdK  = (n) => { const v = Number(n) || 0; const a = Math.abs(v); const s = v < 0 ? '-$' : '$'; return a >= 1000 ? `${s}${(a / 1000).toFixed(a >= 10000 ? 0 : 1)}k` : `${s}${Math.round(a)}` }
+const usd   = (n) => { if (HIDE_PNL) return PNL_MASK; const v = Number(n) || 0; return (v < 0 ? '-$' : '$') + Math.round(Math.abs(v)).toLocaleString() }
+const usdK  = (n) => { if (HIDE_PNL) return PNL_MASK; const v = Number(n) || 0; const a = Math.abs(v); const s = v < 0 ? '-$' : '$'; return a >= 1000 ? `${s}${(a / 1000).toFixed(a >= 10000 ? 0 : 1)}k` : `${s}${Math.round(a)}` }
 const pct   = (n) => `${Math.round(Number(n) || 0)}%`
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
+
+// ─── Execution Discipline data layer (localStorage) ─────────────────────────
+// Discipline is tracked alongside trades without touching the tos_trades schema:
+//   • passed setups  → valid setups the trader skipped (array)
+//   • rule breaks     → { [tradeId]: true } deviations flagged on logged trades
+//   • loss responses  → { [tradeId]: 'good' | 'break' } the post-loss reflection
+const PASSED_KEY   = 'tos_passed_setups'
+const BREAK_KEY    = 'tos_rule_breaks'
+const LOSSRESP_KEY = 'tos_loss_responses'
+const getPassed   = () => lsGet(PASSED_KEY, [])
+const getBreaks   = () => lsGet(BREAK_KEY, {})
+const getLossResp = () => lsGet(LOSSRESP_KEY, {})
+// Letter grade from the /50 plan quality score. A/A+ (>=35) clears the gate.
+const scoreGrade = (total) => total >= 42 ? 'A+' : total >= 35 ? 'A' : total >= 28 ? 'B' : total >= 20 ? 'C' : 'D'
+const isAGrade   = (total) => total >= 35
+// Distinct days this month that have a started daily plan and no rule break.
+const countPlanDaysThisMonth = (breakDays) => {
+  let n = 0
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)
+      if (!k || !k.startsWith('tos_plan_')) continue
+      const date = k.slice('tos_plan_'.length)
+      if (!isThisMonth(date) || breakDays.has(date)) continue
+      const p = lsGet(k, null)
+      if (p && (p.bias || p.entryTrigger || p.finalGate || p.primaryDraw)) n++
+    }
+  } catch { /* storage unavailable */ }
+  return n
+}
+// Reasons a trader skips a setup they should have taken — discipline leaks.
+const PASS_REASONS = ['Hesitated', 'Fear after a loss', 'Doubted the setup', 'Distracted / away', 'Wanted more confirmation', 'Broke my own plan']
 
 // ─── Risk settings (shared between Risk Engine + Performance) ───────────────
 // Futures contracts the Risk Engine sizes for. `micro` points to the smaller
@@ -317,6 +359,8 @@ const blankPlan = () => ({
   ote: [],
   entryTrigger: '', rbChecks: [false, false, false, false], wickCe: false,
   finalGate: '',
+  // Final-gate execution confirmations
+  gateRrOk: false, gatePriceStory: '',
 })
 
 // Weighted /50 score from all sections. Bias and Entry are required (red-marked).
@@ -347,6 +391,59 @@ function computeQuality(p) {
 
 // Always merge with blankPlan() so older saved plans gain the new merged fields.
 const loadPlan = (dt) => ({ ...blankPlan(), ...lsGet(`tos_plan_${dt}`, {}) })
+
+// ─── The Professional Trader Principle — permanent discipline banner ─────────
+const PRO_PRINCIPLES = [
+  { Icon: Clock,      text: 'Wait for A+ setups' },
+  { Icon: Target,     text: 'Take every valid setup' },
+  { Icon: Lock,       text: 'Do not change rules after losses' },
+  { Icon: Crosshair,  text: 'No target = no trade' },
+  { Icon: TrendingUp, text: 'Follow price, not opinions' },
+  { Icon: Award,      text: 'Discipline creates payouts' },
+]
+function ProfessionalPrinciple() {
+  return (
+    <div style={{ ...card, padding: '16px 18px', border: `1px solid ${GOLD_LINE}`, background: 'linear-gradient(135deg, rgba(234,179,8,0.09), #0d0d0d)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '13px' }}>
+        <Award size={14} color={GOLD} />
+        <div style={{ fontSize: '10.5px', fontWeight: 800, letterSpacing: '0.18em', color: GOLD, textTransform: 'uppercase' }}>The Professional Trader Principle</div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(168px, 1fr))', gap: '8px' }}>
+        {PRO_PRINCIPLES.map(p => (
+          <div key={p.text} style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '9px 11px', borderRadius: '9px', background: BG, border: `1px solid ${CARD_BORD}` }}>
+            <p.Icon size={14} color={GOLD} style={{ flexShrink: 0 }} />
+            <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.04em', color: '#cdb86f', textTransform: 'uppercase', lineHeight: 1.3 }}>{p.text}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Final-gate confirmation row. `locked` rows are auto-derived (read-only).
+function GateCheck({ ok, label, onToggle, locked = false, hint }) {
+  return (
+    <button type="button" onClick={locked ? undefined : onToggle} style={{
+      display: 'flex', alignItems: 'center', gap: '11px', width: '100%', textAlign: 'left',
+      padding: '11px 13px', borderRadius: '9px', cursor: locked ? 'default' : 'pointer', fontFamily: 'inherit', minHeight: 0,
+      border: `1px solid ${ok ? D_GREEN + '66' : CARD_BORD}`, background: ok ? 'rgba(34,197,94,0.08)' : BG,
+    }}>
+      <span style={{
+        width: '18px', height: '18px', borderRadius: '5px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        border: `1.5px solid ${ok ? D_GREEN : '#444'}`, background: ok ? D_GREEN : 'transparent',
+      }}>
+        {ok && <Check size={11} strokeWidth={3.5} color="#000" />}
+      </span>
+      <span style={{ flex: 1, fontSize: '12.5px', fontWeight: 600, color: ok ? '#fff' : '#aaa' }}>{label}</span>
+      {hint != null && <span style={{ fontSize: '11px', fontWeight: 800, color: ok ? D_GREEN : '#777' }}>{hint}</span>}
+    </button>
+  )
+}
+const STORY_OPTS = [
+  { v: 'price',      l: 'Price Confirmed',     c: D_GREEN },
+  { v: 'liquidity',  l: 'Liquidity Confirmed', c: GOLD },
+  { v: 'assumption', l: 'Assumption',          c: D_RED },
+]
 
 function DailyPlan({ pro = false }) {
   const [date, setDate] = useState(todayKey())
@@ -403,6 +500,9 @@ function DailyPlan({ pro = false }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      {/* THE PROFESSIONAL TRADER PRINCIPLE — permanent, always visible */}
+      <ProfessionalPrinciple />
+
       {/* Date controls */}
       <div style={{ ...card, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', padding: '16px 20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -516,6 +616,66 @@ function DailyPlan({ pro = false }) {
           </span>
           <span style={{ fontSize: '11px', color: finalValid ? D_GREEN : '#666', fontWeight: 600 }}>{finalLen}/15</span>
         </div>
+
+        {/* Required execution confirmations */}
+        {(() => {
+          const scoreOk = isAGrade(total)
+          const rrOk    = !!plan.gateRrOk
+          const story   = plan.gatePriceStory
+          const storyOk = story === 'price' || story === 'liquidity'
+          const allOk   = scoreOk && rrOk && storyOk
+          return (
+            <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: `1px solid ${CARD_BORD}` }}>
+              <div style={{ ...lbl, marginBottom: '10px' }}>Required before you may execute</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <GateCheck ok={scoreOk} locked label="Setup score is A or A+" hint={`${scoreGrade(total)} · ${total}/50`} />
+                <GateCheck ok={rrOk} onToggle={() => set('gateRrOk', !plan.gateRrOk)} label="Minimum 1:5 RR available" hint={rrOk ? '1:5+' : 'confirm'} />
+              </div>
+
+              <div style={{ marginTop: '14px' }}>
+                <div style={{ ...lbl, marginBottom: '8px' }}>Am I following price or inventing a story?</div>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {STORY_OPTS.map(o => {
+                    const on = story === o.v
+                    return (
+                      <button key={o.v} type="button" onClick={() => set('gatePriceStory', on ? '' : o.v)} style={{
+                        flex: '1 1 0', minWidth: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                        padding: '11px 10px', borderRadius: '9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12.5px', fontWeight: on ? 700 : 500, minHeight: 0, transition: 'all .15s',
+                        border: `1px solid ${on ? o.c : CARD_BORD}`, background: on ? `${o.c}1f` : 'transparent', color: on ? o.c : '#888',
+                      }}>
+                        <span style={{ width: '13px', height: '13px', borderRadius: '50%', flexShrink: 0, border: `1.5px solid ${on ? o.c : '#444'}`, background: on ? o.c : 'transparent' }} />
+                        {o.l}
+                      </button>
+                    )
+                  })}
+                </div>
+                {story === 'assumption' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginTop: '10px', padding: '11px 13px', borderRadius: '9px', background: 'rgba(239,68,68,0.1)', border: `1px solid ${D_RED}66`, color: D_RED, fontSize: '13px', fontWeight: 800, letterSpacing: '0.02em' }}>
+                    <AlertTriangle size={16} /> WAIT — NO TRADE
+                  </div>
+                )}
+              </div>
+
+              {/* Gate verdict */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: '11px', marginTop: '16px', padding: '14px 16px', borderRadius: '11px',
+                background: allOk ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
+                border: `1px solid ${allOk ? D_GREEN + '66' : D_RED + '66'}`,
+                color: allOk ? D_GREEN : D_RED, animation: allOk ? 'none' : 'tosBannerPulse 2.4s ease-in-out infinite',
+              }}>
+                {allOk ? <ShieldCheck size={20} /> : <Ban size={20} />}
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '14px', fontWeight: 900, letterSpacing: '0.01em' }}>{allOk ? 'SETUP CONFIRMED — EXECUTE THE PLAN' : 'NO SETUP = NO TRADE'}</div>
+                  {!allOk && (
+                    <div style={{ fontSize: '11px', color: '#a06b6b', marginTop: '3px', fontWeight: 500 }}>
+                      {[!scoreOk && 'score not A/A+', !rrOk && '1:5 RR not confirmed', !storyOk && 'price not confirmed'].filter(Boolean).join(' · ')}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )
+        })()}
       </div>
 
       {/* 9 — Trade Quality Score */}
@@ -640,10 +800,44 @@ const initTradeForm = () => {
   return { ...blankTrade(), bias: plan?.bias || '' }
 }
 
+// Centered overlay used by the passed-setup logger and the post-loss reflection.
+function TosModal({ children, onClose, maxWidth = '440px' }) {
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.74)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+      <div onClick={e => e.stopPropagation()} style={{ ...card, width: '100%', maxWidth, animation: 'tosEnter 0.2s ease-out both' }}>{children}</div>
+    </div>
+  )
+}
+
 function TradeLog({ session, trades, tableMissing, onAdded, onDeleted, pro = false }) {
   const [form, setForm] = useState(initTradeForm)
   const [saving, setSaving] = useState(false)
   const [dismissed, setDismissed] = useState({}) // in-memory only → reappears on reload
+
+  // ── Execution-discipline state (localStorage-backed) ──
+  const [ruleBreaks, setRuleBreaks] = useState(getBreaks)
+  const [lossResp,   setLossResp]   = useState(getLossResp)
+  const [passed,     setPassed]     = useState(getPassed)
+  const [lossPrompt, setLossPrompt] = useState(null)   // trade awaiting its loss reflection
+  const [passModal,  setPassModal]  = useState(false)
+  const [passForm,   setPassForm]   = useState({ instrument: '', reason: '', note: '' })
+  useEffect(() => { lsSet(BREAK_KEY, ruleBreaks) }, [ruleBreaks])
+  useEffect(() => { lsSet(LOSSRESP_KEY, lossResp) }, [lossResp])
+  useEffect(() => { lsSet(PASSED_KEY, passed) }, [passed])
+
+  const toggleBreak = (id) => setRuleBreaks(m => { const n = { ...m }; if (n[id]) delete n[id]; else n[id] = true; return n })
+  const answerLoss  = (id, ans) => {
+    setLossResp(m => ({ ...m, [id]: ans }))
+    if (ans === 'break') setRuleBreaks(m => ({ ...m, [id]: true }))
+  }
+  const savePassed = () => {
+    if (!passForm.reason) return toast.error('Pick why you skipped it')
+    setPassed(arr => [{ id: makeId(), date: todayKey(), instrument: passForm.instrument || null, reason: passForm.reason, note: passForm.note || null }, ...arr])
+    setPassForm({ instrument: '', reason: '', note: '' })
+    setPassModal(false)
+    toast.success('Passed setup logged')
+  }
+  const missedThisMonth = passed.filter(p => isThisMonth(p.date)).length
 
   const F = (k) => (v) => setForm(f => ({ ...f, [k]: v }))
   const FE = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }))
@@ -665,7 +859,10 @@ function TradeLog({ session, trades, tableMissing, onAdded, onDeleted, pro = fal
   const recent = trades.filter(t => t.trade_date !== todayKey()).slice(0, 15)
 
   const banners = []
-  if (lossesToday >= 2) banners.push({ id: 'stop', type: 'red', Icon: XCircle, text: 'STOP TRADING FOR TODAY — two losses, rules enforced' })
+  if (lossesToday >= 2) {
+    banners.push({ id: 'model', type: 'red', Icon: Brain, text: 'LOSSES DO NOT INVALIDATE THE MODEL — STOP TRADING' })
+    banners.push({ id: 'stop', type: 'red', Icon: XCircle, text: 'STOP TRADING FOR TODAY — two losses, rules enforced' })
+  }
   else if (lossesToday === 1) banners.push({ id: 'half', type: 'red', Icon: AlertTriangle, text: 'HALF RISK REQUIRED — reduce position size by 50%' })
   if (winsToday >= 1 && lossesToday === 0) banners.push({ id: 'win', type: 'green', Icon: CheckCircle, text: 'FIRST TRADE WON — consider calling it a day' })
 
@@ -714,12 +911,17 @@ function TradeLog({ session, trades, tableMissing, onAdded, onDeleted, pro = fal
     onAdded(data)
     setForm(initTradeForm())
     toast.success(form.date === todayKey() ? 'Trade logged' : `Trade filed under ${form.date}`)
+    // After a loss, force the rule-discipline reflection.
+    if (data.result === 'Loss') setLossPrompt(data)
   }
 
   const del = async (id) => {
     const { error } = await supabase.from('tos_trades').delete().eq('id', id)
     if (error) { toast.error(error.message); return }
     onDeleted(id)
+    // Drop any orphaned discipline flags for the removed trade.
+    setRuleBreaks(m => { if (!m[id]) return m; const n = { ...m }; delete n[id]; return n })
+    setLossResp(m => { if (!(id in m)) return m; const n = { ...m }; delete n[id]; return n })
   }
 
   const visibleBanners = banners.filter(b => !dismissed[b.id])
@@ -821,6 +1023,22 @@ function TradeLog({ session, trades, tableMissing, onAdded, onDeleted, pro = fal
 
         {/* ── TRADE LISTS ── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {/* Passed setups — discipline tracker for valid setups skipped */}
+          <div style={card}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ ...lbl, marginBottom: '4px' }}>Valid Setups Missed This Month</div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                  <span style={{ fontSize: '30px', fontWeight: 900, color: missedThisMonth > 0 ? ORANGE : GREEN, lineHeight: 1, letterSpacing: '-1px' }}>{missedThisMonth}</span>
+                  <span style={{ fontSize: '12px', color: '#666' }}>skipped</span>
+                </div>
+              </div>
+              <button onClick={() => setPassModal(true)} style={{ ...ghostBtn, display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px' }}>
+                <SkipForward size={15} color={GOLD} /> Log Passed Setup
+              </button>
+            </div>
+          </div>
+
           <div style={card}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
               <div style={{ fontSize: '14px', fontWeight: 800, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Today's Trades</div>
@@ -830,7 +1048,7 @@ function TradeLog({ session, trades, tableMissing, onAdded, onDeleted, pro = fal
               <div style={{ padding: '36px 16px', textAlign: 'center', color: '#555', fontSize: '13px' }}>No trades logged today.</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {todays.map(t => <TradeRow key={t.id} t={t} onDelete={del} pro={pro} />)}
+                {todays.map(t => <TradeRow key={t.id} t={t} onDelete={del} pro={pro} ruleBreak={!!ruleBreaks[t.id]} onFlag={() => toggleBreak(t.id)} lossResp={lossResp[t.id]} />)}
               </div>
             )}
           </div>
@@ -842,12 +1060,87 @@ function TradeLog({ session, trades, tableMissing, onAdded, onDeleted, pro = fal
                 <div style={{ fontSize: '12px', color: '#666' }}>last {recent.length}</div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {recent.map(t => <TradeRow key={t.id} t={t} onDelete={del} showDate pro={pro} />)}
+                {recent.map(t => <TradeRow key={t.id} t={t} onDelete={del} showDate pro={pro} ruleBreak={!!ruleBreaks[t.id]} onFlag={() => toggleBreak(t.id)} lossResp={lossResp[t.id]} />)}
               </div>
             </div>
           )}
         </div>
       </div>
+
+      {/* ── Log Passed Setup modal ── */}
+      {passModal && (
+        <TosModal onClose={() => setPassModal(false)}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '6px' }}>
+            <SkipForward size={17} color={GOLD} />
+            <div style={{ fontSize: '15px', fontWeight: 800, color: '#fff' }}>Log a Passed Setup</div>
+          </div>
+          <div style={{ fontSize: '12px', color: '#888', marginBottom: '16px', lineHeight: 1.5 }}>A valid setup you chose not to take. Taking every valid setup is the rule — record why you skipped.</div>
+          <div style={{ marginBottom: '14px' }}>
+            <div style={lbl}>Instrument (optional)</div>
+            <input value={passForm.instrument} onChange={e => setPassForm(f => ({ ...f, instrument: e.target.value }))} style={inp} placeholder="NQ, ES…" />
+          </div>
+          <div style={{ ...lbl, color: RED, marginBottom: '8px' }}>Why did I skip it? — required</div>
+          <div className="tos-chipgrid" style={{ marginBottom: '14px' }}>
+            {PASS_REASONS.map(r => {
+              const on = passForm.reason === r
+              return (
+                <button key={r} type="button" onClick={() => setPassForm(f => ({ ...f, reason: on ? '' : r }))} style={{
+                  padding: '9px 12px', borderRadius: '8px', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s', minHeight: 0,
+                  border: `1px solid ${on ? GOLD_LINE : CARD_BORD}`, background: on ? GOLD_SOFT : 'transparent', color: on ? GOLD : '#888', fontWeight: on ? 700 : 500,
+                }}>{r}</button>
+              )
+            })}
+          </div>
+          <div style={{ marginBottom: '18px' }}>
+            <div style={lbl}>Note (optional)</div>
+            <textarea value={passForm.note} onChange={e => setPassForm(f => ({ ...f, note: e.target.value }))} style={ta} placeholder="What did I see, and what stopped me?" />
+          </div>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button onClick={() => setPassModal(false)} style={{ ...ghostBtn, flex: 1 }}>Cancel</button>
+            <button onClick={savePassed} style={{ ...goldBtn, flex: 1 }}>Log Passed Setup</button>
+          </div>
+        </TosModal>
+      )}
+
+      {/* ── Post-loss reflection modal ── */}
+      {lossPrompt && (() => {
+        const ans = lossResp[lossPrompt.id]
+        return (
+          <TosModal onClose={() => setLossPrompt(null)}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '6px' }}>
+              <Scale size={17} color={GOLD} />
+              <div style={{ fontSize: '15px', fontWeight: 800, color: '#fff' }}>Did I follow my rules?</div>
+            </div>
+            <div style={{ fontSize: '12px', color: '#888', marginBottom: '18px', lineHeight: 1.5 }}>
+              {lossPrompt.instrument} loss logged. A loss inside your rules is part of the model. A loss from breaking them is the only real mistake.
+            </div>
+            {!ans ? (
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button onClick={() => answerLoss(lossPrompt.id, 'good')} style={{
+                  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '14px', borderRadius: '11px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 800, fontSize: '13px',
+                  border: `1px solid ${D_GREEN}66`, background: 'rgba(34,197,94,0.1)', color: D_GREEN,
+                }}><ThumbsUp size={16} /> Yes</button>
+                <button onClick={() => answerLoss(lossPrompt.id, 'break')} style={{
+                  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '14px', borderRadius: '11px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 800, fontSize: '13px',
+                  border: `1px solid ${D_RED}66`, background: 'rgba(239,68,68,0.1)', color: D_RED,
+                }}><ThumbsDown size={16} /> No</button>
+              </div>
+            ) : (
+              <>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '11px', padding: '16px', borderRadius: '11px',
+                  background: ans === 'good' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
+                  border: `1px solid ${ans === 'good' ? D_GREEN + '66' : D_RED + '66'}`, color: ans === 'good' ? D_GREEN : D_RED,
+                }}>
+                  {ans === 'good' ? <CheckCircle size={22} /> : <Flag size={22} />}
+                  <div style={{ fontSize: '15px', fontWeight: 900, letterSpacing: '0.01em' }}>{ans === 'good' ? 'GOOD LOSS — MOVE ON' : 'RULE BREAK — FIX PROCESS'}</div>
+                </div>
+                <button onClick={() => setLossPrompt(null)} style={{ ...ghostBtn, width: '100%', marginTop: '14px' }}>Close</button>
+              </>
+            )}
+          </TosModal>
+        )
+      })()}
     </div>
   )
 }
@@ -856,12 +1149,12 @@ function Tag({ children, color = '#888' }) {
   return <span style={{ padding: '2px 8px', borderRadius: '6px', fontSize: '10px', fontWeight: 600, background: `${color}14`, color, border: `1px solid ${color}28` }}>{children}</span>
 }
 
-function TradeRow({ t, onDelete, showDate = false, pro = false }) {
+function TradeRow({ t, onDelete, showDate = false, pro = false, ruleBreak = false, onFlag, lossResp }) {
   const c = t.result === 'Win' ? GREEN : t.result === 'Loss' ? RED : '#999'
   const cc = confluenceCount(t)
   const entryTime = t.created_at ? new Date(t.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '—'
   return (
-    <div style={{ padding: '12px 14px', borderRadius: '10px', background: BG, border: `1px solid ${CARD_BORD}` }}>
+    <div style={{ padding: '12px 14px', borderRadius: '10px', background: BG, border: `1px solid ${ruleBreak ? D_RED + '55' : CARD_BORD}` }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flexWrap: 'wrap' }}>
           <span style={{ fontWeight: 800, color: '#fff', fontSize: '14px' }}>{t.instrument}</span>
@@ -871,10 +1164,15 @@ function TradeRow({ t, onDelete, showDate = false, pro = false }) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
           <span style={{ fontSize: '12px', color: GOLD, fontWeight: 700 }}>{t.rr ? `${t.rr}R` : '—'}</span>
+          {onFlag && (
+            <button onClick={onFlag} style={{ background: 'transparent', border: 'none', color: ruleBreak ? D_RED : '#555', cursor: 'pointer', display: 'flex', minHeight: 0, padding: 0 }} title={ruleBreak ? 'Unflag rule break' : 'Flag as rule break'}><Flag size={14} fill={ruleBreak ? D_RED : 'none'} /></button>
+          )}
           <button onClick={() => onDelete(t.id)} style={{ background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', display: 'flex', minHeight: 0, padding: 0 }} title="Delete"><Trash2 size={14} /></button>
         </div>
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '9px' }}>
+        {ruleBreak && <Tag color={D_RED}><Flag size={9} style={{ verticalAlign: '-1px' }} /> RULE BREAK</Tag>}
+        {lossResp === 'good' && <Tag color={GREEN}><Check size={9} strokeWidth={3} style={{ verticalAlign: '-1px' }} /> Good loss</Tag>}
         {t.session && <Tag>{t.session}</Tag>}
         {t.liquidity_swept && <Tag>Liq swept</Tag>}
         {t.rejection_block && <Tag>RB</Tag>}
@@ -1115,6 +1413,23 @@ function Performance({ trades, tableMissing, pro = false }) {
   const oneR = getOneR()
   const accountSize = parseFloat(getRisk().accountSize) || 10000
 
+  // ── Execution-discipline metrics (localStorage-backed) ──
+  const discipline = useMemo(() => {
+    const passed = getPassed(), breaks = getBreaks(), resp = getLossResp()
+    const monthTrades = trades.filter(t => isThisMonth(t.trade_date))
+    const breakDays = new Set(trades.filter(t => breaks[t.id]).map(t => t.trade_date))
+    const daysFollowed = countPlanDaysThisMonth(breakDays)
+    const skipped = passed.filter(p => isThisMonth(p.date)).length
+    const setupsPassed = passed.length
+    const patience = daysFollowed * 10 + skipped * 5
+    const monthBreaks = monthTrades.filter(t => breaks[t.id]).length
+    const adherence = monthTrades.length ? Math.round((monthTrades.length - monthBreaks) / monthTrades.length * 100) : 100
+    const monthLosses = monthTrades.filter(t => t.result === 'Loss')
+    const goodLosses = monthLosses.filter(t => resp[t.id] === 'good').length
+    const breakLosses = monthLosses.filter(t => resp[t.id] === 'break' || breaks[t.id]).length
+    return { daysFollowed, skipped, setupsPassed, patience, adherence, monthBreaks, goodLosses, breakLosses, monthTradeN: monthTrades.length }
+  }, [trades])
+
   const stats = useMemo(() => {
     const n = trades.length
     const wins = trades.filter(t => t.result === 'Win')
@@ -1211,6 +1526,65 @@ function Performance({ trades, tableMissing, pro = false }) {
         <StatCard label="Total R" value={`${stats.totalR >= 0 ? '+' : ''}${stats.totalR.toFixed(1)}R`} color={stats.totalR >= 0 ? GREEN : RED} Icon={DollarSign} sub={usd(stats.totalR * oneR)} />
         <StatCard label="Monthly R" value={`${stats.monthR >= 0 ? '+' : ''}${stats.monthR.toFixed(1)}R`} color={stats.monthR >= 0 ? GREEN : RED} sub={usd(stats.monthR * oneR)} />
         <StatCard label="Weekly R" value={`${stats.weekR >= 0 ? '+' : ''}${stats.weekR.toFixed(1)}R`} color={stats.weekR >= 0 ? GREEN : RED} sub={usd(stats.weekR * oneR)} />
+      </div>
+
+      {/* ── Patience Score + Discipline Metrics ── */}
+      <div className="tos-grid-2">
+        <div style={{ ...card, border: `1px solid ${GOLD_LINE}`, background: 'linear-gradient(135deg, rgba(234,179,8,0.06), #0d0d0d)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+            <div style={{ fontSize: '14px', fontWeight: 800, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Hourglass size={16} color={GOLD} /> Patience Score
+            </div>
+            <div style={{ ...lbl, marginBottom: 0 }}>this month</div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', marginBottom: '16px' }}>
+            <span style={{ fontSize: '52px', fontWeight: 900, color: GOLD, letterSpacing: '-2px', lineHeight: 1 }}>{discipline.patience}</span>
+            <span style={{ fontSize: '11px', color: '#666' }}>(days × 10) + (skips × 5)</span>
+          </div>
+          <div className="tos-grid-3">
+            {[
+              { l: 'Days Followed Plan', v: discipline.daysFollowed, Icon: Calendar },
+              { l: 'Trades Skipped Correctly', v: discipline.skipped, Icon: SkipForward },
+              { l: 'Setups Passed', v: discipline.setupsPassed, Icon: Eye },
+            ].map(m => (
+              <div key={m.l} style={{ textAlign: 'center', padding: '14px 8px', borderRadius: '10px', background: BG, border: `1px solid ${CARD_BORD}` }}>
+                <m.Icon size={14} color={GOLD} style={{ marginBottom: '6px' }} />
+                <div style={{ fontSize: '24px', fontWeight: 800, color: '#fff', lineHeight: 1 }}>{m.v}</div>
+                <div style={{ ...lbl, marginTop: '7px', marginBottom: 0 }}>{m.l}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={card}>
+          <div style={{ fontSize: '14px', fontWeight: 800, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+            <ShieldCheck size={16} color={GOLD} /> Discipline Metrics
+          </div>
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '7px' }}>
+              <span style={{ fontSize: '12px', color: '#aaa', fontWeight: 600 }}>Rule Adherence</span>
+              <span style={{ fontSize: '13px', fontWeight: 800, color: discipline.adherence >= 80 ? GREEN : discipline.adherence >= 50 ? YELLOW : RED }}>{discipline.adherence}%</span>
+            </div>
+            <div style={{ height: '8px', borderRadius: '6px', background: '#161616', overflow: 'hidden' }}>
+              <div style={{ width: `${discipline.adherence}%`, height: '100%', background: discipline.adherence >= 80 ? GREEN : discipline.adherence >= 50 ? YELLOW : RED, borderRadius: '6px', transition: 'width .4s' }} />
+            </div>
+            <div style={{ fontSize: '10.5px', color: '#666', marginTop: '6px' }}>{discipline.monthBreaks} rule break{discipline.monthBreaks !== 1 ? 's' : ''} across {discipline.monthTradeN} trade{discipline.monthTradeN !== 1 ? 's' : ''} this month</div>
+          </div>
+          <div style={{ ...lbl, marginBottom: '8px' }}>Good Losses vs Rule-Break Losses</div>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <div style={{ flex: 1, textAlign: 'center', padding: '14px 8px', borderRadius: '10px', background: 'rgba(126,231,135,0.07)', border: `1px solid ${GREEN}33` }}>
+              <div style={{ fontSize: '28px', fontWeight: 900, color: GREEN, lineHeight: 1 }}>{discipline.goodLosses}</div>
+              <div style={{ ...lbl, marginTop: '7px', marginBottom: 0, color: '#7a9a7e' }}>Good Losses</div>
+            </div>
+            <div style={{ flex: 1, textAlign: 'center', padding: '14px 8px', borderRadius: '10px', background: 'rgba(255,107,107,0.07)', border: `1px solid ${RED}33` }}>
+              <div style={{ fontSize: '28px', fontWeight: 900, color: RED, lineHeight: 1 }}>{discipline.breakLosses}</div>
+              <div style={{ ...lbl, marginTop: '7px', marginBottom: 0, color: '#a87a7a' }}>Rule-Break Losses</div>
+            </div>
+          </div>
+          <div style={{ marginTop: '14px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: GOLD, fontWeight: 600, lineHeight: 1.4 }}>
+            <Award size={14} /> The goal is to reward discipline, not activity.
+          </div>
+        </div>
       </div>
 
       {/* Process score tracker */}
@@ -2094,6 +2468,15 @@ function Challenge({ trades, pro = false }) {
   // daily-limit calculator
   const tradesBeforeLimit = dailyDD > 0 && dollarRisk > 0 ? Math.floor(dailyDD / dollarRisk) : null
 
+  // Max trades allowed TODAY = remaining daily drawdown ÷ risk per trade.
+  // Trailing-DD firms (no fixed daily limit) fall back to the total buffer.
+  const todayChTrades = chTrades.filter(t => t.trade_date === todayKey())
+  const todayPnl = todayChTrades.reduce((s, t) => s + tradeR(t) * oneR, 0)
+  const todayLossUsed = Math.max(0, -todayPnl)
+  const effDailyDD = f.daily > 0 ? dailyDD : totalDD
+  const remainingDailyDD = Math.max(0, effDailyDD - todayLossUsed)
+  const maxTradesToday = dollarRisk > 0 ? Math.floor(remainingDailyDD / dollarRisk) : 0
+
   // consistency — per-day $ from logged R × 1R (dayPnl computed above)
   const dayVals = Object.entries(dayPnl).map(([date, v]) => ({ date, v })).sort((a, b) => a.date.localeCompare(b.date))
   const profitDays = dayVals.filter(d => d.v > 0)
@@ -2145,6 +2528,23 @@ function Challenge({ trades, pro = false }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
       <Confetti run={confettiRun} />
+
+      {/* Flawless-execution statement + today's hard trade cap */}
+      <div style={{ ...card, border: `1px solid ${GOLD_LINE}`, background: 'linear-gradient(135deg, rgba(234,179,8,0.10), #0d0d0d)' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '18px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flex: '1 1 320px', minWidth: '260px' }}>
+            <Trophy size={18} color={GOLD} style={{ marginTop: '3px', flexShrink: 0 }} />
+            <div style={{ fontSize: '15px', fontWeight: 700, color: '#fff', lineHeight: 1.55 }}>
+              My goal is not to pass today. My goal is not to make money today. <span style={{ color: GOLD }}>My goal is to execute flawlessly.</span>
+            </div>
+          </div>
+          <div style={{ textAlign: 'center', padding: '12px 20px', borderRadius: '12px', background: BG, border: `1px solid ${GOLD_LINE}`, flexShrink: 0 }}>
+            <div style={{ ...lbl, marginBottom: '5px' }}>Max Trades Allowed Today</div>
+            <div style={{ fontSize: '36px', fontWeight: 900, color: maxTradesToday > 0 ? GOLD : RED, lineHeight: 1, letterSpacing: '-1px' }}>{maxTradesToday}</div>
+            <div style={{ fontSize: '10px', color: '#666', marginTop: '5px' }}>{usd(remainingDailyDD)} left ÷ {usd(dollarRisk)}/trade</div>
+          </div>
+        </div>
+      </div>
 
       {/* Setup */}
       <div style={card}>
@@ -2497,6 +2897,10 @@ export function TOSPage({ session }) {
   const [tableMissing, setTableMissing] = useState(false)
   const pro = uiMode === 'pro'
   const setMode = (m) => { setUiMode(m); lsSet(UI_KEY, m) }
+  // Hide P&L mode — mirrors the module-level flag read by usd()/usdK() into
+  // React state so toggling re-renders every masked dollar figure.
+  const [hidePnl, setHidePnlState] = useState(() => lsGet(HIDE_PNL_KEY, false))
+  const toggleHidePnl = () => { const v = !hidePnl; setHidePnl(v); setHidePnlState(v) }
 
   useEffect(() => {
     let cancelled = false
@@ -2551,20 +2955,31 @@ export function TOSPage({ session }) {
             </div>
             <h1 style={{ fontSize: '38px', fontWeight: 900, letterSpacing: '-1.5px', color: '#fff', lineHeight: 1, marginBottom: '8px' }}>Trading OS</h1>
             <div style={{ fontSize: '13.5px', color: '#999' }}>Plan → execute → enforce → measure → improve. Your edge, operationalised.</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '12px', color: GOLD, fontWeight: 600, letterSpacing: '0.02em', marginTop: '7px' }}>
+              <Award size={13} /> Winning today is following the plan.
+            </div>
           </div>
-          {/* UI version switcher */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px', borderRadius: '11px', background: 'rgba(0,0,0,0.35)', border: `1px solid ${CARD_BORD}`, flexShrink: 0 }}>
-            {[{ id: 'standard', label: 'Standard', Icon: Layers }, { id: 'pro', label: 'Pro', Icon: Gem }].map(m => {
-              const on = uiMode === m.id
-              return (
-                <button key={m.id} onClick={() => setMode(m.id)} style={{
-                  display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', cursor: 'pointer', fontFamily: 'inherit', minHeight: 0,
-                  border: 'none', background: on ? GOLD : 'transparent', color: on ? '#000' : '#999', fontSize: '12.5px', fontWeight: on ? 800 : 600, transition: 'all .15s',
-                }}>
-                  <m.Icon size={14} /> {m.label}
-                </button>
-              )
-            })}
+          {/* Header controls — Hide P&L + UI version switcher */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end', flexShrink: 0 }}>
+            <button onClick={toggleHidePnl} title="Hide all dollar amounts across TOS" style={{
+              display: 'flex', alignItems: 'center', gap: '7px', padding: '8px 14px', borderRadius: '10px', cursor: 'pointer', fontFamily: 'inherit', minHeight: 0,
+              border: `1px solid ${hidePnl ? GOLD_LINE : CARD_BORD}`, background: hidePnl ? GOLD_SOFT : 'rgba(0,0,0,0.35)', color: hidePnl ? GOLD : '#999', fontSize: '12.5px', fontWeight: 700, transition: 'all .15s',
+            }}>
+              {hidePnl ? <EyeOff size={14} /> : <Eye size={14} />} {hidePnl ? 'P&L Hidden' : 'Hide P&L'}
+            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px', borderRadius: '11px', background: 'rgba(0,0,0,0.35)', border: `1px solid ${CARD_BORD}` }}>
+              {[{ id: 'standard', label: 'Standard', Icon: Layers }, { id: 'pro', label: 'Pro', Icon: Gem }].map(m => {
+                const on = uiMode === m.id
+                return (
+                  <button key={m.id} onClick={() => setMode(m.id)} style={{
+                    display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', cursor: 'pointer', fontFamily: 'inherit', minHeight: 0,
+                    border: 'none', background: on ? GOLD : 'transparent', color: on ? '#000' : '#999', fontSize: '12.5px', fontWeight: on ? 800 : 600, transition: 'all .15s',
+                  }}>
+                    <m.Icon size={14} /> {m.label}
+                  </button>
+                )
+              })}
+            </div>
           </div>
         </div>
       </div>
