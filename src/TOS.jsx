@@ -18,17 +18,21 @@ import {
   Wallet, ShieldCheck, Trophy, RotateCcw,
 } from 'lucide-react'
 
-// ─── Palette ────────────────────────────────────────────────────────────────
-const GOLD = '#eab308', GOLD_DIM = 'rgba(234,179,8,0.14)', GOLD_LINE = 'rgba(234,179,8,0.45)'
-const GREEN = '#22c55e', RED = '#ef4444', AMBER = '#f59e0b', ORANGE = '#f97316', BLUE = '#60a5fa'
-const BG = '#000', PANEL = '#0a0a0a', SUNK = '#070707', LINE = '#1a1a1a', TXT = '#fff', MUTE = '#666'
+// ─── Palette — pure monochrome ────────────────────────────────────────────────
+// White = active / important. Grays = inactive. Functional color only:
+// green = win/pass, red = loss/fail, caution-yellow = risk-bar mid band.
+const GOLD = '#ffffff', GOLD_DIM = 'rgba(255,255,255,0.10)', GOLD_LINE = 'rgba(255,255,255,0.38)'
+const GREEN = '#22c55e', RED = '#ef4444', CAUTION = '#facc15'
+const AMBER = '#8f8f8f'                                          // former caution accent → gray
+const BG = '#000', PANEL = '#0a0a0a', SUNK = '#070707', RAISED = '#111', LINE = '#1a1a1a', LINE2 = '#222', TXT = '#fff', MUTE = '#666'
 
 // ─── Style tokens ─────────────────────────────────────────────────────────────
-const panel = { background: PANEL, border: `1px solid ${LINE}`, borderRadius: '14px', padding: '16px' }
-const selStyle = { width: '100%', background: SUNK, border: `1px solid ${LINE}`, borderRadius: '9px', padding: '10px 30px 10px 12px', color: '#fff', fontSize: '12.5px', outline: 'none', appearance: 'none', WebkitAppearance: 'none', fontFamily: 'inherit', cursor: 'pointer', boxSizing: 'border-box' }
-const inpStyle = { width: '100%', background: SUNK, border: `1px solid ${LINE}`, borderRadius: '9px', padding: '10px 12px', color: '#fff', fontSize: '13px', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }
-const ghostBtn = { background: 'transparent', color: '#888', border: `1px solid ${LINE}`, borderRadius: '9px', padding: '10px 16px', cursor: 'pointer', fontWeight: 600, fontSize: '12.5px', fontFamily: 'inherit' }
-const goldBtn = { background: GOLD, color: '#000', border: 'none', borderRadius: '10px', padding: '12px 18px', cursor: 'pointer', fontWeight: 800, fontSize: '13px', fontFamily: 'inherit' }
+const panel = { background: PANEL, border: `1px solid ${LINE}`, borderRadius: '12px', padding: '16px' }
+const selStyle = { width: '100%', background: SUNK, border: `1px solid ${LINE}`, borderRadius: '10px', padding: '10px 30px 10px 12px', color: '#fff', fontSize: '12.5px', outline: 'none', appearance: 'none', WebkitAppearance: 'none', fontFamily: 'inherit', cursor: 'pointer', boxSizing: 'border-box', transition: 'border-color .15s ease' }
+const inpStyle = { width: '100%', background: SUNK, border: `1px solid ${LINE}`, borderRadius: '10px', padding: '10px 12px', color: '#fff', fontSize: '13px', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', transition: 'border-color .15s ease' }
+const ghostBtn = { background: 'transparent', color: '#888', border: `1px solid ${LINE}`, borderRadius: '10px', padding: '10px 16px', cursor: 'pointer', fontWeight: 600, fontSize: '12.5px', fontFamily: 'inherit', transition: 'all .15s ease' }
+const goldBtn = { background: GOLD, color: '#000', border: 'none', borderRadius: '10px', padding: '12px 18px', cursor: 'pointer', fontWeight: 800, fontSize: '13px', fontFamily: 'inherit', transition: 'opacity .15s ease, transform .15s ease' }
+const makeId = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'id_' + Math.random().toString(36).slice(2)
 
 // ─── localStorage helpers ─────────────────────────────────────────────────────
 const lsGet = (k, fb) => { try { const s = localStorage.getItem(k); return s == null ? fb : JSON.parse(s) } catch { return fb } }
@@ -103,7 +107,7 @@ function computeGrade(c) {
   const grade = s >= 90 ? 'A+' : s >= 75 ? 'A' : s >= 55 ? 'B' : s >= 35 ? 'C' : 'INVALID'
   return { grade, score: s }
 }
-const GRADE_COLOR = { 'A+': GOLD, A: GREEN, B: AMBER, C: ORANGE, INVALID: RED }
+const GRADE_COLOR = { 'A+': '#ffffff', A: GREEN, B: '#b0b0b0', C: '#787878', INVALID: RED }
 const verdictOf = (c) => {
   const ex = [c.clearTarget, c.clearPath, c.aPlus, c.takeTrade]
   if (ex.some(v => v === false)) return 'no'
@@ -159,13 +163,16 @@ function computeCore(trades, settings) {
 // ════════════════════════════════════════════════════════════════════════════
 function Toggle({ label, active, onClick, activeColor = GOLD, activeText = '#000', Icon, size = 'md', flex = false }) {
   const lg = size === 'lg'
+  const [h, setH] = useState(false)
   return (
-    <button type="button" onClick={onClick} style={{
+    <button type="button" onClick={onClick} onMouseEnter={() => setH(true)} onMouseLeave={() => setH(false)} style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
-      padding: lg ? '13px 14px' : '9px 10px', borderRadius: '9px', cursor: 'pointer', fontFamily: 'inherit',
+      padding: lg ? '13px 14px' : '9px 10px', borderRadius: '10px', cursor: 'pointer', fontFamily: 'inherit',
       fontSize: lg ? '13px' : '11.5px', fontWeight: active ? 800 : 600, lineHeight: 1.1,
-      border: `1px solid ${active ? activeColor : LINE}`, background: active ? activeColor : '#0d0d0d',
-      color: active ? activeText : '#888', transition: 'all .12s', minHeight: 0, flex: flex ? '1 1 0' : 'none', whiteSpace: 'nowrap',
+      border: `1px solid ${active ? activeColor : (h ? '#333' : LINE)}`,
+      background: active ? activeColor : (h ? '#161616' : '#0d0d0d'),
+      color: active ? activeText : (h ? '#cfcfcf' : '#888'),
+      transition: 'all .15s ease', minHeight: 0, flex: flex ? '1 1 0' : 'none', whiteSpace: 'nowrap',
     }}>{Icon && <Icon size={lg ? 15 : 13} />}{label}</button>
   )
 }
@@ -183,7 +190,7 @@ function SegRow({ options, value, onChange, colorFn }) {
         const opt = typeof o === 'string' ? { v: o, l: o } : o
         const active = value === opt.v
         const ac = colorFn ? colorFn(opt.v) : GOLD
-        return <Toggle key={opt.v} label={opt.l} Icon={opt.Icon} active={active} onClick={() => onChange(active ? '' : opt.v)} activeColor={ac} activeText={ac === GREEN || ac === RED || ac === ORANGE ? '#fff' : '#000'} flex />
+        return <Toggle key={opt.v} label={opt.l} Icon={opt.Icon} active={active} onClick={() => onChange(active ? '' : opt.v)} activeColor={ac} activeText={ac === GREEN || ac === RED ? '#fff' : '#000'} flex />
       })}
     </div>
   )
@@ -278,7 +285,7 @@ function Command({ trades, settings, command, setCommand, onOpenSettings, missed
   ]
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* TOP BAR — compact metrics, horizontal scroll on mobile */}
       <div className="tos-scroll" style={{ display: 'flex', overflowX: 'auto', background: PANEL, border: `1px solid ${LINE}`, borderRadius: '12px' }}>
         {topStats.map((s, i) => <Stat key={i} {...s} />)}
@@ -308,8 +315,8 @@ function Command({ trades, settings, command, setCommand, onOpenSettings, missed
               <Label>Trading Against Primary?</Label>
               <YN value={c.againstPrimary} onChange={v => set('againstPrimary', v)} />
               {c.againstPrimary === true && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginTop: '8px', padding: '8px 11px', borderRadius: '8px', background: 'rgba(245,158,11,0.1)', border: `1px solid ${AMBER}55`, color: AMBER, fontSize: '11px', fontWeight: 700 }}>
-                  <AlertTriangle size={13} /> AGAINST OBJECTIVE — LOWER PROBABILITY
+                <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginTop: '8px', padding: '8px 11px', borderRadius: '9px', background: RAISED, border: `1px solid ${LINE2}`, color: '#bbb', fontSize: '11px', fontWeight: 700 }}>
+                  <AlertTriangle size={13} color="#fff" /> AGAINST OBJECTIVE — LOWER PROBABILITY
                 </div>
               )}
             </div>
@@ -423,6 +430,108 @@ function Command({ trades, settings, command, setCommand, onOpenSettings, missed
 // ════════════════════════════════════════════════════════════════════════════
 //  VIEW 2 — ANALYTICS
 // ════════════════════════════════════════════════════════════════════════════
+// ─── Apex account tracker (manual, multi-account, localStorage) ───────────────
+const APEX_KEY = 'tos_apex'
+const APEX_SIZES = [50000, 100000, 150000, 250000, 300000]
+const APEX_TYPES = ['Evaluation', 'PA', 'Funded']
+const blankApex = (n = 1) => ({ id: makeId(), name: `Account ${n}`, size: 50000, type: 'Evaluation', startBalance: '50000', currentBalance: '50000', threshold: '2500', profitGoal: '3000', daysTraded: '0' })
+const loadApex = () => { const s = lsGet(APEX_KEY, null); return (s && Array.isArray(s.accounts) && s.accounts.length) ? { accounts: s.accounts, selected: clamp(s.selected || 0, 0, s.accounts.length - 1) } : { accounts: [blankApex(1)], selected: 0 } }
+const riskColor = (r) => (r >= 0.5 ? GREEN : r >= 0.25 ? CAUTION : RED)
+const apexIconBtn = { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '30px', height: '30px', borderRadius: '8px', background: SUNK, border: `1px solid ${LINE}`, color: '#999', cursor: 'pointer', transition: 'all .15s ease' }
+
+function ApexBar({ label, valueText, ratio, color }) {
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+        <span style={{ fontSize: '10px', letterSpacing: '0.08em', textTransform: 'uppercase', color: MUTE, fontWeight: 700 }}>{label}</span>
+        <span style={{ fontSize: '11px', fontWeight: 800, color }}>{valueText}</span>
+      </div>
+      <div style={{ height: '8px', borderRadius: '6px', background: '#161616', overflow: 'hidden' }}>
+        <div style={{ width: `${clamp(ratio, 0, 1) * 100}%`, height: '100%', background: color, borderRadius: '6px', transition: 'width .3s ease, background .3s ease' }} />
+      </div>
+    </div>
+  )
+}
+function ApexTracker() {
+  const [st, setSt] = useState(loadApex)
+  const save = (next) => { setSt(next); lsSet(APEX_KEY, next) }
+  const accounts = st.accounts
+  const sel = clamp(st.selected, 0, accounts.length - 1)
+  const a = accounts[sel]
+  const upd = (k, v) => save({ ...st, accounts: accounts.map((x, i) => i === sel ? { ...x, [k]: v } : x) })
+  const addAcct = () => save({ accounts: [...accounts, blankApex(accounts.length + 1)], selected: accounts.length })
+  const delAcct = () => { if (accounts.length <= 1) return save({ accounts: [blankApex(1)], selected: 0 }); const next = accounts.filter((_, i) => i !== sel); save({ accounts: next, selected: clamp(sel, 0, next.length - 1) }) }
+
+  const size = num(a.size)
+  const start = num(a.startBalance) || size
+  const current = num(a.currentBalance) || start
+  const threshold = num(a.threshold)
+  const goal = num(a.profitGoal)
+  const profitMade = current - start
+  const profitRemaining = Math.max(0, goal - profitMade)
+  const profitRatio = goal > 0 ? clamp(profitMade / goal, 0, 1) : 0
+  const peak = Math.max(start, current)
+  const ddRemaining = Math.max(0, current - (peak - threshold))
+  const bufferRatio = threshold > 0 ? clamp(ddRemaining / threshold, 0, 1) : 0
+  const health = Math.round(bufferRatio * 100)
+  const profitDone = goal > 0 && profitRemaining <= 0
+
+  return (
+    <div style={panel}>
+      <PanelTitle Icon={Wallet} right={(
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <button onClick={addAcct} title="Add account" style={apexIconBtn}><Plus size={14} /></button>
+          <button onClick={delAcct} title="Delete account" style={apexIconBtn}><Trash2 size={14} /></button>
+        </div>
+      )}>Apex Account</PanelTitle>
+
+      <div className="tos-scroll" style={{ display: 'flex', gap: '6px', overflowX: 'auto', marginBottom: '16px' }}>
+        {accounts.map((x, i) => (
+          <button key={x.id} onClick={() => save({ ...st, selected: i })} style={{
+            padding: '7px 14px', borderRadius: '99px', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', fontWeight: i === sel ? 800 : 600, whiteSpace: 'nowrap', flexShrink: 0, transition: 'all .15s ease',
+            border: `1px solid ${i === sel ? GOLD : LINE}`, background: i === sel ? GOLD : 'transparent', color: i === sel ? '#000' : '#888',
+          }}>{x.name || `Account ${i + 1}`}</button>
+        ))}
+      </div>
+
+      <div className="tos-apex">
+        <div><Label>Name / Number</Label><input value={a.name} onChange={e => upd('name', e.target.value)} style={inpStyle} placeholder="Apex #…" /></div>
+        <div><Label>Account Type</Label><SegRow options={APEX_TYPES} value={a.type} onChange={v => upd('type', v || 'Evaluation')} /></div>
+        <div><Label>Days Traded</Label><input value={a.daysTraded} onChange={e => upd('daysTraded', e.target.value)} inputMode="numeric" style={inpStyle} placeholder="0" /></div>
+      </div>
+      <div style={{ marginTop: '12px' }}>
+        <Label>Account Size</Label>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(70px, 1fr))', gap: '6px' }}>
+          {APEX_SIZES.map(sz => <Toggle key={sz} label={`$${sz / 1000}K`} active={size === sz} onClick={() => upd('size', sz)} />)}
+        </div>
+      </div>
+      <div className="tos-apex" style={{ marginTop: '12px' }}>
+        <div><Label>Starting Balance</Label><input value={a.startBalance} onChange={e => upd('startBalance', e.target.value)} inputMode="decimal" style={inpStyle} placeholder="50000" /></div>
+        <div><Label>Current Balance</Label><input value={a.currentBalance} onChange={e => upd('currentBalance', e.target.value)} inputMode="decimal" style={inpStyle} placeholder="50000" /></div>
+        <div><Label>Trailing Threshold</Label><input value={a.threshold} onChange={e => upd('threshold', e.target.value)} inputMode="decimal" style={inpStyle} placeholder="2500" /></div>
+        <div><Label>Profit Goal</Label><input value={a.profitGoal} onChange={e => upd('profitGoal', e.target.value)} inputMode="decimal" style={inpStyle} placeholder="3000" /></div>
+      </div>
+
+      <Divider />
+
+      <div className="tos-edge">
+        <MetricCard label="Current Balance" value={usd(current)} color="#fff" Icon={Wallet} />
+        <MetricCard label="Profit Made" value={usd(profitMade)} color={profitMade >= 0 ? GREEN : RED} Icon={TrendingUp} />
+        <MetricCard label="Profit Target Left" value={profitDone ? 'Reached' : usd(profitRemaining)} color={profitDone ? GREEN : '#fff'} Icon={Target} />
+        <MetricCard label="Drawdown Left" value={usd(ddRemaining)} color={riskColor(bufferRatio)} Icon={ShieldCheck} />
+        <MetricCard label="Account Health" value={`${health}%`} color={riskColor(bufferRatio)} Icon={Activity} />
+        <MetricCard label="Days Traded" value={num(a.daysTraded)} color="#fff" Icon={Calendar} />
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '16px' }}>
+        <ApexBar label="Balance → Profit Goal" valueText={goal > 0 ? `${usd(Math.max(0, profitMade))} / ${usd(goal)}` : 'set goal'} ratio={profitRatio} color={profitDone ? GREEN : '#fff'} />
+        <ApexBar label="Drawdown Buffer Remaining" valueText={`${usd(ddRemaining)} / ${usd(threshold)}`} ratio={bufferRatio} color={riskColor(bufferRatio)} />
+        <ApexBar label="Account Health" valueText={`${health}%`} ratio={bufferRatio} color={riskColor(bufferRatio)} />
+      </div>
+    </div>
+  )
+}
+
 function aggregate(trades, keyFn) {
   const m = {}
   for (const t of trades) {
@@ -474,7 +583,7 @@ function Analytics({ trades, settings, missedThisMonth }) {
     { label: 'Win Streak', value: winStreak, Icon: Flame, color: GREEN },
     { label: 'Loss Streak', value: lossStreak, Icon: TrendingDown, color: RED },
     { label: 'Trades / Week', value: m.perWeek ? m.perWeek.toFixed(1) : '0', Icon: Activity, color: TXT },
-    { label: 'Missed A+', value: missedThisMonth, Icon: AlertTriangle, color: missedThisMonth > 0 ? ORANGE : GREEN },
+    { label: 'Missed A+', value: missedThisMonth, Icon: AlertTriangle, color: missedThisMonth > 0 ? '#fff' : GREEN },
     { label: 'Rule Violations', value: ruleViol, Icon: XCircle, color: ruleViol > 0 ? RED : GREEN },
   ]
 
@@ -505,12 +614,14 @@ function Analytics({ trades, settings, missedThisMonth }) {
   const daysTo = (amt) => (dailyExp > 0 ? Math.ceil(amt / dailyExp) : null)
   const dateIn = (days) => { if (days == null) return '—'; const d = new Date(); d.setDate(d.getDate() + days); return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }
 
-  if (trades.length === 0) {
-    return <div style={{ ...panel, textAlign: 'center', padding: '60px 20px', color: MUTE }}><BarChart3 size={30} color="#333" /><div style={{ marginTop: '12px', fontSize: '14px', fontWeight: 700, color: '#fff' }}>No data yet</div><div style={{ fontSize: '12px', marginTop: '4px' }}>Log trades to unlock analytics.</div></div>
-  }
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {/* APEX ACCOUNT TRACKER — always visible */}
+      <ApexTracker />
+
+      {trades.length === 0 ? (
+        <div style={{ ...panel, textAlign: 'center', padding: '60px 20px', color: MUTE }}><BarChart3 size={30} color="#333" /><div style={{ marginTop: '12px', fontSize: '14px', fontWeight: 700, color: '#fff' }}>No trade data yet</div><div style={{ fontSize: '12px', marginTop: '4px' }}>Log trades to unlock analytics.</div></div>
+      ) : (<>
       {/* EDGE CARDS */}
       <div className="tos-edge">
         {edge.map((e, i) => <MetricCard key={i} label={e.label} value={e.value} sub={e.sub} color={e.color} Icon={e.Icon} />)}
@@ -527,7 +638,7 @@ function Analytics({ trades, settings, missedThisMonth }) {
                 <XAxis dataKey="name" tick={chartAxis} {...noAxis} interval={0} />
                 <YAxis tick={chartAxis} {...noAxis} domain={[0, 100]} />
                 <Tooltip contentStyle={tip} cursor={{ fill: 'rgba(255,255,255,0.03)' }} formatter={(v, n, p) => [`${v}% (${p.payload.n})`, 'Win rate']} />
-                <Bar dataKey="wr" radius={[3, 3, 0, 0]} maxBarSize={34}>{trigBar.map((d, i) => <Cell key={i} fill={d.wr >= 50 ? GREEN : ORANGE} />)}</Bar>
+                <Bar dataKey="wr" radius={[3, 3, 0, 0]} maxBarSize={34}>{trigBar.map((d, i) => <Cell key={i} fill={d.wr >= 50 ? GREEN : RED} />)}</Bar>
               </BarChart>
             </ResponsiveContainer>
           ) : <Empty />}
@@ -541,7 +652,7 @@ function Analytics({ trades, settings, missedThisMonth }) {
                 <XAxis dataKey="name" tick={chartAxis} {...noAxis} interval={0} />
                 <YAxis tick={chartAxis} {...noAxis} domain={[0, 100]} />
                 <Tooltip contentStyle={tip} cursor={{ fill: 'rgba(255,255,255,0.03)' }} formatter={(v, n, p) => [`${v}% (${p.payload.n})`, 'Win rate']} />
-                <Bar dataKey="wr" radius={[3, 3, 0, 0]} maxBarSize={40}>{sessBar.map((d, i) => <Cell key={i} fill={d.wr >= 50 ? GREEN : ORANGE} />)}</Bar>
+                <Bar dataKey="wr" radius={[3, 3, 0, 0]} maxBarSize={40}>{sessBar.map((d, i) => <Cell key={i} fill={d.wr >= 50 ? GREEN : RED} />)}</Bar>
               </BarChart>
             </ResponsiveContainer>
           ) : <Empty />}
@@ -551,7 +662,7 @@ function Analytics({ trades, settings, missedThisMonth }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '2px' }}>
             {dayHeat.map(d => {
               const has = d.wr != null
-              const bg = !has ? '#0d0d0d' : `rgba(${d.wr >= 50 ? '34,197,94' : '249,115,22'}, ${0.15 + (d.wr / 100) * 0.6})`
+              const bg = !has ? '#0d0d0d' : `rgba(${d.wr >= 50 ? '34,197,94' : '239,68,68'}, ${0.15 + (d.wr / 100) * 0.6})`
               return (
                 <div key={d.day} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <span style={{ width: '34px', fontSize: '11px', color: MUTE, fontWeight: 600 }}>{d.day}</span>
@@ -623,6 +734,7 @@ function Analytics({ trades, settings, missedThisMonth }) {
           ))}
         </div>
       </div>
+      </>)}
     </div>
   )
 }
@@ -644,7 +756,7 @@ function Review({ trades, onReview, onDelete }) {
   const sorted = chrono(trades).reverse()
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* STATS */}
       <div className="tos-edge">
         {REVIEW_FIELDS.map(f => { const v = pctTrue(f.k); return <MetricCard key={f.k} label={f.l.replace('?', '')} value={v == null ? '—' : `${v}%`} color={v == null ? MUTE : v >= 70 ? GREEN : v >= 50 ? AMBER : RED} Icon={CheckCircle} /> })}
@@ -822,8 +934,8 @@ ALTER TABLE tos_trades ADD COLUMN IF NOT EXISTS trigger_correct boolean;
 ALTER TABLE tos_trades ADD COLUMN IF NOT EXISTS rule_followed boolean;`
 function SqlNotice() {
   return (
-    <div style={{ ...panel, borderColor: AMBER + '55' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '12px' }}><AlertTriangle size={16} color={AMBER} /><span style={{ fontSize: '14px', fontWeight: 800, color: '#fff' }}>tos_trades not found</span></div>
+    <div style={{ ...panel, borderColor: LINE2 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '12px' }}><AlertTriangle size={16} color="#fff" /><span style={{ fontSize: '14px', fontWeight: 800, color: '#fff' }}>tos_trades not found</span></div>
       <div style={{ fontSize: '12.5px', color: MUTE, marginBottom: '12px', lineHeight: 1.6 }}>Create the table, then run the column upgrade below in Supabase SQL editor.</div>
       <pre style={{ background: SUNK, border: `1px solid ${LINE}`, borderRadius: '10px', padding: '14px', fontSize: '11px', color: '#9a9a9a', overflowX: 'auto', lineHeight: 1.6 }}>{SETUP_SQL}</pre>
     </div>
@@ -838,16 +950,30 @@ const TABS = [
   { id: 'analytics', label: 'Analytics', Icon: BarChart3 },
   { id: 'review', label: 'Review', Icon: ClipboardCheck },
 ]
+function NavTab({ on, Icon, label, onClick }) {
+  const [h, setH] = useState(false)
+  return (
+    <button onClick={onClick} onMouseEnter={() => setH(true)} onMouseLeave={() => setH(false)} style={{
+      display: 'flex', alignItems: 'center', gap: '7px', padding: '9px 16px', borderRadius: '9px', cursor: 'pointer', fontFamily: 'inherit',
+      border: 'none', background: on ? GOLD : (h ? '#141414' : 'transparent'), color: on ? '#000' : (h ? '#ddd' : '#888'),
+      fontSize: '12.5px', fontWeight: on ? 800 : 600, transition: 'all .15s ease', minHeight: 0,
+    }}>{Icon && <Icon size={14} />}{label}</button>
+  )
+}
 const TOS_CSS = `
 @keyframes tosIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.tos-view { animation: tosIn .18s ease both; }
 .tos-scroll::-webkit-scrollbar { height: 0; display: none; }
-.tos-cols { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; align-items: start; }
-.tos-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
-.tos-exec { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-.tos-edge { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+.tos-cols { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; align-items: start; }
+.tos-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.tos-exec { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.tos-edge { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+.tos-apex { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.tos-fab { transition: transform .15s ease, box-shadow .15s ease; }
+.tos-fab:hover { transform: translateY(-2px); box-shadow: 0 12px 38px rgba(255,255,255,0.24) !important; }
 @media (max-width: 1100px) { .tos-edge { grid-template-columns: repeat(4, 1fr); } }
 @media (max-width: 920px) { .tos-cols { grid-template-columns: 1fr; } .tos-grid2 { grid-template-columns: 1fr; } .tos-exec { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 620px) { .tos-edge { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 620px) { .tos-edge { grid-template-columns: repeat(2, 1fr); } .tos-apex { grid-template-columns: 1fr 1fr; } }
 `
 
 export function TOSPage({ session }) {
@@ -900,16 +1026,8 @@ export function TOSPage({ session }) {
           <Brain size={20} color={GOLD} />
           <h1 style={{ fontSize: '20px', fontWeight: 900, letterSpacing: '-0.5px', color: '#fff', margin: 0 }}>TRADING OS</h1>
         </div>
-        <div style={{ display: 'flex', gap: '6px', background: PANEL, border: `1px solid ${LINE}`, borderRadius: '11px', padding: '4px' }}>
-          {TABS.map(t => {
-            const on = tab === t.id
-            return (
-              <button key={t.id} onClick={() => setTab(t.id)} style={{
-                display: 'flex', alignItems: 'center', gap: '7px', padding: '9px 16px', borderRadius: '8px', cursor: 'pointer', fontFamily: 'inherit',
-                border: 'none', background: on ? GOLD : 'transparent', color: on ? '#000' : '#888', fontSize: '12.5px', fontWeight: on ? 800 : 600, transition: 'all .12s', minHeight: 0,
-              }}><t.Icon size={14} />{t.label}</button>
-            )
-          })}
+        <div style={{ display: 'flex', gap: '6px', background: PANEL, border: `1px solid ${LINE}`, borderRadius: '12px', padding: '4px' }}>
+          {TABS.map(t => <NavTab key={t.id} on={tab === t.id} Icon={t.Icon} label={t.label} onClick={() => setTab(t.id)} />)}
         </div>
       </div>
 
@@ -917,20 +1035,20 @@ export function TOSPage({ session }) {
       {tableMissing ? <SqlNotice /> : loading ? (
         <div style={{ textAlign: 'center', padding: '70px', color: MUTE }}><Activity size={18} /> Loading…</div>
       ) : (
-        <>
+        <div key={tab} className="tos-view">
           {tab === 'command' && <Command trades={trades} settings={settings} command={command} setCommand={setCommand} onOpenSettings={() => setSettingsOpen(true)} missedThisMonth={missedThisMonth} onPass={onPass} />}
           {tab === 'analytics' && <Analytics trades={trades} settings={settings} missedThisMonth={missedThisMonth} />}
           {tab === 'review' && <Review trades={trades} onReview={setReviewTrade} onDelete={onDelete} />}
-        </>
+        </div>
       )}
 
       {/* FLOATING LOG BUTTON */}
       {!tableMissing && (
-        <button onClick={() => setLogOpen(true)} title="Log trade" style={{
+        <button onClick={() => setLogOpen(true)} title="Log trade" className="tos-fab" style={{
           position: 'fixed', right: '22px', bottom: '22px', zIndex: 200,
           display: 'flex', alignItems: 'center', gap: '8px', padding: '14px 20px', borderRadius: '99px',
           background: GOLD, color: '#000', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 800, fontSize: '14px',
-          boxShadow: '0 8px 30px rgba(234,179,8,0.35)',
+          boxShadow: '0 8px 30px rgba(255,255,255,0.16)',
         }}><Plus size={18} /> Log</button>
       )}
 
