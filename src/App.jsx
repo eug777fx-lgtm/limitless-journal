@@ -4017,7 +4017,7 @@ function TradingPlan({ flags = {} }) {
 
 
 // ─── Settings ─────────────────────────────────────────────────
-function Settings({ theme, setTheme, session, profile, setProfile, glassMode, setGlassMode, onLogout, trades = [], demoMode = false, setDemoMode = () => {} }) {
+function Settings({ theme, setTheme, session, profile, setProfile, glassMode, setGlassMode, onLogout, trades = [], demoMode = false, setDemoMode = () => {}, setTrades = () => {}, setPage = () => {} }) {
   // Support ticket
   const [ticketSubj, setTicketSubj] = useState('')
   const [ticketBody, setTicketBody] = useState('')
@@ -4126,6 +4126,52 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
   const sectionCard = { background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: '14px', padding: '28px', marginBottom: '16px', backdropFilter: 'var(--card-blur, none)', WebkitBackdropFilter: 'var(--card-blur, none)' }
   const sectionTitle = { fontSize: '11px', fontWeight: '600', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#555', marginBottom: '16px' }
   const divider = { height: '1px', background: '#1a1a1a', margin: '20px 0' }
+
+  // ── Danger Zone ──
+  const [dangerAction, setDangerAction] = useState(null) // null | 'clear' | 'reset'
+  const [confirmText,  setConfirmText]  = useState('')
+  const [dangerBusy,   setDangerBusy]   = useState(false)
+  const closeDanger = () => { if (dangerBusy) return; setDangerAction(null); setConfirmText('') }
+
+  const clearAllTrades = async () => {
+    setDangerBusy(true)
+    const { error } = await supabase.from('trades').delete().eq('user_id', session.user.id)
+    if (error) { setDangerBusy(false); toast.error(error.message || 'Could not clear trades'); return }
+    try { localStorage.removeItem('goal_history') } catch { /* ignore */ }
+    setTrades([])               // reload dashboard stats to zero
+    setDangerBusy(false)
+    setDangerAction(null); setConfirmText('')
+    toast.success('All trades cleared — starting fresh')
+  }
+
+  const resetFullAccount = async () => {
+    setDangerBusy(true)
+    const { error } = await supabase.from('trades').delete().eq('user_id', session.user.id)
+    if (error) { setDangerBusy(false); toast.error(error.message || 'Could not reset account'); return }
+    try { await supabase.from('profiles').update({ monthly_goal: 0 }).eq('id', session.user.id) } catch { /* ignore */ }
+    // Wipe all app localStorage (checklist, TOS data, demo mode, goals, network…) but
+    // keep the Supabase auth session so the redirect lands on the dashboard, not login.
+    try {
+      Object.keys(localStorage).forEach(k => {
+        if (k.startsWith('sb-') || k.includes('supabase') || k.includes('auth-token')) return
+        localStorage.removeItem(k)
+      })
+    } catch { /* ignore */ }
+    setProfile(p => ({ ...p, monthly_goal: 0 }))
+    setTrades([])
+    setDangerBusy(false)
+    setDangerAction(null); setConfirmText('')
+    toast.success('Account reset — everything is back to zero')
+    setPage('dashboard')        // redirect to dashboard
+  }
+
+  const dangerCfg = dangerAction === 'clear'
+    ? { word: 'DELETE', title: 'Clear All Trades', confirmLabel: 'Clear All Trades', Icon: Trash2, onConfirm: clearAllTrades,
+        msg: 'Are you sure? This will permanently delete ALL your trades. This cannot be undone.' }
+    : dangerAction === 'reset'
+    ? { word: 'RESET', title: 'Reset Full Account', confirmLabel: 'Reset Account', Icon: RefreshCw, onConfirm: resetFullAccount,
+        msg: 'This will delete ALL your trades, reset your profile stats, and clear all local data. Type RESET to confirm.' }
+    : null
 
   return (
     <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both' }}>
@@ -4389,6 +4435,85 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Danger Zone ── */}
+      <div style={{ ...sectionCard, marginTop: '24px', marginBottom: 0, border: '1px solid rgba(239,68,68,0.3)' }}>
+        <div style={{ ...sectionTitle, color: '#ef4444' }}>Danger Zone</div>
+        <div style={{ height: '1px', background: 'rgba(239,68,68,0.18)', marginBottom: '18px' }} />
+        <div style={{ fontSize: '12.5px', color: '#a06b6b', marginBottom: '26px', lineHeight: 1.5 }}>
+          These actions are permanent and cannot be undone.
+        </div>
+
+        {/* Clear All Trades */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-hi)', marginBottom: '3px' }}>Clear All Trades</div>
+            <div style={{ fontSize: '11.5px', color: '#666', lineHeight: 1.4 }}>Permanently delete every trade in your journal.</div>
+          </div>
+          <button
+            onClick={() => { setConfirmText(''); setDangerAction('clear') }}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: '1px solid rgba(239,68,68,0.5)', color: '#ef4444', borderRadius: '10px', padding: '11px 18px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s', flexShrink: 0 }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+          >
+            <Trash2 size={15} /> Clear All Trades
+          </button>
+        </div>
+
+        {/* spacer — keeps the two destructive actions far apart */}
+        <div style={{ height: '1px', background: '#1a1a1a', margin: '26px 0' }} />
+
+        {/* Reset Full Account */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-hi)', marginBottom: '3px' }}>Reset Full Account</div>
+            <div style={{ fontSize: '11.5px', color: '#666', lineHeight: 1.4 }}>Delete all trades, reset your stats, and wipe all local data.</div>
+          </div>
+          <button
+            onClick={() => { setConfirmText(''); setDangerAction('reset') }}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#ef4444', border: '1px solid #ef4444', color: '#fff', borderRadius: '10px', padding: '11px 18px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', fontFamily: 'inherit', transition: 'opacity 0.15s', flexShrink: 0 }}
+            onMouseEnter={e => { e.currentTarget.style.opacity = '0.88' }}
+            onMouseLeave={e => { e.currentTarget.style.opacity = '1' }}
+          >
+            <RefreshCw size={15} /> Reset Full Account
+          </button>
+        </div>
+      </div>
+
+      {/* ── Danger Zone confirmation modal (type-to-confirm) ── */}
+      {dangerCfg && createPortal(
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.78)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', zIndex: 100000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }} onClick={closeDanger}>
+          <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: '440px', background: '#0d0d0d', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '16px', padding: '26px', boxShadow: '0 32px 100px rgba(0,0,0,0.9)', animation: 'modalIn 0.2s ease both' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '11px', marginBottom: '14px' }}>
+              <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <dangerCfg.Icon size={18} color="#ef4444" />
+              </div>
+              <div style={{ fontSize: '17px', fontWeight: '800', color: '#fff', letterSpacing: '-0.3px' }}>{dangerCfg.title}</div>
+            </div>
+            <div style={{ fontSize: '13px', color: '#bbb', lineHeight: 1.6, marginBottom: '20px' }}>{dangerCfg.msg}</div>
+            <div style={{ fontSize: '11px', color: '#777', marginBottom: '8px' }}>Type <span style={{ color: '#ef4444', fontWeight: '700', letterSpacing: '0.05em' }}>{dangerCfg.word}</span> to confirm</div>
+            <input
+              autoFocus
+              value={confirmText}
+              onChange={e => setConfirmText(e.target.value)}
+              placeholder={dangerCfg.word}
+              disabled={dangerBusy}
+              style={{ width: '100%', background: '#080808', border: '1px solid #222', borderRadius: '10px', padding: '11px 13px', color: '#fff', fontSize: '14px', fontFamily: 'inherit', outline: 'none', letterSpacing: '0.08em', boxSizing: 'border-box', marginBottom: '22px' }}
+            />
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button onClick={closeDanger} disabled={dangerBusy} style={{ background: 'transparent', border: '1px solid #2a2a2a', color: 'var(--text-md)', borderRadius: '10px', padding: '10px 18px', fontSize: '13px', cursor: dangerBusy ? 'wait' : 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+              <button
+                onClick={dangerCfg.onConfirm}
+                disabled={dangerBusy || confirmText !== dangerCfg.word}
+                style={{ display: 'flex', alignItems: 'center', gap: '7px', background: '#ef4444', border: 'none', color: '#fff', borderRadius: '10px', padding: '10px 20px', fontSize: '13px', fontWeight: '700', fontFamily: 'inherit', cursor: (dangerBusy || confirmText !== dangerCfg.word) ? 'not-allowed' : 'pointer', opacity: (dangerBusy || confirmText !== dangerCfg.word) ? 0.45 : 1, transition: 'opacity 0.15s' }}
+              >
+                {dangerBusy ? <><Loader2 size={13} className="spin" /> Working…</> : <><dangerCfg.Icon size={14} /> {dangerCfg.confirmLabel}</>}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   )
@@ -7378,7 +7503,7 @@ export default function App() {
         {page === 'tos'         && session?.user?.email === ADMIN_EMAIL && <TOSPage session={session} />}
         {page === 'copy'        && session?.user?.email === ADMIN_EMAIL && <CopyTraderPage />}
         {page === 'plan'        && <TradingPlan flags={featureFlags} />}
-        {page === 'settings'    && <Settings theme={theme} setTheme={handleSetTheme} session={session} profile={profile} setProfile={setProfile} glassMode={glassMode} setGlassMode={v => { setGlassMode(v); localStorage.setItem('glass_mode', v) }} onLogout={logout} trades={effectiveTrades} demoMode={demoMode} setDemoMode={setDemoMode} />}
+        {page === 'settings'    && <Settings theme={theme} setTheme={handleSetTheme} session={session} profile={profile} setProfile={setProfile} glassMode={glassMode} setGlassMode={v => { setGlassMode(v); localStorage.setItem('glass_mode', v) }} onLogout={logout} trades={effectiveTrades} demoMode={demoMode} setDemoMode={setDemoMode} setTrades={setTrades} setPage={setPage} />}
         {page === 'admin'       && <AdminPanel session={session} setPage={setPage} />}
       </main>
 
