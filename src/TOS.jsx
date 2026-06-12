@@ -91,7 +91,7 @@ const countPlanDaysThisMonth = (breakDays) => {
       const date = k.slice('tos_plan_'.length)
       if (!isThisMonth(date) || breakDays.has(date)) continue
       const p = lsGet(k, null)
-      if (p && (p.bias || p.entryTrigger || p.dolTarget || p.primaryDraw)) n++
+      if (p && (p.bias || p.entryTrigger || p.primaryDraw)) n++
     }
   } catch { /* storage unavailable */ }
   return n
@@ -361,8 +361,6 @@ function SymbolSearch({ value, onChange }) {
 // Draw options for the merged Liquidity & Delivery section
 const DRAW_OPTIONS = ['PDH', 'PDL', 'Data High', 'Data Low', 'Equal Highs', 'Equal Lows', 'Midnight Open', 'London High', 'London Low', 'Session High', 'Session Low', 'NWOG', 'Gap Fill']
 const RB_CHECKS = ['Liquidity sweep occurred', 'Strong rejection exists', 'Opposing candle confirms', 'NOT just a wick']
-// Draw on Liquidity — single-select target pills (replaces the old Final Gate text)
-const DOL_OPTIONS = ['Equal Lows', 'Equal Highs', 'PDL', 'PDH', 'Weekly Low', 'Weekly High', 'Buy Side Liq.', 'Sell Side Liq.', 'ONH', 'ONL']
 
 function DrawSelect({ value, onChange }) {
   return (
@@ -386,33 +384,29 @@ const blankPlan = () => ({
   entryTrigger: '', rbChecks: [false, false, false, false], wickCe: false,
   // Execution-gate confirmations
   gateRrOk: false, gatePriceStory: '',
-  // Draw on Liquidity — single-select target for the day
-  dolTarget: '',
 })
 
 // Weighted /50 score from all sections. Bias and Entry are required (red-marked).
-// Maxes sum to exactly 50: Bias 10 · Draw 10 · Location 9 · Entry 10 · Key Opens 3 · Draw-on-Liquidity 8.
-// (Rebalanced after the Final Gate text input was replaced by the DOL target pills.)
+// Maxes sum to exactly 50: Bias 12 · Draw 12 · Location 10 · Entry 12 · Key Opens 4.
+// (Rebalanced after the Draw on Liquidity section was removed — weights scaled up ~×1.2.)
 function computeQuality(p) {
-  const bias = p.bias ? 10 : 0
-  // Draw — primary 6 + secondary 4
-  const draw = (p.primaryDraw ? 6 : 0) + (p.secondaryDraw ? 4 : 0)
-  // Location — POI (1→4, 2+→6) + OTE (any→3)
+  const bias = p.bias ? 12 : 0
+  // Draw — primary 7 + secondary 5
+  const draw = (p.primaryDraw ? 7 : 0) + (p.secondaryDraw ? 5 : 0)
+  // Location — POI (1→4, 2+→7) + OTE (any→3)
   const pc = p.poi.length
-  const location = (pc >= 2 ? 6 : pc === 1 ? 4 : 0) + (p.ote.length > 0 ? 3 : 0)
-  // Entry — REQUIRED: trigger 4 + validation 6
+  const location = (pc >= 2 ? 7 : pc === 1 ? 4 : 0) + (p.ote.length > 0 ? 3 : 0)
+  // Entry — REQUIRED: trigger 4 + validation 8
   let entry = 0
-  if (p.entryTrigger === 'Rejection Block') entry = 4 + Math.round((p.rbChecks.filter(Boolean).length / 4) * 6)
-  else if (p.entryTrigger === 'Wick CE') entry = 4 + (p.wickCe ? 6 : 0)
-  // Key Opens — max 3
-  const gate = Math.min(3, p.keyOpens.length)
-  // Draw on Liquidity — a selected target = 8
-  const dol = p.dolTarget ? 8 : 0
+  if (p.entryTrigger === 'Rejection Block') entry = 4 + Math.round((p.rbChecks.filter(Boolean).length / 4) * 8)
+  else if (p.entryTrigger === 'Wick CE') entry = 4 + (p.wickCe ? 8 : 0)
+  // Key Opens — max 4
+  const gate = Math.min(4, p.keyOpens.length)
   const parts = {
-    bias: clamp(bias, 0, 10), draw: clamp(draw, 0, 10), location: clamp(location, 0, 9),
-    entry: clamp(entry, 0, 10), gate: clamp(gate, 0, 3), dol: clamp(dol, 0, 8),
+    bias: clamp(bias, 0, 12), draw: clamp(draw, 0, 12), location: clamp(location, 0, 10),
+    entry: clamp(entry, 0, 12), gate: clamp(gate, 0, 4),
   }
-  return { parts, total: Math.min(50, parts.bias + parts.draw + parts.location + parts.entry + parts.gate + parts.dol) }
+  return { parts, total: Math.min(50, parts.bias + parts.draw + parts.location + parts.entry + parts.gate) }
 }
 
 // Always merge with blankPlan() so older saved plans gain the new merged fields.
@@ -436,12 +430,11 @@ function SetupRating({ total, parts, plan }) {
   const R = 62, CIRC = 2 * Math.PI * R
   const frac = clamp(total / 50, 0, 1)
   const rows = [
-    { l: 'Bias',          v: parts.bias,      max: 10, req: !plan.bias },
-    { l: 'Draw',          v: parts.draw,      max: 10 },
-    { l: 'HTF POI · OTE', v: parts.location,  max: 9 },
-    { l: 'Entry',         v: parts.entry,     max: 10, req: !plan.entryTrigger },
-    { l: 'Key Opens',     v: parts.gate,      max: 3 },
-    { l: 'Draw on Liq.',  v: parts.dol,       max: 8 },
+    { l: 'Bias',          v: parts.bias,      max: 12, req: !plan.bias },
+    { l: 'Draw',          v: parts.draw,      max: 12 },
+    { l: 'HTF POI · OTE', v: parts.location,  max: 10 },
+    { l: 'Entry',         v: parts.entry,     max: 12, req: !plan.entryTrigger },
+    { l: 'Key Opens',     v: parts.gate,      max: 4 },
   ]
   const missing = [!plan.bias && 'Bias', !plan.entryTrigger && 'Entry Trigger'].filter(Boolean)
   const verdict = missing.length
@@ -818,24 +811,6 @@ function DailyPlan({ pro = false }) {
         })()}
         </div>
 
-        {/* 8 — DRAW ON LIQUIDITY (single-select target, bottom of column) */}
-        <div>
-          {cl('Draw on Liquidity')}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-            {DOL_OPTIONS.map(o => {
-              const on = plan.dolTarget === o
-              return (
-                <button key={o} type="button" onClick={() => set('dolTarget', on ? '' : o)} style={{
-                  padding: '10px 12px', borderRadius: '9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12.5px', fontWeight: on ? 700 : 500, transition: 'all .15s', minHeight: 0,
-                  border: `1px solid ${on ? GOLD : CARD_BORD}`,
-                  background: on ? GOLD : 'transparent',
-                  color: on ? '#000' : '#888',
-                }}>{o}</button>
-              )
-            })}
-          </div>
-        </div>
-
       </div>
 
       {/* RIGHT — setup rating gauge + risk calculator */}
@@ -997,7 +972,7 @@ function TradeLog({ session, trades, tableMissing, onAdded, onDeleted, pro = fal
   // Only fires when a plan was actually started today (not a blank/auto-saved one).
   const planRaw = lsGet(`tos_plan_${todayKey()}`, null)
   const planStarted = planRaw && (planRaw.bias || planRaw.biasReason || planRaw.entryTrigger ||
-    planRaw.primaryDraw || planRaw.dolTarget || planRaw.poi?.length ||
+    planRaw.primaryDraw || planRaw.poi?.length ||
     planRaw.keyOpens?.length || planRaw.ote?.length)
   if (planStarted) {
     const planTotal = computeQuality({ ...blankPlan(), ...planRaw }).total
