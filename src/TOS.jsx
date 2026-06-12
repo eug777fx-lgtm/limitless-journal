@@ -377,8 +377,7 @@ function DrawSelect({ value, onChange }) {
 
 const blankPlan = () => ({
   bias: '', biasReason: '',
-  primaryDraw: '', secondaryDraw: '', againstFirst: null, moAddressed: null,
-  londonHigh: null, londonLow: null, sessionHigh: null, sessionLow: null,
+  primaryDraw: '', secondaryDraw: '',
   poi: [], poiText: '',
   keyOpens: [],
   ote: [],
@@ -391,29 +390,27 @@ const blankPlan = () => ({
 })
 
 // Weighted /50 score from all sections. Bias and Entry are required (red-marked).
-// Maxes sum to exactly 50: Bias 10 · Draw 8 · Liquidity 8 · Location 8 · Entry 10 · Gate 6.
+// Maxes sum to exactly 50: Bias 12 · Draw 10 · Location 10 · Entry 12 · Gate 6.
+// (Rebalanced from /42 after the Liquidity Yes/No section was removed.)
 function computeQuality(p) {
-  const bias = p.bias ? 10 : 0
-  // Draw — primary 5 + secondary 3
-  const draw = (p.primaryDraw ? 5 : 0) + (p.secondaryDraw ? 3 : 0)
-  // Liquidity — session levels answered (×4) + MO answered (2) + against-first answered (2)
-  const sessAns = ['londonHigh', 'londonLow', 'sessionHigh', 'sessionLow'].filter(k => p[k] !== null).length
-  const liquidity = Math.round((sessAns / 4) * 4) + (p.moAddressed !== null ? 2 : 0) + (p.againstFirst !== null ? 2 : 0)
-  // Location — POI (1→4, 2+→6) + OTE (any→2)
+  const bias = p.bias ? 12 : 0
+  // Draw — primary 6 + secondary 4
+  const draw = (p.primaryDraw ? 6 : 0) + (p.secondaryDraw ? 4 : 0)
+  // Location — POI (1→4, 2+→7) + OTE (any→3)
   const pc = p.poi.length
-  const location = (pc >= 2 ? 6 : pc === 1 ? 4 : 0) + (p.ote.length > 0 ? 2 : 0)
-  // Entry — REQUIRED: trigger 4 + validation 6
+  const location = (pc >= 2 ? 7 : pc === 1 ? 4 : 0) + (p.ote.length > 0 ? 3 : 0)
+  // Entry — REQUIRED: trigger 4 + validation 8
   let entry = 0
-  if (p.entryTrigger === 'Rejection Block') entry = 4 + Math.round((p.rbChecks.filter(Boolean).length / 4) * 6)
-  else if (p.entryTrigger === 'Wick CE') entry = 4 + (p.wickCe ? 6 : 0)
+  if (p.entryTrigger === 'Rejection Block') entry = 4 + Math.round((p.rbChecks.filter(Boolean).length / 4) * 8)
+  else if (p.entryTrigger === 'Wick CE') entry = 4 + (p.wickCe ? 8 : 0)
   // Timing & Gate — key opens (max 3) + final gate (≥15 → 3, >0 → 1)
   const gateLen = p.finalGate.trim().length
   const gate = Math.min(3, p.keyOpens.length) + (gateLen >= 15 ? 3 : gateLen > 0 ? 1 : 0)
   const parts = {
-    bias: clamp(bias, 0, 10), draw: clamp(draw, 0, 8), liquidity: clamp(liquidity, 0, 8),
-    location: clamp(location, 0, 8), entry: clamp(entry, 0, 10), gate: clamp(gate, 0, 6),
+    bias: clamp(bias, 0, 12), draw: clamp(draw, 0, 10),
+    location: clamp(location, 0, 10), entry: clamp(entry, 0, 12), gate: clamp(gate, 0, 6),
   }
-  return { parts, total: Math.min(50, parts.bias + parts.draw + parts.liquidity + parts.location + parts.entry + parts.gate) }
+  return { parts, total: Math.min(50, parts.bias + parts.draw + parts.location + parts.entry + parts.gate) }
 }
 
 // Always merge with blankPlan() so older saved plans gain the new merged fields.
@@ -437,11 +434,10 @@ function SetupRating({ total, parts, plan }) {
   const R = 62, CIRC = 2 * Math.PI * R
   const frac = clamp(total / 50, 0, 1)
   const rows = [
-    { l: 'Bias',          v: parts.bias,      max: 10, req: !plan.bias },
-    { l: 'Draw',          v: parts.draw,      max: 8 },
-    { l: 'Liquidity',     v: parts.liquidity, max: 8 },
-    { l: 'HTF POI · OTE', v: parts.location,  max: 8 },
-    { l: 'Entry',         v: parts.entry,     max: 10, req: !plan.entryTrigger },
+    { l: 'Bias',          v: parts.bias,      max: 12, req: !plan.bias },
+    { l: 'Draw',          v: parts.draw,      max: 10 },
+    { l: 'HTF POI · OTE', v: parts.location,  max: 10 },
+    { l: 'Entry',         v: parts.entry,     max: 12, req: !plan.entryTrigger },
     { l: 'Timing & Gate', v: parts.gate,      max: 6 },
   ]
   const missing = [!plan.bias && 'Bias', !plan.entryTrigger && 'Entry Trigger'].filter(Boolean)
@@ -671,7 +667,6 @@ function DailyPlan({ pro = false }) {
   const rbComplete = plan.rbChecks.every(Boolean)
   const finalLen = plan.finalGate.trim().length
   const finalValid = finalLen >= 15
-  const untouchedSession = DELIV_SESSION.some(s => plan[s.k] === false)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -700,32 +695,13 @@ function DailyPlan({ pro = false }) {
           <Seg options={[{ label: 'PxH', value: 'PxH' }, { label: 'PxL', value: 'PxL' }]} value={plan.bias} onChange={v => set('bias', v)} />
         </div>
 
-        {/* 2 — LIQUIDITY (draws + session levels + delivery checks) */}
+        {/* 2 — LIQUIDITY (draws) */}
         <div>
           {cl('Liquidity')}
-          <div className="tos-grid-2" style={{ marginBottom: '10px' }}>
+          <div className="tos-grid-2">
             <div><div style={lbl}>Primary Draw</div><DrawSelect value={plan.primaryDraw} onChange={v => set('primaryDraw', v)} /></div>
             <div><div style={lbl}>Secondary Draw</div><DrawSelect value={plan.secondaryDraw} onChange={v => set('secondaryDraw', v)} /></div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            {DELIV_SESSION.map(s => (
-              <div key={s.k} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '6px 10px', borderRadius: '8px', background: BG, border: `1px solid ${CARD_BORD}`, borderLeft: plan[s.k] !== null ? `3px solid ${GOLD}` : `1px solid ${CARD_BORD}`, transition: 'border .15s' }}>
-                <span style={{ fontSize: '12px', color: plan[s.k] !== null ? '#ddd' : '#777', fontWeight: 600 }}>{s.l} taken?</span>
-                <div style={{ width: '128px', flexShrink: 0 }}><YesNo value={plan[s.k]} onChange={v => set(s.k, v)} /></div>
-              </div>
-            ))}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '6px 10px', borderRadius: '8px', background: BG, border: `1px solid ${CARD_BORD}`, borderLeft: plan.moAddressed !== null ? `3px solid ${GOLD}` : `1px solid ${CARD_BORD}`, transition: 'border .15s' }}>
-              <span style={{ fontSize: '12px', color: plan.moAddressed !== null ? '#ddd' : '#777', fontWeight: 600 }}>Midnight Open addressed?</span>
-              <div style={{ width: '128px', flexShrink: 0 }}><YesNo value={plan.moAddressed} onChange={v => set('moAddressed', v)} /></div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '6px 10px', borderRadius: '8px', background: BG, border: `1px solid ${CARD_BORD}`, borderLeft: plan.againstFirst !== null ? `3px solid ${GOLD}` : `1px solid ${CARD_BORD}`, transition: 'border .15s' }}>
-              <span style={{ fontSize: '12px', color: plan.againstFirst !== null ? '#ddd' : '#777', fontWeight: 600 }}>Trading against primary objective?</span>
-              <div style={{ width: '128px', flexShrink: 0 }}><YesNo value={plan.againstFirst} onChange={v => set('againstFirst', v)} /></div>
-            </div>
-          </div>
-          {plan.againstFirst === true && note(AlertTriangle, D_AMBER, 'Consider waiting for the first objective to be met before entering.')}
-          {plan.moAddressed === false && note(AlertTriangle, GOLD, 'Midnight Open unaddressed — consider whether it is the first draw.')}
-          {untouchedSession && note(Eye, D_AMBER, 'Untouched levels exist — factor into bias.')}
         </div>
 
         {/* 3 — HTF POI */}
@@ -2852,16 +2828,9 @@ function Challenge({ trades, pro = false }) {
   )
 }
 
-// ─── Shared delivery helpers (Delivery Sequence merged into the Daily Plan) ──
+// ─── Shared Daily Plan helpers ──────────────────────────────────────────────
 const D_GREEN = '#22c55e'
 const D_RED   = '#ef4444'
-const D_AMBER = '#f59e0b'
-const DELIV_SESSION = [
-  { k: 'londonHigh', l: 'London High' },
-  { k: 'londonLow', l: 'London Low' },
-  { k: 'sessionHigh', l: 'Session High' },
-  { k: 'sessionLow', l: 'Session Low' },
-]
 // Reusable checkbox row (Daily Plan entry-trigger validation)
 function DCheck({ label, on, onClick, color = GOLD }) {
   return (
