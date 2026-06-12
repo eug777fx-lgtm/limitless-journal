@@ -19,7 +19,7 @@ import {
   ThumbsUp, ThumbsDown, Gauge, Scale, ShieldCheck, Crosshair, Trophy,
   CheckCircle, XCircle, Zap, Award, Calendar, Clock, Flame,
   Sparkles, Hourglass, Layers, Gem, Rocket, Eye,
-  Lock, Flag, SkipForward, EyeOff, Ban,
+  Lock, Flag, SkipForward, Ban,
 } from 'lucide-react'
 
 // ─── Palette ──────────────────────────────────────────────────────────────
@@ -55,12 +55,11 @@ const makeId = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? cryp
 
 // ─── Hide P&L mode (global) ─────────────────────────────────────────────────
 // Module-level flag so the pure usd()/usdK() formatters can mask every dollar
-// figure across TOS. The header toggle mirrors this into React state to force a
-// re-render; both are seeded from / written to the same localStorage key.
+// figure across TOS. Read once from localStorage; the masking logic stays even
+// though the header toggle button was removed.
 const HIDE_PNL_KEY = 'tos_hide_pnl'
 const PNL_MASK = '•••'
-let HIDE_PNL = lsGet(HIDE_PNL_KEY, false)
-const setHidePnl = (v) => { HIDE_PNL = !!v; lsSet(HIDE_PNL_KEY, HIDE_PNL) }
+const HIDE_PNL = lsGet(HIDE_PNL_KEY, false)
 
 // ─── number formatting ──────────────────────────────────────────────────────
 const usd   = (n) => { if (HIDE_PNL) return PNL_MASK; const v = Number(n) || 0; return (v < 0 ? '-$' : '$') + Math.round(Math.abs(v)).toLocaleString() }
@@ -2984,16 +2983,14 @@ function SplitBar({ label, a, b, aLabel = 'A', bLabel = 'B' }) {
 
 export function TOSPage({ session }) {
   const [tab, setTab] = useState('plan')
-  const [uiMode, setUiMode] = useState(() => (lsGet(UI_KEY, 'standard') === 'pro' ? 'pro' : 'standard'))
+  // Pro mode persists in localStorage and is passed to every page. The visual
+  // Standard/Pro toggle was removed from the header, so it reflects the saved
+  // preference (kept as state because it still drives the child pages).
+  const [uiMode] = useState(() => (lsGet(UI_KEY, 'standard') === 'pro' ? 'pro' : 'standard'))
   const [trades, setTrades] = useState([])
   const [loading, setLoading] = useState(true)
   const [tableMissing, setTableMissing] = useState(false)
   const pro = uiMode === 'pro'
-  const setMode = (m) => { setUiMode(m); lsSet(UI_KEY, m) }
-  // Hide P&L mode — mirrors the module-level flag read by usd()/usdK() into
-  // React state so toggling re-renders every masked dollar figure.
-  const [hidePnl, setHidePnlState] = useState(() => lsGet(HIDE_PNL_KEY, false))
-  const toggleHidePnl = () => { const v = !hidePnl; setHidePnl(v); setHidePnlState(v) }
 
   useEffect(() => {
     let cancelled = false
@@ -3031,51 +3028,6 @@ export function TOSPage({ session }) {
   return (
     <div className="page-wrap" style={{ animation: 'tosEnter 0.25s ease-out both', paddingBottom: '60px' }}>
       <style dangerouslySetInnerHTML={{ __html: TOS_CSS }} />
-
-      {/* Header */}
-      <div style={{
-        position: 'relative', overflow: 'hidden', marginBottom: '20px',
-        background: 'linear-gradient(135deg, rgba(234,179,8,0.10) 0%, rgba(13,13,13,0.92) 55%, rgba(8,8,8,0.96) 100%), #0d0d0d',
-        border: `1px solid ${GOLD}26`, borderRadius: '18px', padding: '28px 30px',
-        boxShadow: `0 0 0 1px ${GOLD}11 inset`,
-      }}>
-        <div style={{ position: 'absolute', top: '-45%', right: '-8%', width: '300px', height: '300px', borderRadius: '50%', background: `radial-gradient(circle, ${GOLD}44 0%, transparent 65%)`, filter: 'blur(60px)', pointerEvents: 'none' }} />
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '8px' }}>
-              <Brain size={20} color={GOLD} />
-              <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.2em', color: GOLD, textTransform: 'uppercase' }}>Private System</div>
-            </div>
-            <h1 style={{ fontSize: '38px', fontWeight: 900, letterSpacing: '-1.5px', color: '#fff', lineHeight: 1, marginBottom: '8px' }}>Trading OS</h1>
-            <div style={{ fontSize: '13.5px', color: '#999' }}>Plan → execute → enforce → measure → improve. Your edge, operationalised.</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '12px', color: GOLD, fontWeight: 600, letterSpacing: '0.02em', marginTop: '7px' }}>
-              <Award size={13} /> Winning today is following the plan.
-            </div>
-          </div>
-          {/* Header controls — Hide P&L + UI version switcher */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end', flexShrink: 0 }}>
-            <button onClick={toggleHidePnl} title="Hide all dollar amounts across TOS" style={{
-              display: 'flex', alignItems: 'center', gap: '7px', padding: '8px 14px', borderRadius: '10px', cursor: 'pointer', fontFamily: 'inherit', minHeight: 0,
-              border: `1px solid ${hidePnl ? GOLD_LINE : CARD_BORD}`, background: hidePnl ? GOLD_SOFT : 'rgba(0,0,0,0.35)', color: hidePnl ? GOLD : '#999', fontSize: '12.5px', fontWeight: 700, transition: 'all .15s',
-            }}>
-              {hidePnl ? <EyeOff size={14} /> : <Eye size={14} />} {hidePnl ? 'P&L Hidden' : 'Hide P&L'}
-            </button>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px', borderRadius: '11px', background: 'rgba(0,0,0,0.35)', border: `1px solid ${CARD_BORD}` }}>
-              {[{ id: 'standard', label: 'Standard', Icon: Layers }, { id: 'pro', label: 'Pro', Icon: Gem }].map(m => {
-                const on = uiMode === m.id
-                return (
-                  <button key={m.id} onClick={() => setMode(m.id)} style={{
-                    display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', cursor: 'pointer', fontFamily: 'inherit', minHeight: 0,
-                    border: 'none', background: on ? GOLD : 'transparent', color: on ? '#000' : '#999', fontSize: '12.5px', fontWeight: on ? 800 : 600, transition: 'all .15s',
-                  }}>
-                    <m.Icon size={14} /> {m.label}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* Sub-nav pills */}
       <div className="tos-tabs" style={{ display: 'flex', gap: '7px', overflowX: 'auto', marginBottom: '20px', paddingBottom: '4px' }}>
