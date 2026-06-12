@@ -232,12 +232,13 @@ function Seg({ options, value, onChange, activeColor = GOLD }) {
       {options.map(o => {
         const opt = typeof o === 'string' ? { label: o, value: o } : o
         const active = value === opt.value
+        const ac = opt.color || activeColor   // optional per-pill colour, defaults to activeColor
         return (
           <button key={String(opt.value)} type="button" onClick={() => onChange(active ? null : opt.value)} style={{
             flex: '1 1 0', minWidth: '64px', padding: '10px 12px', borderRadius: '9px',
-            border: `1px solid ${active ? activeColor : CARD_BORD}`,
-            background: active ? `${activeColor}1f` : 'transparent',
-            color: active ? activeColor : '#777', fontSize: '12.5px', fontWeight: active ? 700 : 500,
+            border: `1px solid ${active ? ac : CARD_BORD}`,
+            background: active ? `${ac}1f` : 'transparent',
+            color: active ? ac : '#777', fontSize: '12.5px', fontWeight: active ? 700 : 500,
             cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s', whiteSpace: 'nowrap',
           }}>{opt.label}</button>
         )
@@ -692,7 +693,7 @@ function DailyPlan({ pro = false }) {
         {/* 1 — BIAS */}
         <div>
           {cl('Bias')}
-          <Seg options={[{ label: 'PxH', value: 'PxH' }, { label: 'PxL', value: 'PxL' }]} value={plan.bias} onChange={v => set('bias', v)} />
+          <Seg options={[{ label: 'BULLISH', value: 'Bullish', color: D_GREEN }, { label: 'BEARISH', value: 'Bearish', color: D_RED }]} value={plan.bias} onChange={v => set('bias', v)} />
         </div>
 
         {/* 2 — LIQUIDITY (draws) */}
@@ -1076,7 +1077,7 @@ function TradeLog({ session, trades, tableMissing, onAdded, onDeleted, pro = fal
 
           <div className="tos-grid-2" style={{ marginBottom: '14px' }}>
             <div><div style={lbl}>Direction</div><Seg options={[{ label: 'Long', value: 'Long' }, { label: 'Short', value: 'Short' }]} value={form.direction} onChange={F('direction')} activeColor={form.direction === 'Short' ? RED : GREEN} /></div>
-            <div><div style={lbl}>Bias</div><Seg options={['PxH', 'PxL']} value={form.bias} onChange={F('bias')} /></div>
+            <div><div style={lbl}>Bias</div><Seg options={['Bullish', 'Bearish']} value={form.bias} onChange={F('bias')} /></div>
           </div>
 
           <div className="tos-grid-3" style={{ marginBottom: '8px' }}>
@@ -1892,7 +1893,7 @@ function EdgeTracker({ trades }) {
       <SectionTitle Icon={Crosshair}>Edge Tracker</SectionTitle>
       <div style={{ fontSize: '12px', color: '#777', marginBottom: '6px' }}>Win rate by condition — find which confluences pay in YOUR data.</div>
       <SplitBar label="Confluences present" a={winRateOf(trades.filter(t => confluenceCount(t) === 4))} b={winRateOf(trades.filter(t => confluenceCount(t) < 4))} aLabel="All 4" bLabel="Partial" />
-      <SplitBar label="Bias" a={winRateOf(trades.filter(t => t.bias === 'PxH'))} b={winRateOf(trades.filter(t => t.bias === 'PxL'))} aLabel="PxH" bLabel="PxL" />
+      <SplitBar label="Bias" a={winRateOf(trades.filter(t => t.bias === 'Bullish' || t.bias === 'PxH'))} b={winRateOf(trades.filter(t => t.bias === 'Bearish' || t.bias === 'PxL'))} aLabel="Bullish" bLabel="Bearish" />
       <SplitBar label="Entry trigger" a={winRateOf(trades.filter(t => t.rejection_block))} b={winRateOf(trades.filter(t => t.wick_ce))} aLabel="Rej. Block" bLabel="Wick CE" />
       <SplitBar label="OTE" a={winRateOf(trades.filter(t => t.ote_present))} b={winRateOf(trades.filter(t => !t.ote_present))} aLabel="Present" bLabel="Absent" />
       <SplitBar label="Key Open" a={winRateOf(trades.filter(t => t.key_open))} b={winRateOf(trades.filter(t => !t.key_open))} aLabel="Present" bLabel="Absent" />
