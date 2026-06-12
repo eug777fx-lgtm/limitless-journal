@@ -13,7 +13,7 @@ import {
   LayoutDashboard, BookOpen, ClipboardList, Settings2,
   Lightbulb, Check, BarChart2, Plus, CalendarDays, Layers, Target,
   Pencil, Trash2, GripVertical, Sparkles, Loader2, Shield, Users, Search, X,
-  Bell, Megaphone, Link2, Download, ChevronDown, RefreshCw,
+  Bell, Megaphone, Link2, Download, ChevronDown, RefreshCw, LogOut,
   Mail, Ban, Flag, Activity, MessageSquare, Save,
   Globe, Video, Flame, Play, Clock, Award, Heart,
   Trophy, FileText, ExternalLink, Calendar, Brain,
@@ -7199,114 +7199,120 @@ export default function App() {
         width: '230px',
         minWidth: '230px',
         flexShrink: 0,
-        background: 'var(--sidebar-bg)',
-        backdropFilter: 'blur(24px)',
-        WebkitBackdropFilter: 'blur(24px)',
-        borderRight: '1px solid var(--sidebar-border)',
-        padding: '28px 14px',
+        background: 'linear-gradient(180deg, #08080A 0%, #060607 100%)',
+        borderRight: '1px solid rgba(255,255,255,0.06)',
+        padding: '24px 14px',
         display: 'flex',
         flexDirection: 'column',
         gap: '3px',
-        position: 'relative',
+        position: 'sticky',
+        top: 0,
+        height: '100%',
         zIndex: 2,
       }}>
         {/* Logo */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', marginBottom: '8px' }}>
-          <img src="/logo2.png" alt="logo" style={{ height: '28px', display: 'block' }} />
-          <div style={{ fontSize: '16px', fontWeight: '700', letterSpacing: '0.15em', color: '#fff', lineHeight: 1 }}>
-            LIMITLESS
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', padding: '0 2px' }}>
+          <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: 'linear-gradient(135deg, #1A1A1E, #0C0C0E)', border: '1px solid rgba(255,255,255,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <img src="/logo2.png" alt="logo" style={{ height: '20px', display: 'block' }} />
           </div>
-          <div style={{ fontSize: '9px', color: '#555', letterSpacing: '0.2em', textTransform: 'uppercase', fontWeight: '600' }}>
-            Trading Journal
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: '13px', fontWeight: '700', letterSpacing: '0.22em', color: '#fff', lineHeight: 1.2 }}>
+              LIMITLESS
+            </div>
+            <div style={{ fontSize: '8.5px', color: '#46464D', letterSpacing: '0.3em', textTransform: 'uppercase', fontWeight: '600', marginTop: '2px' }}>
+              Trading Journal
+            </div>
           </div>
         </div>
 
         {/* Add Trade button */}
         <button
           onClick={goAddTrade}
-          className="btn-scale"
-          style={{ ...btn, background: 'linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%)', width: '100%', marginTop: '10px', marginBottom: '14px', padding: '11px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', borderRadius: '10px', fontSize: '13px' }}
+          onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(255,255,255,0.08)' }}
+          onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none' }}
+          style={{ background: '#ffffff', color: '#0A0A0B', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, width: '100%', marginBottom: '14px', padding: '11px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', borderRadius: '10px', fontSize: '13px', transition: 'all 0.15s ease' }}
         >
           <Plus size={16} />
           Add Trade
         </button>
 
-        <div style={{ height: '1px', background: 'var(--divider)', margin: '2px 0 7px' }} />
-
         {/* Nav */}
-        {nav.map(n => (
-          <button
-            key={n.id}
-            onClick={() => setPage(n.id)}
-            className="nav-item"
-            style={{
-              background: page === n.id ? 'rgba(255,255,255,0.05)' : 'transparent',
-              border: page === n.id ? '1px solid #1e1e1e' : '1px solid transparent',
-              borderLeft: page === n.id ? '2px solid rgba(255,255,255,0.4)' : '2px solid transparent',
-              color: page === n.id ? '#ddd' : '#777',
-              borderRadius: '10px',
-              padding: '10px 14px',
-              paddingLeft: '12px',
-              cursor: 'pointer',
-              textAlign: 'left',
-              fontSize: '13px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              width: '100%',
-              fontFamily: 'inherit',
-              fontWeight: page === n.id ? '500' : '400',
-              transition: 'all 0.15s',
-            }}
-          >
-            <n.Icon size={18} color={page === n.id ? '#fff' : '#555'} />
-            {n.label}
-          </button>
-        ))}
+        {nav.map(n => {
+          const active = page === n.id
+          return (
+            <button
+              key={n.id}
+              onClick={() => setPage(n.id)}
+              onMouseEnter={e => { if (page !== n.id) { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; e.currentTarget.style.color = '#fff' } }}
+              onMouseLeave={e => { if (page !== n.id) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#6E6E76' } }}
+              style={{
+                position: 'relative',
+                background: active ? 'rgba(255,255,255,0.04)' : 'transparent',
+                border: active ? '1px solid rgba(255,255,255,0.06)' : '1px solid transparent',
+                color: active ? '#fff' : '#6E6E76',
+                borderRadius: '10px',
+                padding: '10px 12px',
+                cursor: 'pointer',
+                textAlign: 'left',
+                fontSize: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '11px',
+                width: '100%',
+                fontFamily: 'inherit',
+                fontWeight: 500,
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {active && <span style={{ position: 'absolute', left: '-14px', top: '50%', transform: 'translateY(-50%)', width: '2px', height: '18px', background: '#4ADE80', borderRadius: '2px' }} />}
+              <n.Icon size={17} style={{ opacity: 0.85, flexShrink: 0 }} />
+              {n.label}
+            </button>
+          )
+        })}
+
+        {/* SYSTEMS — section label for the private admin group */}
+        {session?.user?.email === ADMIN_EMAIL && (
+          <div style={{ fontSize: '9.5px', letterSpacing: '0.22em', color: '#46464D', textTransform: 'uppercase', padding: '14px 12px 8px', fontWeight: 600 }}>
+            Systems
+          </div>
+        )}
 
         {/* TOS — private system, admin only, gold accent */}
         {session?.user?.email === ADMIN_EMAIL && (
           <button
             onClick={() => setPage('tos')}
+            onMouseEnter={e => { if (page !== 'tos') e.currentTarget.style.background = 'rgba(212,175,55,0.05)' }}
+            onMouseLeave={e => { if (page !== 'tos') e.currentTarget.style.background = 'transparent' }}
             style={{
-              marginTop: '24px',
-              background: page === 'tos' ? 'rgba(234, 179, 8, 0.28)' : 'rgba(234, 179, 8, 0.15)',
-              border: page === 'tos' ? '1px solid rgba(234, 179, 8, 0.6)' : '1px solid rgba(234, 179, 8, 0.3)',
-              color: '#eab308',
+              position: 'relative',
+              background: page === 'tos' ? 'rgba(255,255,255,0.04)' : 'transparent',
+              border: page === 'tos' ? '1px solid rgba(255,255,255,0.06)' : '1px solid transparent',
+              color: '#D4AF37',
               borderRadius: '10px',
-              padding: '10px 14px',
+              padding: '10px 12px',
               cursor: 'pointer',
               textAlign: 'left',
-              fontSize: '13px',
+              fontSize: '14px',
               display: 'flex',
               alignItems: 'center',
-              gap: '10px',
+              gap: '11px',
               width: '100%',
               fontFamily: 'inherit',
-              fontWeight: page === 'tos' ? '600' : '500',
-              transition: 'all 0.15s',
-            }}
-            onMouseEnter={e => {
-              if (page !== 'tos') {
-                e.currentTarget.style.background = 'rgba(234, 179, 8, 0.22)'
-                e.currentTarget.style.border = '1px solid rgba(234, 179, 8, 0.45)'
-              }
-            }}
-            onMouseLeave={e => {
-              if (page !== 'tos') {
-                e.currentTarget.style.background = 'rgba(234, 179, 8, 0.15)'
-                e.currentTarget.style.border = '1px solid rgba(234, 179, 8, 0.3)'
-              }
+              fontWeight: 500,
+              transition: 'all 0.15s ease',
             }}
           >
-            <Brain size={18} color="#eab308" />
-            <span style={{ flex: 1 }}>TOS</span>
+            {page === 'tos' && <span style={{ position: 'absolute', left: '-14px', top: '50%', transform: 'translateY(-50%)', width: '2px', height: '18px', background: '#4ADE80', borderRadius: '2px' }} />}
+            <Brain size={17} style={{ opacity: 0.85, flexShrink: 0 }} />
+            TOS
             <span style={{
-              fontSize: '9px',
-              background: '#eab308',
-              color: '#000',
-              padding: '2px 6px',
-              borderRadius: '99px',
+              marginLeft: 'auto',
+              fontSize: '8.5px',
+              background: 'rgba(212,175,55,0.12)',
+              color: '#D4AF37',
+              padding: '3px 7px',
+              borderRadius: '6px',
               fontWeight: 700,
               letterSpacing: '0.05em',
             }}>SYS</span>
@@ -7317,45 +7323,37 @@ export default function App() {
         {session?.user?.email === ADMIN_EMAIL && (
           <button
             onClick={() => setPage('copy')}
+            onMouseEnter={e => { if (page !== 'copy') e.currentTarget.style.background = 'rgba(34,211,238,0.05)' }}
+            onMouseLeave={e => { if (page !== 'copy') e.currentTarget.style.background = 'transparent' }}
             style={{
-              marginTop: '8px',
-              background: page === 'copy' ? 'rgba(6, 182, 212, 0.25)' : 'rgba(6, 182, 212, 0.12)',
-              border: page === 'copy' ? '1px solid rgba(6, 182, 212, 0.6)' : '1px solid rgba(6, 182, 212, 0.35)',
-              color: '#06b6d4',
+              position: 'relative',
+              background: page === 'copy' ? 'rgba(255,255,255,0.04)' : 'transparent',
+              border: page === 'copy' ? '1px solid rgba(255,255,255,0.06)' : '1px solid transparent',
+              color: '#22D3EE',
               borderRadius: '10px',
-              padding: '10px 14px',
+              padding: '10px 12px',
               cursor: 'pointer',
               textAlign: 'left',
-              fontSize: '13px',
+              fontSize: '14px',
               display: 'flex',
               alignItems: 'center',
-              gap: '10px',
+              gap: '11px',
               width: '100%',
               fontFamily: 'inherit',
-              fontWeight: page === 'copy' ? '600' : '500',
-              transition: 'all 0.15s',
-            }}
-            onMouseEnter={e => {
-              if (page !== 'copy') {
-                e.currentTarget.style.background = 'rgba(6, 182, 212, 0.18)'
-                e.currentTarget.style.border = '1px solid rgba(6, 182, 212, 0.5)'
-              }
-            }}
-            onMouseLeave={e => {
-              if (page !== 'copy') {
-                e.currentTarget.style.background = 'rgba(6, 182, 212, 0.12)'
-                e.currentTarget.style.border = '1px solid rgba(6, 182, 212, 0.35)'
-              }
+              fontWeight: 500,
+              transition: 'all 0.15s ease',
             }}
           >
-            <RefreshCw size={18} color="#06b6d4" />
-            <span style={{ flex: 1 }}>SYNC</span>
+            {page === 'copy' && <span style={{ position: 'absolute', left: '-14px', top: '50%', transform: 'translateY(-50%)', width: '2px', height: '18px', background: '#4ADE80', borderRadius: '2px' }} />}
+            <RefreshCw size={17} style={{ opacity: 0.85, flexShrink: 0 }} />
+            SYNC
             <span style={{
-              fontSize: '9px',
-              background: '#06b6d4',
-              color: '#00161c',
-              padding: '2px 6px',
-              borderRadius: '99px',
+              marginLeft: 'auto',
+              fontSize: '8.5px',
+              background: 'rgba(34,211,238,0.12)',
+              color: '#22D3EE',
+              padding: '3px 7px',
+              borderRadius: '6px',
               fontWeight: 700,
               letterSpacing: '0.05em',
             }}>NEW</span>
@@ -7366,91 +7364,83 @@ export default function App() {
         {session?.user?.email === ADMIN_EMAIL && (
           <button
             onClick={() => setPage('network')}
+            onMouseEnter={e => { if (page !== 'network') e.currentTarget.style.background = 'rgba(168,85,247,0.06)' }}
+            onMouseLeave={e => { if (page !== 'network') e.currentTarget.style.background = 'transparent' }}
             style={{
-              marginTop: '8px',
-              background: page === 'network' ? 'rgba(139, 92, 246, 0.3)' : 'rgba(139, 92, 246, 0.12)',
-              border: page === 'network' ? '1px solid rgba(139, 92, 246, 0.6)' : '1px solid rgba(139, 92, 246, 0.25)',
-              color: page === 'network' ? '#c4b5fd' : '#a78bfa',
+              position: 'relative',
+              background: page === 'network' ? 'rgba(255,255,255,0.04)' : 'transparent',
+              border: page === 'network' ? '1px solid rgba(255,255,255,0.06)' : '1px solid transparent',
+              color: '#C084FC',
               borderRadius: '10px',
-              padding: '10px 14px',
+              padding: '10px 12px',
               cursor: 'pointer',
               textAlign: 'left',
-              fontSize: '13px',
+              fontSize: '14px',
               display: 'flex',
               alignItems: 'center',
-              gap: '10px',
+              gap: '11px',
               width: '100%',
               fontFamily: 'inherit',
-              fontWeight: page === 'network' ? '500' : '400',
-              transition: 'all 0.15s',
-            }}
-            onMouseEnter={e => {
-              if (page !== 'network') {
-                e.currentTarget.style.background = 'rgba(139, 92, 246, 0.22)'
-                e.currentTarget.style.border = '1px solid rgba(139, 92, 246, 0.4)'
-              }
-            }}
-            onMouseLeave={e => {
-              if (page !== 'network') {
-                e.currentTarget.style.background = 'rgba(139, 92, 246, 0.12)'
-                e.currentTarget.style.border = '1px solid rgba(139, 92, 246, 0.25)'
-              }
+              fontWeight: 500,
+              transition: 'all 0.15s ease',
             }}
           >
-            <Globe size={18} color={page === 'network' ? '#c4b5fd' : '#a78bfa'} />
-            <span style={{ flex: 1 }}>Network</span>
+            {page === 'network' && <span style={{ position: 'absolute', left: '-14px', top: '50%', transform: 'translateY(-50%)', width: '2px', height: '18px', background: '#4ADE80', borderRadius: '2px' }} />}
+            <Globe size={17} style={{ opacity: 0.85, flexShrink: 0 }} />
+            Network
             <span style={{
-              fontSize: '9px',
-              background: '#7c3aed',
-              color: '#fff',
-              padding: '2px 6px',
-              borderRadius: '99px',
-              fontWeight: 600,
+              marginLeft: 'auto',
+              fontSize: '8.5px',
+              background: 'rgba(168,85,247,0.14)',
+              color: '#C084FC',
+              padding: '3px 7px',
+              borderRadius: '6px',
+              fontWeight: 700,
               letterSpacing: '0.05em',
             }}>NEW</span>
           </button>
         )}
 
-        <div style={{ flex: 1 }} />
-
-        {/* User card */}
-        <div style={{ padding: '12px 13px', borderRadius: '10px', background: 'rgba(255,255,255,0.02)', border: '1px solid #161616' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-            <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: '#141414', border: '1px solid #222', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: '700', flexShrink: 0, color: '#777' }}>
+        {/* User footer — pinned to bottom */}
+        <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '0 2px' }}>
+            <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'linear-gradient(135deg, #2A2A30, #16161A)', border: '1px solid rgba(255,255,255,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: '600', flexShrink: 0, color: '#6E6E76' }}>
               {initials}
             </div>
-            <div>
-              <div style={{ fontWeight: '600', fontSize: '13px', color: '#ccc' }}>{displayName}</div>
-              <div style={{ color: '#666', fontSize: '11px', marginTop: '1px' }}>{marketFocus}</div>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontWeight: '600', fontSize: '12.5px', color: '#ccc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayName}</div>
+              <div style={{ color: '#46464D', fontSize: '10px', marginTop: '1px' }}>{marketFocus}</div>
             </div>
+            <button
+              onClick={logout}
+              title="Log out"
+              onMouseEnter={e => { e.currentTarget.style.color = '#fff' }}
+              onMouseLeave={e => { e.currentTarget.style.color = '#46464D' }}
+              style={{ background: 'transparent', border: 'none', color: '#46464D', cursor: 'pointer', fontFamily: 'inherit', padding: '6px', display: 'flex', alignItems: 'center', flexShrink: 0, transition: 'color 0.15s ease' }}
+            >
+              <LogOut size={14} />
+            </button>
           </div>
-          <button
-            onClick={logout}
-            style={{ width: '100%', background: 'transparent', border: '1px solid #1c1c1c', borderRadius: '7px', color: '#555', fontSize: '11px', padding: '6px', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s', letterSpacing: '0.04em' }}
-            className="action-btn"
-          >
-            Log out
-          </button>
-        </div>
 
-        {/* Hidden admin link — only visible for the admin email */}
-        {session?.user?.email === ADMIN_EMAIL && (
-          <button
-            onClick={() => setPage('admin')}
-            style={{
-              marginTop: '6px', width: '100%',
-              background: 'transparent', border: 'none',
-              color: page === 'admin' ? '#aaffa0' : '#2a2a2a',
-              fontSize: '9px', letterSpacing: '0.2em', textTransform: 'uppercase',
-              cursor: 'pointer', fontFamily: 'inherit', padding: '4px',
-              transition: 'color 0.15s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.color = '#aaffa0' }}
-            onMouseLeave={e => { e.currentTarget.style.color = page === 'admin' ? '#aaffa0' : '#2a2a2a' }}
-          >
-            · admin ·
-          </button>
-        )}
+          {/* Hidden admin link — only visible for the admin email */}
+          {session?.user?.email === ADMIN_EMAIL && (
+            <button
+              onClick={() => setPage('admin')}
+              style={{
+                marginTop: '8px', width: '100%',
+                background: 'transparent', border: 'none',
+                color: page === 'admin' ? '#aaffa0' : '#46464D',
+                fontSize: '9px', letterSpacing: '0.2em', textTransform: 'uppercase',
+                cursor: 'pointer', fontFamily: 'inherit', padding: '4px',
+                transition: 'color 0.15s ease',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.color = '#aaffa0' }}
+              onMouseLeave={e => { e.currentTarget.style.color = page === 'admin' ? '#aaffa0' : '#46464D' }}
+            >
+              · admin ·
+            </button>
+          )}
+        </div>
       </aside>
 
       {/* ── Mobile top header (hidden on desktop via CSS) ── */}
