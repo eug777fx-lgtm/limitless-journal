@@ -7210,18 +7210,14 @@ export default function App() {
         height: '100%',
         zIndex: 2,
       }}>
-        {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', padding: '0 2px' }}>
-          <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: 'linear-gradient(135deg, #1A1A1E, #0C0C0E)', border: '1px solid rgba(255,255,255,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <img src="/logo2.png" alt="logo" style={{ height: '20px', display: 'block' }} />
+        {/* Logo — crown at natural size, stacked above the wordmark (original layout) */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', marginBottom: '16px' }}>
+          <img src="/logo2.png" alt="logo" style={{ height: '28px', width: 'auto', display: 'block' }} />
+          <div style={{ fontSize: '13px', fontWeight: '700', letterSpacing: '0.22em', color: '#fff', lineHeight: 1.2 }}>
+            LIMITLESS
           </div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: '13px', fontWeight: '700', letterSpacing: '0.22em', color: '#fff', lineHeight: 1.2 }}>
-              LIMITLESS
-            </div>
-            <div style={{ fontSize: '8.5px', color: '#46464D', letterSpacing: '0.3em', textTransform: 'uppercase', fontWeight: '600', marginTop: '2px' }}>
-              Trading Journal
-            </div>
+          <div style={{ fontSize: '8.5px', color: '#46464D', letterSpacing: '0.3em', textTransform: 'uppercase', fontWeight: '600' }}>
+            Trading Journal
           </div>
         </div>
 
