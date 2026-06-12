@@ -117,6 +117,31 @@ const getOneR = () => {
   const v = (parseFloat(r.accountSize) || 0) * (parseFloat(r.riskPct) || 0) / 100
   return v > 0 ? v : 100
 }
+// Pure position-sizing core — shared by the Risk Engine tab and the Daily Plan
+// quick calculator so the auto micro-switch logic lives in exactly one place.
+//  ≥1 whole contract → round down, trade the selected instrument.
+//  <1 contract       → switch to the micro sibling (×10 size: NQ→MNQ, ES→MES).
+const sizePosition = (dollarRisk, stop, instrumentKey) => {
+  const inst = RISK_INSTRUMENTS[instrumentKey] || RISK_INSTRUMENTS.NQ
+  const perContractRisk = stop * inst.pointValue
+  const rawContracts = perContractRisk > 0 ? dollarRisk / perContractRisk : 0
+  let rec = null
+  if (perContractRisk > 0 && dollarRisk > 0) {
+    if (rawContracts >= 1) {
+      rec = { instrument: inst.label, pointValue: inst.pointValue, contracts: Math.floor(rawContracts), micro: false }
+    } else if (inst.micro) {
+      const micro = RISK_INSTRUMENTS[inst.micro]
+      const microRaw = dollarRisk / (stop * micro.pointValue) // == rawContracts × (inst.pointValue / micro.pointValue)
+      rec = { instrument: micro.label, pointValue: micro.pointValue, contracts: Math.floor(microRaw), micro: true, from: inst.label }
+    } else {
+      // already the micro — nothing smaller to switch to
+      rec = { instrument: inst.label, pointValue: inst.pointValue, contracts: Math.floor(rawContracts), micro: false }
+    }
+  }
+  const tooSmall = rec && rec.contracts < 1
+  const actualRisk = rec && !tooSmall ? rec.contracts * stop * rec.pointValue : 0
+  return { inst, perContractRisk, rawContracts, rec, tooSmall, actualRisk }
+}
 
 // ─── Trade derived metrics ──────────────────────────────────────────────────
 const followedRules = (t) => {
@@ -361,6 +386,8 @@ const blankPlan = () => ({
   finalGate: '',
   // Final-gate execution confirmations
   gateRrOk: false, gatePriceStory: '',
+  // Discipline principles acknowledged today (checkbox texts; no score weight)
+  principles: [],
 })
 
 // Weighted /50 score from all sections. Bias and Entry are required (red-marked).
@@ -401,21 +428,169 @@ const PRO_PRINCIPLES = [
   { Icon: TrendingUp, text: 'Follow price, not opinions' },
   { Icon: Award,      text: 'Discipline creates payouts' },
 ]
-function ProfessionalPrinciple() {
+// ─── Setup Rating — circular gauge + per-section breakdown ───────────────────
+// Single source of truth for the /50 quality score in the Daily Plan.
+// Uses the unchanged computeQuality() weights — display only.
+function SetupRating({ total, parts, plan }) {
+  const band = total >= 42 ? { g: 'A+', c: GOLD } : total >= 35 ? { g: 'A', c: GOLD }
+    : total >= 28 ? { g: 'B', c: '#d7d7d7' } : total >= 20 ? { g: 'C', c: '#6e6e6e' } : { g: 'F', c: RED }
+  const R = 62, CIRC = 2 * Math.PI * R
+  const frac = clamp(total / 50, 0, 1)
+  const rows = [
+    { l: 'Bias',          v: parts.bias,      max: 10, req: !plan.bias },
+    { l: 'Draw',          v: parts.draw,      max: 8 },
+    { l: 'Liquidity',     v: parts.liquidity, max: 8 },
+    { l: 'HTF POI · OTE', v: parts.location,  max: 8 },
+    { l: 'Entry',         v: parts.entry,     max: 10, req: !plan.entryTrigger },
+    { l: 'Timing & Gate', v: parts.gate,      max: 6 },
+  ]
+  const missing = [!plan.bias && 'Bias', !plan.entryTrigger && 'Entry Trigger'].filter(Boolean)
+  const verdict = missing.length
+    ? { Icon: AlertTriangle, color: ORANGE, text: `Missing required: ${missing.join(' + ')}` }
+    : total >= 35 ? { Icon: CheckCircle, color: GREEN, text: 'A+ setup — conditions aligned' }
+    : total >= 20 ? { Icon: AlertTriangle, color: YELLOW, text: 'Mediocre — wait for more confluence' }
+    : { Icon: XCircle, color: RED, text: 'Low quality — likely no-trade' }
   return (
-    <div style={{ ...card, padding: '16px 18px', border: `1px solid ${GOLD_LINE}`, background: 'linear-gradient(135deg, rgba(234,179,8,0.09), #0d0d0d)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '13px' }}>
-        <Award size={14} color={GOLD} />
-        <div style={{ fontSize: '10.5px', fontWeight: 800, letterSpacing: '0.18em', color: GOLD, textTransform: 'uppercase' }}>The Professional Trader Principle</div>
+    <div style={{ ...card, border: `1px solid ${GOLD_LINE}`, background: 'linear-gradient(180deg, rgba(234,179,8,0.05), #0d0d0d)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '18px' }}>
+        <Brain size={17} color={GOLD} />
+        <div style={{ fontSize: '14px', fontWeight: 800, color: '#fff', letterSpacing: '0.02em', textTransform: 'uppercase' }}>Setup Rating</div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(168px, 1fr))', gap: '8px' }}>
-        {PRO_PRINCIPLES.map(p => (
-          <div key={p.text} style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '9px 11px', borderRadius: '9px', background: BG, border: `1px solid ${CARD_BORD}` }}>
-            <p.Icon size={14} color={GOLD} style={{ flexShrink: 0 }} />
-            <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.04em', color: '#cdb86f', textTransform: 'uppercase', lineHeight: 1.3 }}>{p.text}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '22px', flexWrap: 'wrap' }}>
+        {/* Circular gauge */}
+        <div style={{ position: 'relative', width: '140px', height: '140px', flexShrink: 0, margin: '0 auto' }}>
+          <svg width="140" height="140" viewBox="0 0 140 140" style={{ transform: 'rotate(-90deg)', display: 'block' }}>
+            <circle cx="70" cy="70" r={R} fill="none" stroke="#1c1c1c" strokeWidth="10" />
+            <circle cx="70" cy="70" r={R} fill="none" stroke={band.c} strokeWidth="10" strokeLinecap="round"
+              strokeDasharray={CIRC} strokeDashoffset={CIRC * (1 - frac)}
+              style={{ transition: 'stroke-dashoffset .5s ease, stroke .3s ease' }} />
+          </svg>
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ fontSize: '36px', fontWeight: 900, color: band.c, lineHeight: 1, letterSpacing: '-1px' }}>{band.g}</span>
+            <span style={{ fontSize: '11px', fontWeight: 700, color: '#666', marginTop: '4px' }}>{total}/50</span>
+          </div>
+        </div>
+        {/* Section breakdown */}
+        <div style={{ flex: '1 1 180px', minWidth: '170px', display: 'flex', flexDirection: 'column', gap: '9px' }}>
+          {rows.map(row => {
+            const ratio = row.max > 0 ? row.v / row.max : 0
+            const c = ratio >= 0.7 ? GREEN : ratio >= 0.4 ? YELLOW : RED
+            return (
+              <div key={row.l}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span style={{ fontSize: '10.5px', color: '#999', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    {row.l}{row.req && <span style={{ color: RED, marginLeft: '3px' }}>*</span>}
+                  </span>
+                  <span style={{ fontSize: '11px', fontWeight: 800, color: row.v > 0 ? c : '#555' }}>{row.v}/{row.max}</span>
+                </div>
+                <div style={{ height: '4px', borderRadius: '3px', background: '#161616', overflow: 'hidden' }}>
+                  <div style={{ width: `${ratio * 100}%`, height: '100%', background: c, borderRadius: '3px', transition: 'width .4s ease, background .3s' }} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+      <div style={{ marginTop: '16px', fontSize: '11px', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', flexWrap: 'wrap' }}>
+        <verdict.Icon size={13} color={verdict.color} />
+        <span style={{ color: verdict.color, fontWeight: 600 }}>{verdict.text}</span>
+        <span style={{ color: '#444' }}>· * required</span>
+      </div>
+    </div>
+  )
+}
+
+// ─── Risk Calculator — compact Daily Plan widget on the shared sizing core ───
+// Reads/writes the same persisted settings as the Risk Engine tab (RISK_KEY),
+// so the two surfaces always agree. The Risk Engine tab remains the full view.
+function RiskCalc() {
+  const [r, setR] = useState(() => getRisk())
+  const [mode, setMode] = useState('%')          // risk input as '%' or '$'
+  const [riskDollar, setRiskDollar] = useState('')
+  useEffect(() => { lsSet(RISK_KEY, r) }, [r])
+  const set = (k) => (e) => setR(prev => ({ ...prev, [k]: e.target.value }))
+
+  const acc  = parseFloat(r.accountSize) || 0
+  const pctV = parseFloat(r.riskPct) || 0
+  const stop = parseFloat(r.stopLoss) || 0
+  const dollarRisk = mode === '$' ? (parseFloat(riskDollar) || 0) : acc * pctV / 100
+  const { rawContracts, rec, tooSmall, actualRisk } = sizePosition(dollarRisk, stop, r.instrument)
+
+  const modeBtn = (m) => (
+    <button key={m} type="button" onClick={() => setMode(m)} style={{
+      padding: '3px 9px', borderRadius: '6px', cursor: 'pointer', fontFamily: 'inherit', fontSize: '10px', fontWeight: 700, minHeight: 0, transition: 'all .15s',
+      border: `1px solid ${mode === m ? GOLD_LINE : CARD_BORD}`, background: mode === m ? GOLD_SOFT : 'transparent', color: mode === m ? GOLD : '#666',
+    }}>{m}</button>
+  )
+  const outs = [
+    { l: 'Contracts', v: rec && !tooSmall ? `${rec.contracts} ${rec.instrument}` : '—', c: rec && !tooSmall ? GREEN : '#555' },
+    { l: '$ / Contract', v: rec ? usd(stop * rec.pointValue) : '—', c: '#fff' },
+    { l: 'Total $ Risk', v: actualRisk > 0 ? usd(actualRisk) : '—', c: GOLD },
+    { l: 'R Value (1R)', v: dollarRisk > 0 ? usd(dollarRisk) : '—', c: '#fff' },
+  ]
+  return (
+    <div style={card}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
+          <Shield size={16} color={GOLD} />
+          <div style={{ fontSize: '14px', fontWeight: 800, color: '#fff', letterSpacing: '0.02em', textTransform: 'uppercase' }}>Risk Calculator</div>
+        </div>
+        {rec?.micro && (
+          <span style={{ fontSize: '9.5px', fontWeight: 800, letterSpacing: '0.08em', color: '#000', background: GOLD, padding: '3px 8px', borderRadius: '99px', flexShrink: 0 }}>
+            AUTO → {rec.instrument}
+          </span>
+        )}
+      </div>
+      <div className="tos-grid-2" style={{ marginBottom: '12px' }}>
+        <div>
+          <div style={lbl}>Account ($)</div>
+          <input value={r.accountSize} onChange={set('accountSize')} type="number" step="100" min="0" inputMode="decimal" style={inp} placeholder="10000" />
+        </div>
+        <div>
+          <div style={{ ...lbl, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>Risk</span>
+            <span style={{ display: 'flex', gap: '4px' }}>{['%', '$'].map(modeBtn)}</span>
+          </div>
+          {mode === '%'
+            ? <input value={r.riskPct} onChange={set('riskPct')} type="number" step="0.1" min="0.1" inputMode="decimal" style={inp} placeholder="1" />
+            : <input value={riskDollar} onChange={e => setRiskDollar(e.target.value)} type="number" step="10" min="0" inputMode="decimal" style={inp} placeholder={String(Math.round(acc * pctV / 100) || 100)} />}
+        </div>
+      </div>
+      <div className="tos-grid-2" style={{ marginBottom: '12px' }}>
+        <div>
+          <div style={lbl}>Stop (points)</div>
+          <input value={r.stopLoss} onChange={set('stopLoss')} type="number" step="0.25" min="0" inputMode="decimal" style={inp} placeholder="20" />
+        </div>
+        <div>
+          <div style={lbl}>Instrument</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '5px' }}>
+            {Object.keys(RISK_INSTRUMENTS).map(key => {
+              const active = r.instrument === key
+              return (
+                <button key={key} type="button" onClick={() => setR(prev => ({ ...prev, instrument: key }))} style={{
+                  padding: '9px 4px', borderRadius: '8px', cursor: 'pointer', fontFamily: 'inherit', fontSize: '11.5px', fontWeight: active ? 800 : 600, minHeight: 0, transition: 'all .15s',
+                  border: `1px solid ${active ? GOLD_LINE : CARD_BORD}`, background: active ? GOLD_SOFT : 'transparent', color: active ? GOLD : '#888',
+                }}>{key}</button>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+      {/* Output row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+        {outs.map(o => (
+          <div key={o.l} style={{ textAlign: 'center', padding: '10px 4px', borderRadius: '9px', background: BG, border: `1px solid ${CARD_BORD}` }}>
+            <div style={{ fontSize: '13.5px', fontWeight: 800, color: o.c, lineHeight: 1.1, whiteSpace: 'nowrap' }}>{o.v}</div>
+            <div style={{ fontSize: '8.5px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: '5px' }}>{o.l}</div>
           </div>
         ))}
       </div>
+      {tooSmall && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginTop: '10px', fontSize: '11px', color: ORANGE }}>
+          <AlertTriangle size={13} /> Below 1 {rec.instrument} contract ({rawContracts.toFixed(2)} raw) — reduce the stop or raise risk.
+        </div>
+      )}
+      <div style={{ marginTop: '10px', fontSize: '10px', color: '#555', textAlign: 'right' }}>Synced with the Risk Engine tab</div>
     </div>
   )
 }
@@ -466,7 +641,6 @@ function DailyPlan({ pro = false }) {
   const toggleRb = (i) => setPlan(p => ({ ...p, rbChecks: p.rbChecks.map((v, idx) => idx === i ? !v : v) }))
 
   const { parts, total } = computeQuality(plan)
-  const scoreColor = total >= 35 ? GREEN : total >= 20 ? YELLOW : RED
   const shiftDate = (days) => {
     const d = new Date(date + 'T00:00:00'); d.setDate(d.getDate() + days); setDate(localKey(d))
   }
@@ -477,13 +651,14 @@ function DailyPlan({ pro = false }) {
       {options.map(o => <Chip key={o} label={o} on={plan[key].includes(o)} onClick={() => toggle(key, o)} />)}
     </div>
   )
-  const sec = (title, hint) => (
-    <div style={{ marginBottom: '14px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: GOLD }} />
-        <div style={{ fontSize: '13px', fontWeight: 700, color: '#fff', letterSpacing: '0.02em', textTransform: 'uppercase' }}>{title}</div>
+  // Small uppercase section label for the checklist spine
+  const cl = (title, extra) => (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '10px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+        <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: GOLD }} />
+        <span style={{ fontSize: '10.5px', fontWeight: 800, color: '#9a9a9a', letterSpacing: '0.14em', textTransform: 'uppercase' }}>{title}</span>
       </div>
-      {hint && <div style={{ fontSize: '11px', color: '#666', marginTop: '4px', marginLeft: '13px' }}>{hint}</div>}
+      {extra}
     </div>
   )
   const note = (Glyph, color, text) => (
@@ -500,9 +675,6 @@ function DailyPlan({ pro = false }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-      {/* THE PROFESSIONAL TRADER PRINCIPLE — permanent, always visible */}
-      <ProfessionalPrinciple />
-
       {/* Date controls */}
       <div style={{ ...card, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', padding: '16px 20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -517,91 +689,104 @@ function DailyPlan({ pro = false }) {
         </div>
       </div>
 
-      {/* 1 — DAILY BIAS */}
-      <div style={card}>
-        {sec('1 · Daily Bias')}
-        <div style={{ marginBottom: '12px' }}>
+      {/* ── Two-column command layout: checklist spine · rating + risk ── */}
+      <div className="tos-grid-dp">
+
+      {/* LEFT — CHECKLIST PANEL */}
+      <div style={{ ...card, display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        {/* 1 — BIAS */}
+        <div>
+          {cl('Bias')}
           <Seg options={[{ label: 'PxH', value: 'PxH' }, { label: 'PxL', value: 'PxL' }]} value={plan.bias} onChange={v => set('bias', v)} />
         </div>
-        <div style={lbl}>Why is this my bias?</div>
-        <textarea value={plan.biasReason} onChange={e => set('biasReason', e.target.value)} style={ta} placeholder="HTF context, draw on liquidity, narrative…" />
-      </div>
 
-      {/* 2 — LIQUIDITY & DELIVERY */}
-      <div style={card}>
-        {sec('2 · Liquidity & Delivery')}
-        <div className="tos-grid-2">
-          <div><div style={lbl}>Primary Draw — targeted FIRST</div><DrawSelect value={plan.primaryDraw} onChange={v => set('primaryDraw', v)} /></div>
-          <div><div style={lbl}>Secondary Draw — comes after</div><DrawSelect value={plan.secondaryDraw} onChange={v => set('secondaryDraw', v)} /></div>
-        </div>
-        <div className="tos-grid-2" style={{ marginTop: '14px' }}>
-          <div><div style={lbl}>Trading against the first objective?</div><YesNo value={plan.againstFirst} onChange={v => set('againstFirst', v)} /></div>
-          <div><div style={lbl}>Has Midnight Open been addressed?</div><YesNo value={plan.moAddressed} onChange={v => set('moAddressed', v)} /></div>
-        </div>
-        {plan.againstFirst === true && note(AlertTriangle, D_AMBER, 'Consider waiting for the first objective to be met before entering.')}
-        {plan.moAddressed === false && note(AlertTriangle, GOLD, 'Midnight Open unaddressed — consider whether it is the first draw.')}
-      </div>
-
-      {/* 3 — SESSION LIQUIDITY */}
-      <div style={card}>
-        {sec('3 · Session Liquidity')}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {DELIV_SESSION.map(s => (
-            <div key={s.k} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '13px', color: '#ddd', fontWeight: 600 }}>{s.l} taken?</span>
-              <div style={{ width: '150px' }}><YesNo value={plan[s.k]} onChange={v => set(s.k, v)} /></div>
+        {/* 2 — LIQUIDITY (draws + session levels + delivery checks) */}
+        <div>
+          {cl('Liquidity')}
+          <div className="tos-grid-2" style={{ marginBottom: '10px' }}>
+            <div><div style={lbl}>Primary Draw</div><DrawSelect value={plan.primaryDraw} onChange={v => set('primaryDraw', v)} /></div>
+            <div><div style={lbl}>Secondary Draw</div><DrawSelect value={plan.secondaryDraw} onChange={v => set('secondaryDraw', v)} /></div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {DELIV_SESSION.map(s => (
+              <div key={s.k} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '6px 10px', borderRadius: '8px', background: BG, border: `1px solid ${CARD_BORD}`, borderLeft: plan[s.k] !== null ? `3px solid ${GOLD}` : `1px solid ${CARD_BORD}`, transition: 'border .15s' }}>
+                <span style={{ fontSize: '12px', color: plan[s.k] !== null ? '#ddd' : '#777', fontWeight: 600 }}>{s.l} taken?</span>
+                <div style={{ width: '128px', flexShrink: 0 }}><YesNo value={plan[s.k]} onChange={v => set(s.k, v)} /></div>
+              </div>
+            ))}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '6px 10px', borderRadius: '8px', background: BG, border: `1px solid ${CARD_BORD}`, borderLeft: plan.moAddressed !== null ? `3px solid ${GOLD}` : `1px solid ${CARD_BORD}`, transition: 'border .15s' }}>
+              <span style={{ fontSize: '12px', color: plan.moAddressed !== null ? '#ddd' : '#777', fontWeight: 600 }}>Midnight Open addressed?</span>
+              <div style={{ width: '128px', flexShrink: 0 }}><YesNo value={plan.moAddressed} onChange={v => set('moAddressed', v)} /></div>
             </div>
-          ))}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '6px 10px', borderRadius: '8px', background: BG, border: `1px solid ${CARD_BORD}`, borderLeft: plan.againstFirst !== null ? `3px solid ${GOLD}` : `1px solid ${CARD_BORD}`, transition: 'border .15s' }}>
+              <span style={{ fontSize: '12px', color: plan.againstFirst !== null ? '#ddd' : '#777', fontWeight: 600 }}>Trading against primary objective?</span>
+              <div style={{ width: '128px', flexShrink: 0 }}><YesNo value={plan.againstFirst} onChange={v => set('againstFirst', v)} /></div>
+            </div>
+          </div>
+          {plan.againstFirst === true && note(AlertTriangle, D_AMBER, 'Consider waiting for the first objective to be met before entering.')}
+          {plan.moAddressed === false && note(AlertTriangle, GOLD, 'Midnight Open unaddressed — consider whether it is the first draw.')}
+          {untouchedSession && note(Eye, D_AMBER, 'Untouched levels exist — factor into bias.')}
         </div>
-        {untouchedSession && note(Eye, D_AMBER, 'Untouched levels exist — factor into bias.')}
-      </div>
 
-      {/* 4 — HTF POI */}
-      <div style={card}>
-        {sec('4 · HTF Point of Interest')}
-        {chipGroup('poi', HTF_POI)}
-        <div style={{ ...lbl, marginTop: '14px' }}>Main area of interest</div>
-        <textarea value={plan.poiText} onChange={e => set('poiText', e.target.value)} style={ta} placeholder="Where do I expect the reaction?" />
-      </div>
-
-      {/* 5 — KEY OPENS */}
-      <div style={card}>
-        {sec('5 · Key Opens')}
-        {chipGroup('keyOpens', KEY_OPENS)}
-      </div>
-
-      {/* 6 — OTE */}
-      <div style={card}>
-        {sec('6 · OTE')}
-        <div className="tos-chipgrid">
-          {OTE_LEVELS.map(o => <Chip key={o} label={o} on={plan.ote.includes(o)} onClick={() => toggle('ote', o)} />)}
+        {/* 3 — HTF POI */}
+        <div>
+          {cl('HTF POI')}
+          {chipGroup('poi', HTF_POI)}
         </div>
-      </div>
 
-      {/* 7 — ENTRY TRIGGER + VALIDATION */}
-      <div style={card}>
-        {sec('7 · Entry Trigger', 'Select one')}
-        <Seg options={ENTRY_TRIGGERS} value={plan.entryTrigger} onChange={v => set('entryTrigger', v || '')} />
-        {plan.entryTrigger === 'Rejection Block' && (
-          <div style={{ marginTop: '14px' }}>
-            <div style={{ ...lbl, marginBottom: '8px' }}>Rejection Block validation</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {/* 4 — KEY OPEN */}
+        <div>
+          {cl('Key Open')}
+          {chipGroup('keyOpens', KEY_OPENS)}
+        </div>
+
+        {/* 5 — OTE (0.705 = main level) */}
+        <div>
+          {cl('OTE')}
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {OTE_LEVELS.map(o => {
+              const on = plan.ote.includes(o)
+              const main = o === '0.705'
+              return (
+                <button key={o} type="button" onClick={() => toggle('ote', o)} style={{
+                  flex: main ? '1.4 1 0' : '1 1 0', padding: main ? '12px 10px' : '10px 10px', borderRadius: '9px', cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s', minHeight: 0,
+                  border: `1px solid ${on ? GOLD_LINE : main ? 'rgba(234,179,8,0.22)' : CARD_BORD}`,
+                  background: on ? GOLD_SOFT : 'transparent',
+                  color: on ? GOLD : main ? '#cdb86f' : '#888',
+                  fontSize: main ? '14px' : '12.5px', fontWeight: main ? 800 : on ? 600 : 500,
+                }}>
+                  {o}
+                  {main && <span style={{ display: 'block', fontSize: '8.5px', letterSpacing: '0.1em', color: on ? GOLD : '#6a5f3a', marginTop: '2px', textTransform: 'uppercase' }}>Main level</span>}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* 6 — ENTRY TRIGGER + VALIDATION */}
+        <div>
+          {cl('Entry Trigger', <span style={{ fontSize: '10px', color: '#555' }}>select one</span>)}
+          <Seg options={ENTRY_TRIGGERS} value={plan.entryTrigger} onChange={v => set('entryTrigger', v || '')} />
+          {plan.entryTrigger === 'Rejection Block' && (
+            <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {RB_CHECKS.map((c, i) => <DCheck key={i} label={c} on={plan.rbChecks[i]} onClick={() => toggleRb(i)} />)}
+              {!rbComplete && note(XCircle, D_RED, 'Rejection block criteria incomplete.')}
             </div>
-            {!rbComplete && note(XCircle, D_RED, 'Rejection block criteria incomplete.')}
-          </div>
-        )}
-        {plan.entryTrigger === 'Wick CE' && (
-          <div style={{ marginTop: '14px' }}>
-            <DCheck label="Midpoint / CE identified" on={plan.wickCe} onClick={() => set('wickCe', !plan.wickCe)} />
-          </div>
-        )}
-      </div>
+          )}
+          {plan.entryTrigger === 'Wick CE' && (
+            <div style={{ marginTop: '10px' }}>
+              <DCheck label="Midpoint / CE identified" on={plan.wickCe} onClick={() => set('wickCe', !plan.wickCe)} />
+            </div>
+          )}
+        </div>
 
-      {/* 8 — FINAL GATE */}
-      <div style={{ ...card, border: `1px solid ${GOLD_LINE}`, background: 'linear-gradient(135deg, rgba(234,179,8,0.05), #0d0d0d)' }}>
-        {sec('8 · Final Gate')}
-        <div style={{ fontSize: '15px', fontWeight: 800, color: '#fff', marginBottom: '12px', lineHeight: 1.35 }}>What must price do FIRST before reaching your target?</div>
+        {/* 7 — DISCIPLINE PRINCIPLES + FINAL GATE */}
+        <div>
+          {cl('Discipline Principles')}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '14px' }}>
+            {PRO_PRINCIPLES.map(p => <DCheck key={p.text} label={p.text} on={plan.principles.includes(p.text)} onClick={() => toggle('principles', p.text)} />)}
+          </div>
+          <div style={{ ...lbl, marginBottom: '8px' }}>Final Gate — what must price do FIRST before your target?</div>
         <input
           value={plan.finalGate}
           onChange={e => set('finalGate', e.target.value)}
@@ -678,58 +863,12 @@ function DailyPlan({ pro = false }) {
         })()}
       </div>
 
-      {/* 9 — Trade Quality Score */}
-      <div style={{ ...card, marginTop: '14px', border: `1px solid ${GOLD_LINE}`, background: 'linear-gradient(180deg, rgba(234,179,8,0.05), #0d0d0d)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '14px', marginBottom: '18px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Gauge size={18} color={GOLD} />
-            <div style={{ fontSize: '14px', fontWeight: 800, color: '#fff', letterSpacing: '0.02em', textTransform: 'uppercase' }}>Trade Quality Score</div>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <span style={{ fontSize: '40px', fontWeight: 900, color: scoreColor, letterSpacing: '-2px', lineHeight: 1 }}>{total}</span>
-            <span style={{ fontSize: '18px', fontWeight: 700, color: '#555' }}>/50</span>
-          </div>
-        </div>
-        {/* big bar */}
-        <div style={{ height: '12px', borderRadius: '8px', background: '#161616', overflow: 'hidden', marginBottom: '18px' }}>
-          <div style={{ width: `${(total / 50) * 100}%`, height: '100%', background: scoreColor, borderRadius: '8px', transition: 'width .4s ease, background .3s' }} />
-        </div>
-        <div className="tos-grid-3">
-          {[
-            { k: 'bias',      l: 'Bias',          max: 10, req: true },
-            { k: 'draw',      l: 'Draw',          max: 8 },
-            { k: 'liquidity', l: 'Liquidity',     max: 8 },
-            { k: 'location',  l: 'Location',      max: 8 },
-            { k: 'entry',     l: 'Entry',         max: 10, req: true },
-            { k: 'gate',      l: 'Timing & Gate', max: 6 },
-          ].map(({ k, l, max, req }) => {
-            const v = parts[k]
-            const ratio = max > 0 ? v / max : 0
-            const c = ratio >= 0.7 ? GREEN : ratio >= 0.4 ? YELLOW : RED
-            return (
-              <div key={k} style={{ textAlign: 'center', padding: '12px 8px', borderRadius: '10px', background: BG, border: `1px solid ${req && v === 0 ? 'rgba(255,107,107,0.4)' : CARD_BORD}` }}>
-                <div style={{ fontSize: '22px', fontWeight: 800, color: c, lineHeight: 1 }}>{v}<span style={{ fontSize: '11px', color: '#555' }}>/{max}</span></div>
-                <div style={{ ...lbl, marginBottom: 0, marginTop: '7px' }}>{l}{req && <span style={{ color: RED, marginLeft: '3px' }}>*</span>}</div>
-              </div>
-            )
-          })}
-        </div>
-        {(() => {
-          const missing = [!plan.bias && 'Bias', !plan.entryTrigger && 'Entry Trigger'].filter(Boolean)
-          const v = missing.length
-            ? { Icon: AlertTriangle, color: ORANGE, text: `Missing required: ${missing.join(' + ')}` }
-            : total >= 35 ? { Icon: CheckCircle, color: GREEN, text: 'A+ setup — conditions aligned' }
-            : total >= 20 ? { Icon: AlertTriangle, color: YELLOW, text: 'Mediocre — wait for more confluence' }
-            : { Icon: XCircle, color: RED, text: 'Low quality — likely no-trade' }
-          return (
-            <div style={{ marginTop: '14px', fontSize: '11px', color: '#888', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', flexWrap: 'wrap' }}>
-              <v.Icon size={13} color={v.color} />
-              <span style={{ color: v.color, fontWeight: 600 }}>{v.text}</span>
-              <span style={{ color: '#444' }}>· * required</span>
-            </div>
-          )
-        })()}
       </div>
+
+      {/* RIGHT — setup rating gauge + risk calculator */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <SetupRating total={total} parts={parts} plan={plan} />
+        <RiskCalc />
 
       {pro && (() => {
         const probability = (!plan.bias || !plan.entryTrigger) ? Math.round((total / 50) * 40) : Math.round(40 + (total / 50) * 50)
@@ -739,7 +878,7 @@ function DailyPlan({ pro = false }) {
         const prev = prevRaw ? { ...blankPlan(), ...prevRaw } : null
         const prevScore = prev ? computeQuality(prev).total : 0
         return (
-          <div style={{ ...card, marginTop: '14px' }}>
+          <div style={card}>
             <SectionTitle Icon={Gauge}>Setup Analysis (Pro)</SectionTitle>
             <div className="tos-grid-2">
               <div>
@@ -776,6 +915,8 @@ function DailyPlan({ pro = false }) {
           </div>
         )
       })()}
+      </div>{/* /right column */}
+      </div>{/* /tos-grid-dp */}
     </div>
   )
 }
@@ -1214,33 +1355,13 @@ function RiskEngine({ lossTakenToday, trades = [], pro = false }) {
   const halfActive = halfManual || lossTakenToday
   const set = (k) => (e) => setR(prev => ({ ...prev, [k]: e.target.value }))
 
-  const inst  = RISK_INSTRUMENTS[r.instrument] || RISK_INSTRUMENTS.NQ
   const acc   = parseFloat(r.accountSize) || 0
   const pctV  = parseFloat(r.riskPct) || 0
   const stop  = parseFloat(r.stopLoss) || 0
   const effPct = halfActive ? pctV / 2 : pctV
   const dollarRisk = acc * effPct / 100
-  const perContractRisk = stop * inst.pointValue
-  const rawContracts = perContractRisk > 0 ? dollarRisk / perContractRisk : 0
-
-  // Contract recommendation with automatic micro-switch.
-  //  ≥1 whole contract → round down, trade the selected instrument.
-  //  <1 contract       → switch to the micro sibling (×10 size: NQ→MNQ, ES→MES).
-  let rec = null
-  if (perContractRisk > 0 && dollarRisk > 0) {
-    if (rawContracts >= 1) {
-      rec = { instrument: inst.label, pointValue: inst.pointValue, contracts: Math.floor(rawContracts), micro: false }
-    } else if (inst.micro) {
-      const micro = RISK_INSTRUMENTS[inst.micro]
-      const microRaw = dollarRisk / (stop * micro.pointValue) // == rawContracts × (inst.pointValue / micro.pointValue)
-      rec = { instrument: micro.label, pointValue: micro.pointValue, contracts: Math.floor(microRaw), micro: true, from: inst.label }
-    } else {
-      // already the micro — nothing smaller to switch to
-      rec = { instrument: inst.label, pointValue: inst.pointValue, contracts: Math.floor(rawContracts), micro: false }
-    }
-  }
-  const tooSmall = rec && rec.contracts < 1
-  const actualRisk = rec && !tooSmall ? rec.contracts * stop * rec.pointValue : 0
+  // Contract recommendation with automatic micro-switch (shared core).
+  const { inst, perContractRisk, rawContracts, rec, tooSmall, actualRisk } = sizePosition(dollarRisk, stop, r.instrument)
 
   // Pro analytics — Kelly, break-even WR, account heat, daily-stop math
   const decided = trades.filter(t => t.result === 'Win' || t.result === 'Loss')
@@ -2746,7 +2867,8 @@ function DCheck({ label, on, onClick, color = GOLD }) {
   return (
     <button type="button" onClick={onClick} style={{
       display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: '9px', width: '100%', textAlign: 'left', minHeight: 0,
-      border: `1px solid ${on ? color + '88' : CARD_BORD}`, background: on ? `${color}14` : 'transparent', color: on ? '#fff' : '#999', fontSize: '12.5px', fontWeight: on ? 600 : 500, cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s',
+      border: `1px solid ${on ? color + '88' : CARD_BORD}`, borderLeft: on ? `3px solid ${color}` : `1px solid ${CARD_BORD}`,
+      background: on ? `${color}14` : 'transparent', color: on ? '#fff' : '#999', fontSize: '12.5px', fontWeight: on ? 600 : 500, cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s',
     }}>
       <span style={{ width: '17px', height: '17px', borderRadius: '5px', flexShrink: 0, border: `1.5px solid ${on ? color : '#333'}`, background: on ? color : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         {on && <Check size={11} strokeWidth={3.5} color="#000" />}
@@ -2822,11 +2944,12 @@ const TOS_CSS = `
 .tos-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .tos-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .tos-grid-plan { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+.tos-grid-dp { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
 .tos-grid-log { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 14px; align-items: start; }
 .tos-grid-risk { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 14px; align-items: start; }
 .tos-date::-webkit-calendar-picker-indicator { filter: invert(0.6) sepia(1) saturate(6) hue-rotate(2deg); cursor: pointer; }
 @media (max-width: 900px) {
-  .tos-grid-plan, .tos-grid-log, .tos-grid-risk { grid-template-columns: 1fr !important; }
+  .tos-grid-plan, .tos-grid-dp, .tos-grid-log, .tos-grid-risk { grid-template-columns: 1fr !important; }
 }
 @media (max-width: 768px) {
   .tos-grid-3, .tos-grid-4 { grid-template-columns: 1fr 1fr !important; }
