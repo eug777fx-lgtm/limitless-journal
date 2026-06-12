@@ -91,7 +91,7 @@ const countPlanDaysThisMonth = (breakDays) => {
       const date = k.slice('tos_plan_'.length)
       if (!isThisMonth(date) || breakDays.has(date)) continue
       const p = lsGet(k, null)
-      if (p && (p.bias || p.entryTrigger || p.finalGate || p.primaryDraw)) n++
+      if (p && (p.bias || p.entryTrigger || p.dolTarget || p.primaryDraw)) n++
     }
   } catch { /* storage unavailable */ }
   return n
@@ -361,6 +361,8 @@ function SymbolSearch({ value, onChange }) {
 // Draw options for the merged Liquidity & Delivery section
 const DRAW_OPTIONS = ['PDH', 'PDL', 'Data High', 'Data Low', 'Equal Highs', 'Equal Lows', 'Midnight Open', 'London High', 'London Low', 'Session High', 'Session Low', 'NWOG', 'Gap Fill']
 const RB_CHECKS = ['Liquidity sweep occurred', 'Strong rejection exists', 'Opposing candle confirms', 'NOT just a wick']
+// Draw on Liquidity — single-select target pills (replaces the old Final Gate text)
+const DOL_OPTIONS = ['Equal Lows', 'Equal Highs', 'PDL', 'PDH', 'Weekly Low', 'Weekly High', 'Buy Side Liq.', 'Sell Side Liq.', 'ONH', 'ONL']
 
 function DrawSelect({ value, onChange }) {
   return (
@@ -382,35 +384,35 @@ const blankPlan = () => ({
   keyOpens: [],
   ote: [],
   entryTrigger: '', rbChecks: [false, false, false, false], wickCe: false,
-  finalGate: '',
-  // Final-gate execution confirmations
+  // Execution-gate confirmations
   gateRrOk: false, gatePriceStory: '',
-  // Discipline principles acknowledged today (checkbox texts; no score weight)
-  principles: [],
+  // Draw on Liquidity — single-select target for the day
+  dolTarget: '',
 })
 
 // Weighted /50 score from all sections. Bias and Entry are required (red-marked).
-// Maxes sum to exactly 50: Bias 12 · Draw 10 · Location 10 · Entry 12 · Gate 6.
-// (Rebalanced from /42 after the Liquidity Yes/No section was removed.)
+// Maxes sum to exactly 50: Bias 10 · Draw 10 · Location 9 · Entry 10 · Key Opens 3 · Draw-on-Liquidity 8.
+// (Rebalanced after the Final Gate text input was replaced by the DOL target pills.)
 function computeQuality(p) {
-  const bias = p.bias ? 12 : 0
+  const bias = p.bias ? 10 : 0
   // Draw — primary 6 + secondary 4
   const draw = (p.primaryDraw ? 6 : 0) + (p.secondaryDraw ? 4 : 0)
-  // Location — POI (1→4, 2+→7) + OTE (any→3)
+  // Location — POI (1→4, 2+→6) + OTE (any→3)
   const pc = p.poi.length
-  const location = (pc >= 2 ? 7 : pc === 1 ? 4 : 0) + (p.ote.length > 0 ? 3 : 0)
-  // Entry — REQUIRED: trigger 4 + validation 8
+  const location = (pc >= 2 ? 6 : pc === 1 ? 4 : 0) + (p.ote.length > 0 ? 3 : 0)
+  // Entry — REQUIRED: trigger 4 + validation 6
   let entry = 0
-  if (p.entryTrigger === 'Rejection Block') entry = 4 + Math.round((p.rbChecks.filter(Boolean).length / 4) * 8)
-  else if (p.entryTrigger === 'Wick CE') entry = 4 + (p.wickCe ? 8 : 0)
-  // Timing & Gate — key opens (max 3) + final gate (≥15 → 3, >0 → 1)
-  const gateLen = p.finalGate.trim().length
-  const gate = Math.min(3, p.keyOpens.length) + (gateLen >= 15 ? 3 : gateLen > 0 ? 1 : 0)
+  if (p.entryTrigger === 'Rejection Block') entry = 4 + Math.round((p.rbChecks.filter(Boolean).length / 4) * 6)
+  else if (p.entryTrigger === 'Wick CE') entry = 4 + (p.wickCe ? 6 : 0)
+  // Key Opens — max 3
+  const gate = Math.min(3, p.keyOpens.length)
+  // Draw on Liquidity — a selected target = 8
+  const dol = p.dolTarget ? 8 : 0
   const parts = {
-    bias: clamp(bias, 0, 12), draw: clamp(draw, 0, 10),
-    location: clamp(location, 0, 10), entry: clamp(entry, 0, 12), gate: clamp(gate, 0, 6),
+    bias: clamp(bias, 0, 10), draw: clamp(draw, 0, 10), location: clamp(location, 0, 9),
+    entry: clamp(entry, 0, 10), gate: clamp(gate, 0, 3), dol: clamp(dol, 0, 8),
   }
-  return { parts, total: Math.min(50, parts.bias + parts.draw + parts.location + parts.entry + parts.gate) }
+  return { parts, total: Math.min(50, parts.bias + parts.draw + parts.location + parts.entry + parts.gate + parts.dol) }
 }
 
 // Always merge with blankPlan() so older saved plans gain the new merged fields.
@@ -434,11 +436,12 @@ function SetupRating({ total, parts, plan }) {
   const R = 62, CIRC = 2 * Math.PI * R
   const frac = clamp(total / 50, 0, 1)
   const rows = [
-    { l: 'Bias',          v: parts.bias,      max: 12, req: !plan.bias },
+    { l: 'Bias',          v: parts.bias,      max: 10, req: !plan.bias },
     { l: 'Draw',          v: parts.draw,      max: 10 },
-    { l: 'HTF POI · OTE', v: parts.location,  max: 10 },
-    { l: 'Entry',         v: parts.entry,     max: 12, req: !plan.entryTrigger },
-    { l: 'Timing & Gate', v: parts.gate,      max: 6 },
+    { l: 'HTF POI · OTE', v: parts.location,  max: 9 },
+    { l: 'Entry',         v: parts.entry,     max: 10, req: !plan.entryTrigger },
+    { l: 'Key Opens',     v: parts.gate,      max: 3 },
+    { l: 'Draw on Liq.',  v: parts.dol,       max: 8 },
   ]
   const missing = [!plan.bias && 'Bias', !plan.entryTrigger && 'Entry Trigger'].filter(Boolean)
   const verdict = missing.length
@@ -619,7 +622,6 @@ const STORY_OPTS = [
 function DailyPlan({ pro = false }) {
   const [date, setDate] = useState(todayKey())
   const [plan, setPlan] = useState(() => loadPlan(todayKey()))
-  const [shake, setShake] = useState(false)
 
   // Reload the plan when the selected date changes (adjust-state-during-render
   // pattern — avoids a setState-in-effect cascade).
@@ -663,10 +665,8 @@ function DailyPlan({ pro = false }) {
     </div>
   )
 
-  // Section-7 entry validation state
+  // Entry-trigger validation state
   const rbComplete = plan.rbChecks.every(Boolean)
-  const finalLen = plan.finalGate.trim().length
-  const finalValid = finalLen >= 15
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -756,29 +756,8 @@ function DailyPlan({ pro = false }) {
           )}
         </div>
 
-        {/* 7 — DISCIPLINE PRINCIPLES + FINAL GATE */}
+        {/* 7 — EXECUTION GATE (required confirmations + verdict) */}
         <div>
-          {cl('Discipline Principles')}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '14px' }}>
-            {PRO_PRINCIPLES.map(p => <DCheck key={p.text} label={p.text} on={plan.principles.includes(p.text)} onClick={() => toggle('principles', p.text)} />)}
-          </div>
-          <div style={{ ...lbl, marginBottom: '8px' }}>Final Gate — what must price do FIRST before your target?</div>
-        <input
-          value={plan.finalGate}
-          onChange={e => set('finalGate', e.target.value)}
-          onBlur={() => { if (finalLen > 0 && !finalValid) { setShake(true); setTimeout(() => setShake(false), 450) } }}
-          className={shake ? 'tos-shake' : ''}
-          style={{ ...inp, borderColor: finalValid ? D_GREEN + '88' : (finalLen > 0 ? 'rgba(239,68,68,0.5)' : CARD_BORD) }}
-          placeholder="e.g. Sweep equal lows at 21,180 before reaching my long target at 21,450"
-        />
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '7px' }}>
-          <span style={{ fontSize: '11px', color: !finalValid && finalLen > 0 ? D_RED : '#666' }}>
-            {finalValid ? 'Specific enough.' : 'Required — be specific (min 15 chars).'}
-          </span>
-          <span style={{ fontSize: '11px', color: finalValid ? D_GREEN : '#666', fontWeight: 600 }}>{finalLen}/15</span>
-        </div>
-
-        {/* Required execution confirmations */}
         {(() => {
           const scoreOk = isAGrade(total)
           const rrOk    = !!plan.gateRrOk
@@ -786,7 +765,7 @@ function DailyPlan({ pro = false }) {
           const storyOk = story === 'price' || story === 'liquidity'
           const allOk   = scoreOk && rrOk && storyOk
           return (
-            <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: `1px solid ${CARD_BORD}` }}>
+            <div>
               <div style={{ ...lbl, marginBottom: '10px' }}>Required before you may execute</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <GateCheck ok={scoreOk} locked label="Setup score is A or A+" hint={`${scoreGrade(total)} · ${total}/50`} />
@@ -837,7 +816,25 @@ function DailyPlan({ pro = false }) {
             </div>
           )
         })()}
-      </div>
+        </div>
+
+        {/* 8 — DRAW ON LIQUIDITY (single-select target, bottom of column) */}
+        <div>
+          {cl('Draw on Liquidity')}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            {DOL_OPTIONS.map(o => {
+              const on = plan.dolTarget === o
+              return (
+                <button key={o} type="button" onClick={() => set('dolTarget', on ? '' : o)} style={{
+                  padding: '10px 12px', borderRadius: '9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12.5px', fontWeight: on ? 700 : 500, transition: 'all .15s', minHeight: 0,
+                  border: `1px solid ${on ? GOLD : CARD_BORD}`,
+                  background: on ? GOLD : 'transparent',
+                  color: on ? '#000' : '#888',
+                }}>{o}</button>
+              )
+            })}
+          </div>
+        </div>
 
       </div>
 
@@ -891,6 +888,19 @@ function DailyPlan({ pro = false }) {
           </div>
         )
       })()}
+
+        {/* Discipline principles — display-only reminders */}
+        <div style={card}>
+          {cl('Discipline Principles')}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+            {PRO_PRINCIPLES.map(p => (
+              <div key={p.text} style={{ display: 'flex', gap: '8px', fontSize: '12px', color: '#888', lineHeight: 1.35 }}>
+                <span style={{ color: '#777', flexShrink: 0 }}>•</span>
+                <span>{p.text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>{/* /right column */}
       </div>{/* /tos-grid-dp */}
     </div>
@@ -987,7 +997,7 @@ function TradeLog({ session, trades, tableMissing, onAdded, onDeleted, pro = fal
   // Only fires when a plan was actually started today (not a blank/auto-saved one).
   const planRaw = lsGet(`tos_plan_${todayKey()}`, null)
   const planStarted = planRaw && (planRaw.bias || planRaw.biasReason || planRaw.entryTrigger ||
-    planRaw.primaryDraw || planRaw.finalGate || planRaw.poi?.length ||
+    planRaw.primaryDraw || planRaw.dolTarget || planRaw.poi?.length ||
     planRaw.keyOpens?.length || planRaw.ote?.length)
   if (planStarted) {
     const planTotal = computeQuality({ ...blankPlan(), ...planRaw }).total
@@ -2904,8 +2914,6 @@ const TOS_CSS = `
 @keyframes tosSpin { to { transform: rotate(360deg); } }
 @keyframes tosConfetti { 0% { transform: translateY(0) rotate(0deg); opacity: 1; } 100% { transform: translateY(110vh) rotate(720deg); opacity: 0; } }
 @keyframes tosMeter { from { width: 0; } }
-@keyframes tosShake { 0%,100% { transform: translateX(0); } 20%,60% { transform: translateX(-7px); } 40%,80% { transform: translateX(7px); } }
-.tos-shake { animation: tosShake 0.4s ease; }
 .tos-spin { animation: tosSpin .9s linear infinite; }
 .tos-tabs::-webkit-scrollbar { height: 0; display: none; }
 .tos-chipgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
