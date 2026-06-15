@@ -5800,7 +5800,7 @@ function AdminPanel({ session, setPage }) {
     try {
       const [usersRes, tradesRes, invitesRes, settingsRes, ticketsRes] = await Promise.all([
         supabase.from('admin_users_view').select('*').order('created_at', { ascending: false }),
-        supabase.from('trades').select('id, user_id, pnl, trade_date, created_at'),
+        supabase.from('trades').select('id, user_id, pnl, symbol, trade_date, created_at'),
         supabase.from('invites').select('*').order('created_at', { ascending: false }),
         supabase.from('app_settings').select('*').eq('id', 1).maybeSingle(),
         supabase.from('support_tickets').select('*').order('created_at', { ascending: false }),
@@ -6609,7 +6609,7 @@ function AdminPanel({ session, setPage }) {
                       style={{ cursor: 'pointer', width: '14px', height: '14px', accentColor: '#aaffa0' }}
                     />
                   </th>
-                  {['', 'User', 'Email', 'Signed Up', 'Status', 'Actions'].map((h, i) => (
+                  {['', 'User', 'Email', 'Signed Up', 'Status', 'Trades', 'Actions'].map((h, i) => (
                     <th key={i} style={{
                       textAlign: 'left', fontSize: '10px', fontWeight: '600',
                       letterSpacing: '0.1em', textTransform: 'uppercase', color: '#666',
@@ -6634,6 +6634,10 @@ function AdminPanel({ session, setPage }) {
                     const d = t.trade_date || t.created_at
                     return !acc || (d && new Date(d) > new Date(acc)) ? d : acc
                   }, null)
+                  // Most traded symbol (mode)
+                  const symbolCounts = {}
+                  for (const t of userTrades) { if (t.symbol) symbolCounts[t.symbol] = (symbolCounts[t.symbol] || 0) + 1 }
+                  const topSymbol = Object.entries(symbolCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null
                   return (
                     <Fragment key={u.id}>
                       <tr
@@ -6666,6 +6670,16 @@ function AdminPanel({ session, setPage }) {
                         <td style={{ padding: '12px 16px', fontSize: '12px', color: 'var(--text-md)', whiteSpace: 'nowrap' }}>{u.email || '—'}</td>
                         <td style={{ padding: '12px 16px', fontSize: '12px', color: 'var(--text-lo)', whiteSpace: 'nowrap' }}>{formatDate(u.created_at)}</td>
                         <td style={{ padding: '12px 16px' }}>{statusBadge(u.status)}</td>
+                        <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
+                          {tradeCount > 0 ? (
+                            <span style={{ fontSize: '13px', color: 'var(--text-hi)' }}>
+                              <span style={{ fontWeight: '700' }}>{tradeCount}</span>
+                              <span style={{ color: '#666', marginLeft: '4px', fontSize: '12px' }}>trades</span>
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: '12px', color: '#555' }}>0 trades</span>
+                          )}
+                        </td>
                         <td style={{ padding: '12px 16px' }} onClick={e => e.stopPropagation()}>
                           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                             {u.status !== 'approved' && (
@@ -6685,13 +6699,14 @@ function AdminPanel({ session, setPage }) {
                       </tr>
                       {isExpanded && (
                         <tr style={{ background: 'rgba(255,255,255,0.015)' }}>
-                          <td colSpan={7} style={{ padding: '20px 24px', borderBottom: '1px solid var(--divider)' }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '16px' }}>
+                          <td colSpan={8} style={{ padding: '20px 24px', borderBottom: '1px solid var(--divider)' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px', marginBottom: '16px' }}>
                               {[
                                 { l: 'Trades',     v: tradeCount },
                                 { l: 'Win Rate',   v: tradeCount > 0 ? `${winRate}%` : '—' },
                                 { l: 'Total P&L',  v: tradeCount > 0 ? `${userPnl >= 0 ? '+' : '−'}$${Math.abs(Math.round(userPnl)).toLocaleString()}` : '—', c: userPnl >= 0 ? '#aaffa0' : '#ff8080' },
                                 { l: 'Last Trade', v: lastTradeDate ? formatDate(lastTradeDate) : 'Never' },
+                                { l: 'Top Symbol', v: topSymbol || '—' },
                               ].map(s => (
                                 <div key={s.l} style={{ background: '#080808', border: '1px solid #1a1a1a', borderRadius: '10px', padding: '12px 14px' }}>
                                   <div style={{ fontSize: '10px', color: '#666', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '6px' }}>{s.l}</div>
