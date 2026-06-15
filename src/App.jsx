@@ -2829,7 +2829,7 @@ function Trades({ trades, session, onTradeAdded, onTradeDeleted, onTradeUpdated,
   }
 
   // Hall of Fame — admin can feature any trade
-  const isAdmin = session?.user?.email === ADMIN_EMAIL
+  const isAdmin = isSuperAdmin(session?.user?.email)
   const featureTrade = async (trade) => {
     if (demoMode) return
     if (!confirm(`Feature this ${trade.symbol} ${trade.direction} (${trade.pnl >= 0 ? '+' : '−'}$${Math.abs(Math.round(trade.pnl))}) in the Hall of Fame?`)) return
@@ -4421,7 +4421,7 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
       </div>
 
       {/* ── Developer (admin-only, hidden) ── */}
-      {session?.user?.email === ADMIN_EMAIL && (
+      {isSuperAdmin(session?.user?.email) && (
         <div style={{ ...sectionCard, marginTop: '24px', marginBottom: 0 }}>
           <div style={sectionTitle}>Developer</div>
           <div style={{ height: '1px', background: '#1a1a1a', marginBottom: '20px' }} />
@@ -5472,7 +5472,7 @@ function NetworkResources({ isAdmin }) {
 const NETWORK_ACCENT = '#7c3aed'
 
 function NetworkPage({ session, setPage, profile }) {
-  const isAdmin = session?.user?.email === ADMIN_EMAIL
+  const isAdmin = isSuperAdmin(session?.user?.email)
   const [creators] = useState(() => loadNetwork('network_creators', NETWORK_SEED_CREATORS))
   const [memberCount,   setMemberCount]   = useState(null)
   const [msgsTodayCount, setMsgsTodayCount] = useState(null)
@@ -5712,8 +5712,14 @@ function NetworkPage({ session, setPage, profile }) {
   )
 }
 
-// ─── Admin Panel ──────────────────────────────────────────────
-const ADMIN_EMAIL = 'eug777fx@gmail.com'
+// ─── Admin access tiers ───────────────────────────────────────
+// SUPER_ADMIN: full access (TOS, TradeSync, Network, Demo Mode, Hall of Fame…).
+// CO_ADMINS: user management + support tickets only (no super-only modules).
+const SUPER_ADMIN = 'eug777fx@gmail.com'
+const CO_ADMINS = ['pirchmark@gmail.com']
+const isSuperAdmin = (email) => email === SUPER_ADMIN
+const isCoAdmin = (email) => CO_ADMINS.includes(email)
+const isAnyAdmin = (email) => isSuperAdmin(email) || isCoAdmin(email)
 
 
 const relativeTime = (date) => {
@@ -5777,7 +5783,9 @@ function AdminPanel({ session, setPage }) {
   const [healthCheckedAt, setHealthCheckedAt] = useState(null)
   const [healthOk,        setHealthOk]        = useState(null)
 
-  const isAdmin = session?.user?.email === ADMIN_EMAIL
+  // Both super and co-admins may use the panel (user management + tickets).
+  const isAdmin = isAnyAdmin(session?.user?.email)
+  const isSuper = isSuperAdmin(session?.user?.email)
 
   useEffect(() => {
     if (!isAdmin) { setPage('dashboard'); return }
@@ -6143,6 +6151,11 @@ function AdminPanel({ session, setPage }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
             <Shield size={20} color="#aaffa0" />
             <h1 style={{ fontSize: '28px', fontWeight: '800', letterSpacing: '-1px', color: 'var(--text-hi)' }}>Admin Panel</h1>
+            {isSuper ? (
+              <span style={{ fontSize: '9.5px', fontWeight: '800', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#0a0a0b', background: '#fff', padding: '4px 9px', borderRadius: '6px' }}>Super Admin</span>
+            ) : (
+              <span style={{ fontSize: '9.5px', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#9a9aa2', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)', padding: '3px 8px', borderRadius: '6px' }}>Co-Admin</span>
+            )}
           </div>
           <div style={{ fontSize: '12px', color: 'var(--text-lo)', letterSpacing: '0.02em' }}>Signed in as {session?.user?.email}</div>
         </div>
@@ -7152,8 +7165,8 @@ export default function App() {
     )
   }
 
-  // ── Banned gate (admin can still access via email match) ──
-  if (profile.status === 'banned' && session?.user?.email !== ADMIN_EMAIL) {
+  // ── Banned gate (admins still get access) ──
+  if (profile.status === 'banned' && !isAnyAdmin(session?.user?.email)) {
     return <BannedScreen onLogout={logout} />
   }
 
@@ -7268,14 +7281,14 @@ export default function App() {
         })}
 
         {/* SYSTEMS — section label for the private admin group */}
-        {session?.user?.email === ADMIN_EMAIL && (
+        {isSuperAdmin(session?.user?.email) && (
           <div style={{ fontSize: '9.5px', letterSpacing: '0.22em', color: '#46464D', textTransform: 'uppercase', padding: '14px 12px 8px', fontWeight: 600 }}>
             Systems
           </div>
         )}
 
         {/* TOS — private system, admin only, gold accent */}
-        {session?.user?.email === ADMIN_EMAIL && (
+        {isSuperAdmin(session?.user?.email) && (
           <button
             onClick={() => setPage('tos')}
             onMouseEnter={e => { if (page !== 'tos') e.currentTarget.style.background = 'rgba(212,175,55,0.05)' }}
@@ -7316,7 +7329,7 @@ export default function App() {
         )}
 
         {/* TRADESYNC — private module, admin only, cyan accent */}
-        {session?.user?.email === ADMIN_EMAIL && (
+        {isSuperAdmin(session?.user?.email) && (
           <button
             onClick={() => setPage('copy')}
             onMouseEnter={e => { if (page !== 'copy') e.currentTarget.style.background = 'rgba(34,211,238,0.05)' }}
@@ -7357,7 +7370,7 @@ export default function App() {
         )}
 
         {/* Network — admin only, accent purple, NEW badge */}
-        {session?.user?.email === ADMIN_EMAIL && (
+        {isSuperAdmin(session?.user?.email) && (
           <button
             onClick={() => setPage('network')}
             onMouseEnter={e => { if (page !== 'network') e.currentTarget.style.background = 'rgba(168,85,247,0.06)' }}
@@ -7418,8 +7431,8 @@ export default function App() {
             </button>
           </div>
 
-          {/* Hidden admin link — only visible for the admin email */}
-          {session?.user?.email === ADMIN_EMAIL && (
+          {/* Hidden admin link — visible to super + co-admins */}
+          {isAnyAdmin(session?.user?.email) && (
             <button
               onClick={() => setPage('admin')}
               style={{
@@ -7486,8 +7499,8 @@ export default function App() {
         )}
         {page === 'news' && featureFlags.newsCalendar && <NewsCalendar />}
         {page === 'network'     && <NetworkPage session={session} setPage={setPage} profile={profile} />}
-        {page === 'tos'         && session?.user?.email === ADMIN_EMAIL && <TOSPage session={session} />}
-        {page === 'copy'        && session?.user?.email === ADMIN_EMAIL && <CopyTraderPage />}
+        {page === 'tos'         && isSuperAdmin(session?.user?.email) && <TOSPage session={session} />}
+        {page === 'copy'        && isSuperAdmin(session?.user?.email) && <CopyTraderPage />}
         {page === 'plan'        && <TradingPlan flags={featureFlags} />}
         {page === 'settings'    && <Settings theme={theme} setTheme={handleSetTheme} session={session} profile={profile} setProfile={setProfile} glassMode={glassMode} setGlassMode={v => { setGlassMode(v); localStorage.setItem('glass_mode', v) }} onLogout={logout} trades={effectiveTrades} demoMode={demoMode} setDemoMode={setDemoMode} setTrades={setTrades} setPage={setPage} />}
         {page === 'admin'       && <AdminPanel session={session} setPage={setPage} />}
@@ -7561,7 +7574,7 @@ export default function App() {
             ))}
 
             {/* TOS — private system, admin only, gold accent */}
-            {session?.user?.email === ADMIN_EMAIL && (
+            {isSuperAdmin(session?.user?.email) && (
               <button
                 onClick={() => { setMobileSidebarOpen(false); setTimeout(() => setPage('tos'), 20) }}
                 style={{
@@ -7592,7 +7605,7 @@ export default function App() {
             )}
 
             {/* TRADESYNC — private module, admin only, cyan accent */}
-            {session?.user?.email === ADMIN_EMAIL && (
+            {isSuperAdmin(session?.user?.email) && (
               <button
                 onClick={() => { setMobileSidebarOpen(false); setTimeout(() => setPage('copy'), 20) }}
                 style={{
@@ -7623,7 +7636,7 @@ export default function App() {
             )}
 
             {/* Network — admin only, accent purple, NEW badge */}
-            {session?.user?.email === ADMIN_EMAIL && (
+            {isSuperAdmin(session?.user?.email) && (
               <button
                 onClick={() => { setMobileSidebarOpen(false); setTimeout(() => setPage('network'), 20) }}
                 style={{
