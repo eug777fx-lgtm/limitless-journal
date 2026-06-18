@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://limitless-journal.com/sitemap.xml
