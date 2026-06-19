@@ -36,22 +36,20 @@ export function shell(inner) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="color-scheme" content="dark" /><meta name="supported-color-schemes" content="dark" /></head>
-  <body style="margin:0;padding:0;background:#080808">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#080808">
+  <body style="margin:0;padding:0;background:#000000">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#000000">
       <tr><td align="center" style="padding:24px 12px">
-        <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:12px">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;background:#0a0a0a;border:1px solid #1f1f1f;border-radius:12px">
           <!-- Header -->
-          <tr><td style="background:#000000;padding:24px 40px;border-radius:12px 12px 0 0">
-            <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
-              <td style="vertical-align:middle"><img src="${LOGO}" width="32" height="32" alt="LIMITLESS" style="display:block;border:0;height:auto" /></td>
-              <td style="vertical-align:middle;padding-left:12px;color:#ffffff;font-weight:700;font-size:16px;letter-spacing:0.15em;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">LIMITLESS</td>
-            </tr></table>
+          <tr><td style="background:#000000;padding:28px 40px 20px;text-align:center;border-radius:12px 12px 0 0">
+            <img src="${LOGO}" width="40" height="auto" alt="LIMITLESS" style="display:block;margin:0 auto 8px auto;border:0" />
+            <div style="color:#ffffff;font-weight:700;font-size:13px;letter-spacing:0.2em;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">LIMITLESS</div>
           </td></tr>
-          <tr><td style="height:1px;line-height:1px;font-size:0;background:#aaffa0;opacity:0.3">&nbsp;</td></tr>
+          <tr><td style="height:1px;line-height:1px;font-size:0;background:#1a1a1a">&nbsp;</td></tr>
           <!-- Body -->
           <tr><td style="padding:40px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">${inner}</td></tr>
           <!-- Footer -->
-          <tr><td style="padding:26px 40px 32px;border-top:1px solid #1a1a1a;text-align:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+          <tr><td style="padding:26px 40px 32px;border-top:1px solid #1f1f1f;text-align:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
             <div style="color:#888888;font-size:13px;font-weight:600;letter-spacing:0.04em">LIMITLESS Trading Journal</div>
             <div style="margin-top:6px"><a href="https://limitless-journal.com" style="color:#aaffa0;font-size:12px;text-decoration:none">limitless-journal.com</a></div>
             <div style="color:#666666;font-size:11px;margin-top:14px;line-height:1.5">You're receiving this because you're a LIMITLESS member.</div>
@@ -150,12 +148,15 @@ export function signupNotificationHtml({ name, email, phone, marketFocus, when }
     const shown = value == null || value === '' ? '—' : esc(value)
     return `<tr><td style="padding:8px 0;color:#888;font-size:13px;width:130px">${label}</td><td style="padding:8px 0;color:#fff;font-size:13px;font-weight:600">${shown}</td></tr>`
   }
-  return `<!doctype html><html><body style="margin:0;background:#080808;font-family:-apple-system,Segoe UI,sans-serif">
+  return `<!doctype html><html><body style="margin:0;background:#000000;font-family:-apple-system,Segoe UI,sans-serif">
     <div style="max-width:540px;margin:0 auto;padding:32px 24px">
-      <div style="font-size:11px;letter-spacing:0.2em;color:#aaffa0;text-transform:uppercase;font-weight:700">LIMITLESS</div>
+      <div style="text-align:center;margin-bottom:24px">
+        <img src="${LOGO}" width="40" height="auto" alt="LIMITLESS" style="display:block;margin:0 auto 8px auto;border:0" />
+        <div style="color:#ffffff;font-weight:700;font-size:13px;letter-spacing:0.2em">LIMITLESS</div>
+      </div>
       <h1 style="color:#fff;font-size:22px;margin:10px 0 4px">🔔 New Signup — Approval Needed</h1>
       <p style="color:#888;font-size:13px;margin:0 0 22px">A new trader just created an account.</p>
-      <table style="width:100%;border-collapse:collapse;background:#0d0d0d;border:1px solid #1f1f1f;border-radius:12px;padding:8px 18px">
+      <table style="width:100%;border-collapse:collapse;background:#111111;border:1px solid #1f1f1f;border-radius:12px;padding:8px 18px">
         ${row('Name', name)}
         ${row('Email', email)}
         ${row('Phone', phone)}
