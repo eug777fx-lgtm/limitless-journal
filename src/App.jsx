@@ -645,17 +645,6 @@ const COUNTRIES = [
 const DEFAULT_COUNTRY = COUNTRIES.find(c => c.name === 'United States')
 
 // ─── Auth Page ────────────────────────────────────────────────
-// Record a referral: look up the referrer profile by its username (the ?ref code)
-// and link the new user. Best-effort — never blocks signup / login.
-async function recordReferral(refUsername, referredId) {
-  try {
-    if (!refUsername || !referredId) return
-    const { data: ref } = await supabase.from('profiles').select('id').eq('username', refUsername).maybeSingle()
-    if (!ref || ref.id === referredId) return
-    await supabase.from('referrals').insert({ referrer_id: ref.id, referred_id: referredId, ref_code: refUsername })
-  } catch { /* referrals table / RLS optional */ }
-}
-
 // Fire-and-forget admin notification when a new account is created.
 function notifySignup({ firstName, lastName, email, phone }) {
   try {
@@ -681,14 +670,11 @@ function AuthPage({ onAuth }) {
   const [loading, setLoading]   = useState(false)
   const [inviteCode, setInviteCode] = useState(null)
   const [inviteValid, setInviteValid] = useState(null) // null | true | false
-  const [refCode, setRefCode] = useState(null) // referrer username from ?ref=
 
   // Detect ?invite=XXX in URL and validate it
   useEffect(() => {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
-    const ref = params.get('ref')
-    if (ref) { setRefCode(ref.trim()); try { localStorage.setItem('pending_ref', ref.trim()) } catch { /* ignore */ } }
     const code = params.get('invite')
     if (!code) return
     setInviteCode(code)
@@ -755,14 +741,12 @@ function AuthPage({ onAuth }) {
           if (autoApprove) {
             await supabase.from('invites').update({ used_at: new Date().toISOString(), used_by: userId }).eq('code', inviteCode).is('used_at', null)
           }
-          if (refCode) { recordReferral(refCode, userId); try { localStorage.removeItem('pending_ref') } catch { /* ignore */ } }
           onAuth(data.session)
         } else {
-          // Email confirm required — defer invite + referral to first login
+          // Email confirm required — defer invite to first login
           if (autoApprove) {
             try { localStorage.setItem('pending_invite', inviteCode) } catch {}
           }
-          // pending_ref already stored at ?ref detection; applied in loadProfile
           setMessage('Account created — check your email to confirm, then log in.')
           setTab('login')
         }
@@ -5863,10 +5847,6 @@ function AdminPanel({ session, setPage }) {
   const [trades,       setTrades]       = useState([])
   const [invites,      setInvites]      = useState([])
   const [tickets,      setTickets]      = useState([])
-  const [referrals,    setReferrals]    = useState([])
-  const [refLinks,     setRefLinks]     = useState([])
-  const [refBusy,      setRefBusy]      = useState(null)
-  const [refCopiedId,  setRefCopiedId]  = useState(null)
   const [announcement, setAnnouncement] = useState({ text: '', active: false })
   const [annDraft,     setAnnDraft]     = useState('')
   const [annSaving,    setAnnSaving]    = useState(false)
@@ -5917,14 +5897,12 @@ function AdminPanel({ session, setPage }) {
     setError('')
     const startedAt = Date.now()
     try {
-      const [usersRes, tradesRes, invitesRes, settingsRes, ticketsRes, referralsRes, refLinksRes] = await Promise.all([
+      const [usersRes, tradesRes, invitesRes, settingsRes, ticketsRes] = await Promise.all([
         supabase.from('admin_users_view').select('*').order('created_at', { ascending: false }),
         supabase.from('trades').select('id, user_id, pnl, symbol, trade_date, created_at'),
         supabase.from('invites').select('*').order('created_at', { ascending: false }),
         supabase.from('app_settings').select('*').eq('id', 1).maybeSingle(),
         supabase.from('support_tickets').select('*').order('created_at', { ascending: false }),
-        supabase.from('referrals').select('referrer_id, referred_id, ref_code, created_at'),
-        supabase.from('referral_links').select('user_id, ref_code, created_at'),
       ])
       if (usersRes.error)  throw usersRes.error
       if (tradesRes.error) throw tradesRes.error
@@ -5932,8 +5910,6 @@ function AdminPanel({ session, setPage }) {
       setTrades(tradesRes.data || [])
       if (!invitesRes.error) setInvites(invitesRes.data || [])
       if (!ticketsRes.error) setTickets(ticketsRes.data || [])
-      if (!referralsRes.error) setReferrals(referralsRes.data || [])
-      if (!refLinksRes.error) setRefLinks(refLinksRes.data || [])
       if (!settingsRes.error && settingsRes.data) {
         const ann = { text: settingsRes.data.announcement_text || '', active: !!settingsRes.data.announcement_active }
         setAnnouncement(ann)
@@ -6040,29 +6016,6 @@ function AdminPanel({ session, setPage }) {
   const copyInvite = async (code) => {
     const url = `${window.location.origin}/?invite=${code}`
     try { await navigator.clipboard.writeText(url) } catch {}
-  }
-
-  // ── Referral links (admin-controlled, per user) ──
-  const referralUrl = (username) => `app.limitless-journal.com?ref=${username}`
-  const generateReferralLink = async (u) => {
-    if (!u.username) { toast.error('This user needs a username before a link can be generated'); return }
-    setRefBusy(u.id)
-    try {
-      const row = { user_id: u.id, ref_code: u.username, created_by: session.user.id }
-      const { error } = await supabase.from('referral_links').upsert(row, { onConflict: 'user_id' })
-      if (error) throw error
-      setRefLinks(prev => prev.some(r => r.user_id === u.id)
-        ? prev.map(r => r.user_id === u.id ? { ...r, ref_code: u.username } : r)
-        : [...prev, { user_id: u.id, ref_code: u.username, created_at: new Date().toISOString() }])
-      toast.success('Referral link generated')
-    } catch (e) {
-      toast.error(`Could not generate link — ${e.message}`)
-    } finally {
-      setRefBusy(null)
-    }
-  }
-  const copyReferralLink = async (u) => {
-    try { await navigator.clipboard.writeText(`https://${referralUrl(u.username)}`); setRefCopiedId(u.id); setTimeout(() => setRefCopiedId(null), 1800) } catch { /* ignore */ }
   }
 
   // ── Announcement ──
@@ -6381,7 +6334,6 @@ function AdminPanel({ session, setPage }) {
           { id: 'overview', label: 'Overview',  icon: BarChart2 },
           { id: 'users',    label: 'Users',     icon: Users },
           { id: 'waitlist', label: 'Waitlist',  icon: Users, badge: pendingUsers || 0 },
-          { id: 'referrals', label: 'Referrals', icon: Link2 },
           { id: 'tickets',  label: 'Tickets',   icon: MessageSquare, badge: tickets.filter(t => t.status === 'open').length },
           { id: 'health',   label: 'Health',    icon: Activity },
         ].map(t => {
@@ -7006,103 +6958,6 @@ function AdminPanel({ session, setPage }) {
         )
       })()}
 
-      {/* ── Referrals tab ── */}
-      {tab === 'referrals' && (() => {
-        const approved = users.filter(u => (u.status || 'pending') === 'approved')
-        const userById = new Map(users.map(u => [u.id, u]))
-        const linkByUser = new Map(refLinks.map(r => [r.user_id, r]))
-        const signupsByReferrer = new Map()
-        for (const r of referrals) {
-          if (!r.referrer_id) continue
-          if (!signupsByReferrer.has(r.referrer_id)) signupsByReferrer.set(r.referrer_id, [])
-          signupsByReferrer.get(r.referrer_id).push(r)
-        }
-        const sorted = [...approved].sort((a, b) => (signupsByReferrer.get(b.id)?.length || 0) - (signupsByReferrer.get(a.id)?.length || 0))
-        const summary = [
-          { l: 'Links Generated', v: refLinks.length },
-          { l: 'Total Signups',   v: referrals.length },
-          { l: 'Approved Users',  v: approved.length },
-        ]
-        return (
-          <>
-            <div style={{ fontSize: '12px', color: 'var(--text-lo)', lineHeight: 1.6, marginBottom: '16px' }}>
-              Generate a personal referral link for any approved user, then send it to them manually. Anyone who signs up with <code style={{ color: '#aaffa0' }}>?ref=username</code> is tracked below.
-            </div>
-            <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-              {summary.map(s => (
-                <div key={s.l} style={{ ...statCard, padding: '16px 20px', flex: '1 1 140px' }}>
-                  <div style={{ ...lbl, color: '#888', marginBottom: '8px' }}>{s.l}</div>
-                  <div style={{ fontSize: '24px', fontWeight: '800', letterSpacing: '-0.5px', color: 'var(--text-hi)' }}>{s.v}</div>
-                </div>
-              ))}
-            </div>
-
-            <div style={statCard}>
-              {sorted.length === 0 ? (
-                <div style={{ fontSize: '12px', color: 'var(--text-lo)', padding: '24px', textAlign: 'center' }}>No approved users yet.</div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {sorted.map(u => {
-                    const link = linkByUser.get(u.id)
-                    const sus = signupsByReferrer.get(u.id) || []
-                    const name = u.username || [u.first_name, u.last_name].filter(Boolean).join(' ') || u.email || 'Unknown'
-                    const busy = refBusy === u.id
-                    return (
-                      <div key={u.id} style={{ background: '#080808', border: '1px solid #161616', borderRadius: '12px', padding: '14px 16px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                          <div style={{ width: '34px', height: '34px', borderRadius: '50%', background: '#141414', border: '1px solid #222', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', color: '#aaa', flexShrink: 0 }}>{initialsOf(u)}</div>
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-hi)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
-                            <div style={{ fontSize: '11px', color: 'var(--text-lo)', marginTop: '1px' }}>{u.email || '—'}{u.username ? ` · @${u.username}` : ''}</div>
-                          </div>
-                          <div style={{ textAlign: 'center', minWidth: '64px' }}>
-                            <div style={{ fontSize: '16px', fontWeight: '800', color: sus.length ? '#aaffa0' : '#444' }}>{sus.length}</div>
-                            <div style={{ fontSize: '9px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.08em' }}>signups</div>
-                          </div>
-                          <div style={{ fontSize: '10px', fontWeight: '600', letterSpacing: '0.06em', textTransform: 'uppercase', color: link ? '#aaffa0' : '#555', minWidth: '78px', textAlign: 'right' }}>
-                            {link ? 'Link generated' : 'No link'}
-                          </div>
-                        </div>
-
-                        {/* Link control */}
-                        {!u.username ? (
-                          <div style={{ fontSize: '11.5px', color: '#888', marginTop: '12px' }}>Set a username for this user before generating a link.</div>
-                        ) : link ? (
-                          <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
-                            <div style={{ flex: 1, minWidth: '200px', display: 'flex', alignItems: 'center', background: '#0d0d0d', border: '1px solid #1c1c1c', borderRadius: '9px', padding: '9px 12px', fontSize: '12px', color: 'var(--text-md)', fontFamily: 'monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{referralUrl(u.username)}</div>
-                            <button onClick={() => copyReferralLink(u)} style={{ background: refCopiedId === u.id ? '#1a1a1a' : '#fff', color: refCopiedId === u.id ? '#aaffa0' : '#000', border: 'none', borderRadius: '9px', padding: '0 16px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit', minHeight: '40px', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
-                              {refCopiedId === u.id ? '✓ Copied' : <><Link2 size={13} /> Copy</>}
-                            </button>
-                          </div>
-                        ) : (
-                          <button onClick={() => generateReferralLink(u)} disabled={busy} style={{ marginTop: '12px', background: 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', color: '#aaffa0', borderRadius: '9px', padding: '9px 16px', fontSize: '12px', fontWeight: '600', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', display: 'inline-flex', alignItems: 'center', gap: '7px', opacity: busy ? 0.6 : 1 }}>
-                            <Link2 size={13} /> {busy ? 'Generating…' : 'Generate Invite Link'}
-                          </button>
-                        )}
-
-                        {/* Who signed up */}
-                        {sus.length > 0 && (
-                          <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #141414' }}>
-                            <div style={{ fontSize: '10px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>Signed up with this link</div>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                              {sus.map((r, i) => {
-                                const ru = userById.get(r.referred_id)
-                                const rn = ru ? (ru.username || [ru.first_name, ru.last_name].filter(Boolean).join(' ') || ru.email || 'Unknown') : 'Unknown user'
-                                return <span key={r.referred_id || i} style={{ fontSize: '11.5px', color: 'var(--text-md)', background: '#0d0d0d', border: '1px solid #1c1c1c', borderRadius: '99px', padding: '4px 11px' }}>{rn}</span>
-                              })}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          </>
-        )
-      })()}
-
       {/* ── Tickets tab ── */}
       {tab === 'tickets' && (
         <div style={{ ...statCard, padding: '0', overflow: 'hidden' }}>
@@ -7333,14 +7188,6 @@ export default function App() {
         }
       } catch {}
       try { localStorage.removeItem('pending_invite') } catch {}
-    }
-
-    // Apply a deferred referral captured at signup (?ref=) on first login.
-    let pendingRef = null
-    try { pendingRef = localStorage.getItem('pending_ref') } catch { /* ignore */ }
-    if (pendingRef) {
-      recordReferral(pendingRef, sess.user.id)
-      try { localStorage.removeItem('pending_ref') } catch { /* ignore */ }
     }
 
     setProfile(data)
