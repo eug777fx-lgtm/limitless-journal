@@ -8,10 +8,13 @@
     <!-- PWA -->
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#080808" />
+    <link rel="apple-touch-icon" href="/logo2.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/logo2.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/logo2.png" />
+    <link rel="apple-touch-icon" sizes="167x167" href="/logo2.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="LIMITLESS" />
-    <link rel="apple-touch-icon" href="/LIMITLESS LOGO FAVICON.png" />
 
     <!-- Primary SEO -->
     <title>LIMITLESS — Trading Journal for Serious Traders</title>
@@ -36,6 +39,49 @@
     <meta name="twitter:image" content="https://limitless-journal.com/logo2.png" />
   </head>
   <body>
+    <div id="app-loader" style="
+      position: fixed;
+      inset: 0;
+      background: #080808;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 99999;
+      transition: opacity 0.6s ease;
+    ">
+      <img src="/logo2.png" alt="LIMITLESS" style="
+        width: 52px;
+        height: auto;
+        margin-bottom: 32px;
+        opacity: 0;
+        animation: logoFadeIn 0.8s ease 0.2s forwards;
+      " />
+      <div style="
+        width: 32px;
+        height: 32px;
+        border: 2px solid rgba(255,255,255,0.08);
+        border-top: 2px solid rgba(255,255,255,0.9);
+        border-radius: 50%;
+        opacity: 0;
+        animation: spinnerFadeIn 0.8s ease 0.5s forwards, spin 0.8s linear 0.5s infinite;
+      "></div>
+    </div>
+
+    <style>
+      @keyframes logoFadeIn {
+        from { opacity: 0; transform: scale(0.9); }
+        to { opacity: 1; transform: scale(1); }
+      }
+      @keyframes spinnerFadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
+
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

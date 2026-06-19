@@ -2,8 +2,12 @@
   "rewrites": [],
   "crons": [
     {
+      "path": "/api/daily-email",
+      "schedule": "0 0 * * *"
+    },
+    {
       "path": "/api/weekly-email",
-      "schedule": "0 20 * * 0"
+      "schedule": "0 20 * * 6"
     }
   ]
 }

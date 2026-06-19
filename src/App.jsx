@@ -7104,6 +7104,16 @@ export default function App() {
   const [glassMode,      setGlassMode]      = useState(() => localStorage.getItem('glass_mode') === 'true')
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
 
+  // ── Premium boot loader (defined in index.html) — fade out once auth resolves ──
+  useEffect(() => {
+    if (authLoading) return // keep showing until we know logged-in or not
+    const loader = document.getElementById('app-loader')
+    if (!loader) return
+    loader.style.opacity = '0'
+    const timer = setTimeout(() => { loader.style.display = 'none' }, 600)
+    return () => clearTimeout(timer)
+  }, [authLoading])
+
   // ── Auth init ──
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
