@@ -4169,12 +4169,6 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
   const [localGoal,   setLocalGoal]   = useState(profile?.monthly_goal ? String(profile.monthly_goal) : '')
   const [goalSaved,   setGoalSaved]   = useState(false)
 
-  // Referral + leaderboard state
-  const [showLB,    setShowLB]    = useState(!!profile?.show_on_leaderboard)
-  const [refCount,  setRefCount]  = useState(null)
-  const [refCopied, setRefCopied] = useState(false)
-  const referralLink = `app.limitless-journal.com?ref=${profile?.username || ''}`
-
   useEffect(() => {
     setLocalFirstName(profile?.first_name   || '')
     setLocalLastName(profile?.last_name    || '')
@@ -4182,32 +4176,7 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
     setLocalName(profile?.username        || '')
     setLocalMarket(profile?.market_focus  || '')
     setLocalGoal(profile?.monthly_goal ? String(profile.monthly_goal) : '')
-    setShowLB(!!profile?.show_on_leaderboard)
   }, [profile])
-
-  // How many traders joined with this user's link
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const { count } = await supabase.from('referrals').select('*', { count: 'exact', head: true }).eq('referrer_id', session.user.id)
-        if (!cancelled) setRefCount(count || 0)
-      } catch { if (!cancelled) setRefCount(0) }
-    })()
-    return () => { cancelled = true }
-  }, [session?.user?.id])
-
-  const copyReferral = async () => {
-    try { await navigator.clipboard.writeText(`https://${referralLink}`); setRefCopied(true); setTimeout(() => setRefCopied(false), 1800) } catch { /* ignore */ }
-  }
-  const toggleLeaderboard = async () => {
-    const next = !showLB
-    setShowLB(next)
-    try {
-      await supabase.from('profiles').update({ show_on_leaderboard: next }).eq('id', session.user.id)
-      setProfile(p => ({ ...p, show_on_leaderboard: next }))
-    } catch { setShowLB(!next) }
-  }
 
   const saveProfile = async () => {
     const updates = {
@@ -4494,44 +4463,6 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
             )}
           </>
         )}
-      </div>
-
-      {/* ── Refer a Trader ── */}
-      <div style={sectionCard}>
-        <div style={sectionTitle}>Refer a Trader</div>
-        <div style={{ height: '1px', background: '#1a1a1a', marginBottom: '20px' }} />
-        {profile?.username ? (
-          <>
-            <div style={{ fontSize: '13px', color: '#888', lineHeight: 1.6, marginBottom: '14px' }}>
-              Share your personal link. <span style={{ color: 'var(--text-hi)', fontWeight: '600' }}>{refCount == null ? '…' : refCount}</span> trader{refCount === 1 ? '' : 's'} joined using your link.
-            </div>
-            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              <div style={{ flex: 1, minWidth: '200px', display: 'flex', alignItems: 'center', background: '#080808', border: '1px solid #1c1c1c', borderRadius: '10px', padding: '11px 14px', fontSize: '12.5px', color: 'var(--text-md)', fontFamily: 'monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{referralLink}</div>
-              <button onClick={copyReferral} style={{ background: refCopied ? '#1a1a1a' : '#fff', color: refCopied ? '#aaffa0' : '#000', border: 'none', borderRadius: '99px', padding: '0 22px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', minWidth: '110px', minHeight: '44px', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                {refCopied ? '✓ Copied' : <><Link2 size={14} /> Copy</>}
-              </button>
-            </div>
-          </>
-        ) : (
-          <div style={{ fontSize: '13px', color: '#888', lineHeight: 1.6 }}>
-            Set a <span style={{ color: 'var(--text-hi)', fontWeight: '600' }}>username</span> in your Profile above to get your personal referral link.
-          </div>
-        )}
-      </div>
-
-      {/* ── Leaderboard ── */}
-      <div style={sectionCard}>
-        <div style={sectionTitle}>Leaderboard</div>
-        <div style={{ height: '1px', background: '#1a1a1a', marginBottom: '20px' }} />
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-hi)', marginBottom: '2px' }}>Show me on the leaderboard</div>
-            <div style={{ fontSize: '11px', color: '#555', lineHeight: 1.4 }}>Compete on monthly win rate, P&L, R:R and trade count. Only your username is shown — never personal info. Off by default.</div>
-          </div>
-          <div className={`toggle-track ${showLB ? 'on' : ''}`} onClick={toggleLeaderboard} style={{ flexShrink: 0 }}>
-            <div className="toggle-knob" />
-          </div>
-        </div>
       </div>
 
       {/* ── Support ── */}
@@ -5933,6 +5864,9 @@ function AdminPanel({ session, setPage }) {
   const [invites,      setInvites]      = useState([])
   const [tickets,      setTickets]      = useState([])
   const [referrals,    setReferrals]    = useState([])
+  const [refLinks,     setRefLinks]     = useState([])
+  const [refBusy,      setRefBusy]      = useState(null)
+  const [refCopiedId,  setRefCopiedId]  = useState(null)
   const [announcement, setAnnouncement] = useState({ text: '', active: false })
   const [annDraft,     setAnnDraft]     = useState('')
   const [annSaving,    setAnnSaving]    = useState(false)
@@ -5983,13 +5917,14 @@ function AdminPanel({ session, setPage }) {
     setError('')
     const startedAt = Date.now()
     try {
-      const [usersRes, tradesRes, invitesRes, settingsRes, ticketsRes, referralsRes] = await Promise.all([
+      const [usersRes, tradesRes, invitesRes, settingsRes, ticketsRes, referralsRes, refLinksRes] = await Promise.all([
         supabase.from('admin_users_view').select('*').order('created_at', { ascending: false }),
         supabase.from('trades').select('id, user_id, pnl, symbol, trade_date, created_at'),
         supabase.from('invites').select('*').order('created_at', { ascending: false }),
         supabase.from('app_settings').select('*').eq('id', 1).maybeSingle(),
         supabase.from('support_tickets').select('*').order('created_at', { ascending: false }),
-        supabase.from('referrals').select('referrer_id'),
+        supabase.from('referrals').select('referrer_id, referred_id, ref_code, created_at'),
+        supabase.from('referral_links').select('user_id, ref_code, created_at'),
       ])
       if (usersRes.error)  throw usersRes.error
       if (tradesRes.error) throw tradesRes.error
@@ -5998,6 +5933,7 @@ function AdminPanel({ session, setPage }) {
       if (!invitesRes.error) setInvites(invitesRes.data || [])
       if (!ticketsRes.error) setTickets(ticketsRes.data || [])
       if (!referralsRes.error) setReferrals(referralsRes.data || [])
+      if (!refLinksRes.error) setRefLinks(refLinksRes.data || [])
       if (!settingsRes.error && settingsRes.data) {
         const ann = { text: settingsRes.data.announcement_text || '', active: !!settingsRes.data.announcement_active }
         setAnnouncement(ann)
@@ -6104,6 +6040,29 @@ function AdminPanel({ session, setPage }) {
   const copyInvite = async (code) => {
     const url = `${window.location.origin}/?invite=${code}`
     try { await navigator.clipboard.writeText(url) } catch {}
+  }
+
+  // ── Referral links (admin-controlled, per user) ──
+  const referralUrl = (username) => `app.limitless-journal.com?ref=${username}`
+  const generateReferralLink = async (u) => {
+    if (!u.username) { toast.error('This user needs a username before a link can be generated'); return }
+    setRefBusy(u.id)
+    try {
+      const row = { user_id: u.id, ref_code: u.username, created_by: session.user.id }
+      const { error } = await supabase.from('referral_links').upsert(row, { onConflict: 'user_id' })
+      if (error) throw error
+      setRefLinks(prev => prev.some(r => r.user_id === u.id)
+        ? prev.map(r => r.user_id === u.id ? { ...r, ref_code: u.username } : r)
+        : [...prev, { user_id: u.id, ref_code: u.username, created_at: new Date().toISOString() }])
+      toast.success('Referral link generated')
+    } catch (e) {
+      toast.error(`Could not generate link — ${e.message}`)
+    } finally {
+      setRefBusy(null)
+    }
+  }
+  const copyReferralLink = async (u) => {
+    try { await navigator.clipboard.writeText(`https://${referralUrl(u.username)}`); setRefCopiedId(u.id); setTimeout(() => setRefCopiedId(null), 1800) } catch { /* ignore */ }
   }
 
   // ── Announcement ──
@@ -6422,6 +6381,7 @@ function AdminPanel({ session, setPage }) {
           { id: 'overview', label: 'Overview',  icon: BarChart2 },
           { id: 'users',    label: 'Users',     icon: Users },
           { id: 'waitlist', label: 'Waitlist',  icon: Users, badge: pendingUsers || 0 },
+          { id: 'referrals', label: 'Referrals', icon: Link2 },
           { id: 'tickets',  label: 'Tickets',   icon: MessageSquare, badge: tickets.filter(t => t.status === 'open').length },
           { id: 'health',   label: 'Health',    icon: Activity },
         ].map(t => {
@@ -6663,36 +6623,6 @@ function AdminPanel({ session, setPage }) {
 
       {/* ── Users tab (full management view) ── */}
       {tab === 'users' && <>
-
-      {/* Referral Leaderboard */}
-      <div style={{ ...statCard, marginBottom: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
-          <Trophy size={16} color="#ffd966" />
-          <div style={{ ...lbl, color: '#999' }}>Referral Leaderboard</div>
-          <span style={{ fontSize: '10px', color: '#666' }}>{referrals.length} total</span>
-        </div>
-        {(() => {
-          const counts = {}
-          for (const r of referrals) { if (r.referrer_id) counts[r.referrer_id] = (counts[r.referrer_id] || 0) + 1 }
-          const userById = new Map(users.map(u => [u.id, u]))
-          const top = Object.entries(counts).map(([id, n]) => ({ id, n, u: userById.get(id) })).sort((a, b) => b.n - a.n).slice(0, 10)
-          if (top.length === 0) return <div style={{ fontSize: '12px', color: 'var(--text-lo)' }}>No referrals yet.</div>
-          return (
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {top.map((row, i) => {
-                const name = row.u ? (row.u.username || [row.u.first_name, row.u.last_name].filter(Boolean).join(' ') || row.u.email || 'Unknown') : 'Unknown'
-                return (
-                  <div key={row.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '9px 4px', borderBottom: '1px solid #141414' }}>
-                    <span style={{ width: '20px', fontSize: '13px', fontWeight: 800, color: i === 0 ? '#ffd966' : i === 1 ? '#cfd3da' : i === 2 ? '#d49a6a' : '#555' }}>{i + 1}</span>
-                    <span style={{ flex: 1, minWidth: 0, fontSize: '13px', color: 'var(--text-hi)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span>
-                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#aaffa0' }}>{row.n} ref{row.n === 1 ? '' : 's'}</span>
-                  </div>
-                )
-              })}
-            </div>
-          )
-        })()}
-      </div>
 
       {/* Invite Links */}
       <div style={{ ...statCard, marginBottom: '16px' }}>
@@ -7076,6 +7006,103 @@ function AdminPanel({ session, setPage }) {
         )
       })()}
 
+      {/* ── Referrals tab ── */}
+      {tab === 'referrals' && (() => {
+        const approved = users.filter(u => (u.status || 'pending') === 'approved')
+        const userById = new Map(users.map(u => [u.id, u]))
+        const linkByUser = new Map(refLinks.map(r => [r.user_id, r]))
+        const signupsByReferrer = new Map()
+        for (const r of referrals) {
+          if (!r.referrer_id) continue
+          if (!signupsByReferrer.has(r.referrer_id)) signupsByReferrer.set(r.referrer_id, [])
+          signupsByReferrer.get(r.referrer_id).push(r)
+        }
+        const sorted = [...approved].sort((a, b) => (signupsByReferrer.get(b.id)?.length || 0) - (signupsByReferrer.get(a.id)?.length || 0))
+        const summary = [
+          { l: 'Links Generated', v: refLinks.length },
+          { l: 'Total Signups',   v: referrals.length },
+          { l: 'Approved Users',  v: approved.length },
+        ]
+        return (
+          <>
+            <div style={{ fontSize: '12px', color: 'var(--text-lo)', lineHeight: 1.6, marginBottom: '16px' }}>
+              Generate a personal referral link for any approved user, then send it to them manually. Anyone who signs up with <code style={{ color: '#aaffa0' }}>?ref=username</code> is tracked below.
+            </div>
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+              {summary.map(s => (
+                <div key={s.l} style={{ ...statCard, padding: '16px 20px', flex: '1 1 140px' }}>
+                  <div style={{ ...lbl, color: '#888', marginBottom: '8px' }}>{s.l}</div>
+                  <div style={{ fontSize: '24px', fontWeight: '800', letterSpacing: '-0.5px', color: 'var(--text-hi)' }}>{s.v}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={statCard}>
+              {sorted.length === 0 ? (
+                <div style={{ fontSize: '12px', color: 'var(--text-lo)', padding: '24px', textAlign: 'center' }}>No approved users yet.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {sorted.map(u => {
+                    const link = linkByUser.get(u.id)
+                    const sus = signupsByReferrer.get(u.id) || []
+                    const name = u.username || [u.first_name, u.last_name].filter(Boolean).join(' ') || u.email || 'Unknown'
+                    const busy = refBusy === u.id
+                    return (
+                      <div key={u.id} style={{ background: '#080808', border: '1px solid #161616', borderRadius: '12px', padding: '14px 16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                          <div style={{ width: '34px', height: '34px', borderRadius: '50%', background: '#141414', border: '1px solid #222', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', color: '#aaa', flexShrink: 0 }}>{initialsOf(u)}</div>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-hi)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-lo)', marginTop: '1px' }}>{u.email || '—'}{u.username ? ` · @${u.username}` : ''}</div>
+                          </div>
+                          <div style={{ textAlign: 'center', minWidth: '64px' }}>
+                            <div style={{ fontSize: '16px', fontWeight: '800', color: sus.length ? '#aaffa0' : '#444' }}>{sus.length}</div>
+                            <div style={{ fontSize: '9px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.08em' }}>signups</div>
+                          </div>
+                          <div style={{ fontSize: '10px', fontWeight: '600', letterSpacing: '0.06em', textTransform: 'uppercase', color: link ? '#aaffa0' : '#555', minWidth: '78px', textAlign: 'right' }}>
+                            {link ? 'Link generated' : 'No link'}
+                          </div>
+                        </div>
+
+                        {/* Link control */}
+                        {!u.username ? (
+                          <div style={{ fontSize: '11.5px', color: '#888', marginTop: '12px' }}>Set a username for this user before generating a link.</div>
+                        ) : link ? (
+                          <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
+                            <div style={{ flex: 1, minWidth: '200px', display: 'flex', alignItems: 'center', background: '#0d0d0d', border: '1px solid #1c1c1c', borderRadius: '9px', padding: '9px 12px', fontSize: '12px', color: 'var(--text-md)', fontFamily: 'monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{referralUrl(u.username)}</div>
+                            <button onClick={() => copyReferralLink(u)} style={{ background: refCopiedId === u.id ? '#1a1a1a' : '#fff', color: refCopiedId === u.id ? '#aaffa0' : '#000', border: 'none', borderRadius: '9px', padding: '0 16px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit', minHeight: '40px', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
+                              {refCopiedId === u.id ? '✓ Copied' : <><Link2 size={13} /> Copy</>}
+                            </button>
+                          </div>
+                        ) : (
+                          <button onClick={() => generateReferralLink(u)} disabled={busy} style={{ marginTop: '12px', background: 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', color: '#aaffa0', borderRadius: '9px', padding: '9px 16px', fontSize: '12px', fontWeight: '600', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', display: 'inline-flex', alignItems: 'center', gap: '7px', opacity: busy ? 0.6 : 1 }}>
+                            <Link2 size={13} /> {busy ? 'Generating…' : 'Generate Invite Link'}
+                          </button>
+                        )}
+
+                        {/* Who signed up */}
+                        {sus.length > 0 && (
+                          <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #141414' }}>
+                            <div style={{ fontSize: '10px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>Signed up with this link</div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                              {sus.map((r, i) => {
+                                const ru = userById.get(r.referred_id)
+                                const rn = ru ? (ru.username || [ru.first_name, ru.last_name].filter(Boolean).join(' ') || ru.email || 'Unknown') : 'Unknown user'
+                                return <span key={r.referred_id || i} style={{ fontSize: '11.5px', color: 'var(--text-md)', background: '#0d0d0d', border: '1px solid #1c1c1c', borderRadius: '99px', padding: '4px 11px' }}>{rn}</span>
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </>
+        )
+      })()}
+
       {/* ── Tickets tab ── */}
       {tab === 'tickets' && (
         <div style={{ ...statCard, padding: '0', overflow: 'hidden' }}>
@@ -7194,107 +7221,6 @@ function AdminPanel({ session, setPage }) {
           </div>
         </div>,
         document.body
-      )}
-    </div>
-  )
-}
-
-// ─── Leaderboard ──────────────────────────────────────────────
-// Reads aggregated monthly stats for opt-in users via the leaderboard_monthly()
-// Postgres RPC (security definer — bypasses per-user RLS). Degrades to an empty
-// state if the RPC isn't installed yet.
-function Leaderboard({ session, profile }) {
-  const [rows, setRows] = useState(null) // null=loading, []=empty/unavailable
-  const [tab, setTab] = useState('winRate')
-  const myId = session?.user?.id
-
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const { data, error } = await supabase.rpc('leaderboard_monthly')
-        if (cancelled) return
-        setRows(!error && Array.isArray(data) ? data : [])
-      } catch { if (!cancelled) setRows([]) }
-    })()
-    return () => { cancelled = true }
-  }, [])
-
-  const TABS = [
-    { id: 'winRate', label: 'Win Rate', key: 'win_rate', fmt: v => `${Math.round(Number(v) || 0)}%` },
-    { id: 'pnl',     label: 'Net P&L',  key: 'net_pnl',  fmt: v => `${(Number(v) || 0) >= 0 ? '+' : '−'}$${Math.abs(Math.round(Number(v) || 0)).toLocaleString()}` },
-    { id: 'rr',      label: 'Avg R:R',  key: 'avg_rr',   fmt: v => `${(Number(v) || 0).toFixed(1)}R` },
-    { id: 'count',   label: 'Trades',   key: 'trades',   fmt: v => `${Number(v) || 0}` },
-  ]
-  const active = TABS.find(t => t.id === tab)
-  const monthLabel = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-  const ranked = (rows || []).filter(r => r && r.username && (Number(r.trades) || 0) > 0)
-    .slice().sort((a, b) => (Number(b[active.key]) || 0) - (Number(a[active.key]) || 0))
-
-  return (
-    <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-        <Trophy size={22} color="#ffd966" />
-        <h1 style={{ fontSize: '28px', fontWeight: '800', letterSpacing: '-1px', color: 'var(--text-hi)' }}>Leaderboard</h1>
-      </div>
-      <div style={{ fontSize: '12px', color: 'var(--text-lo)', marginBottom: '20px' }}>{monthLabel} · opt-in traders only · usernames only</div>
-
-      {/* Ranking tabs */}
-      <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap' }}>
-        {TABS.map(t => {
-          const on = tab === t.id
-          return (
-            <button key={t.id} onClick={() => setTab(t.id)} style={{
-              padding: '8px 16px', borderRadius: '99px', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12.5px', fontWeight: on ? 700 : 500, minHeight: 'auto',
-              border: `1px solid ${on ? 'rgba(255,255,255,0.25)' : 'var(--card-border)'}`, background: on ? 'rgba(255,255,255,0.06)' : 'transparent', color: on ? 'var(--text-hi)' : 'var(--text-lo)', transition: 'all 0.15s',
-            }}>{t.label}</button>
-          )
-        })}
-      </div>
-
-      <div style={card}>
-        {rows === null ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-lo)', fontSize: '13px' }}>Loading…</div>
-        ) : ranked.length === 0 ? (
-          <div style={{ padding: '46px 24px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-            <Trophy size={32} color="#333" />
-            <div style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-hi)' }}>No traders ranked yet</div>
-            <div style={{ fontSize: '12.5px', color: 'var(--text-lo)', lineHeight: 1.6, maxWidth: '320px' }}>
-              Opt in from Settings → "Show me on leaderboard" and log trades this month to appear here.
-            </div>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {ranked.map((r, i) => {
-              const me = r.user_id === myId
-              const rankColor = i === 0 ? '#ffd966' : i === 1 ? '#cfd3da' : i === 2 ? '#d49a6a' : '#555'
-              const initials = String(r.username || '?').slice(0, 2).toUpperCase()
-              return (
-                <div key={r.user_id || i} style={{
-                  display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 14px', borderRadius: '12px',
-                  background: me ? 'rgba(255,255,255,0.06)' : 'transparent',
-                  border: me ? '1px solid rgba(255,255,255,0.14)' : '1px solid transparent',
-                  borderBottom: me ? '1px solid rgba(255,255,255,0.14)' : '1px solid var(--divider)',
-                }}>
-                  <div style={{ width: '26px', textAlign: 'center', fontSize: '15px', fontWeight: '800', color: rankColor, fontVariantNumeric: 'tabular-nums' }}>{i + 1}</div>
-                  <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#141414', border: '1px solid #222', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: '700', color: me ? '#fff' : '#aaa', flexShrink: 0 }}>{initials}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: '14px', fontWeight: '600', color: me ? '#fff' : 'var(--text-hi)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {r.username}{me && <span style={{ fontSize: '10px', color: '#888', marginLeft: '7px', letterSpacing: '0.1em' }}>YOU</span>}
-                    </div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-lo)', marginTop: '1px' }}>{Number(r.trades) || 0} trades</div>
-                  </div>
-                  <div style={{ fontSize: '16px', fontWeight: '800', color: me ? '#fff' : 'var(--text-hi)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{active.fmt(r[active.key])}</div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
-      {profile && profile.show_on_leaderboard === false && rows !== null && (
-        <div style={{ fontSize: '11.5px', color: 'var(--text-lo)', marginTop: '12px', textAlign: 'center' }}>
-          You're not visible on the leaderboard — enable it in Settings to compete.
-        </div>
       )}
     </div>
   )
@@ -7462,7 +7388,6 @@ export default function App() {
     { id: 'trades',    Icon: BookOpen,        label: 'Trade Log'    },
     { id: 'plan',      Icon: ClipboardList,   label: 'Trading Plan' },
     ...(featureFlags.newsCalendar ? [{ id: 'news', Icon: CalendarDays, label: 'News' }] : []),
-    { id: 'leaderboard', Icon: Trophy,        label: 'Leaderboard'  },
     { id: 'settings',  Icon: Settings2,       label: 'Settings'     },
   ]
 
@@ -7840,7 +7765,6 @@ export default function App() {
           />
         )}
         {page === 'news' && featureFlags.newsCalendar && <NewsCalendar />}
-        {page === 'leaderboard' && <Leaderboard session={session} profile={profile} />}
         {page === 'network'     && <NetworkPage session={session} setPage={setPage} profile={profile} />}
         {page === 'tos'         && isSuperAdmin(session?.user?.email) && <TOSPage session={session} />}
         {page === 'copy'        && isSuperAdmin(session?.user?.email) && <CopyTraderPage />}
