@@ -645,6 +645,28 @@ const COUNTRIES = [
 const DEFAULT_COUNTRY = COUNTRIES.find(c => c.name === 'United States')
 
 // ─── Auth Page ────────────────────────────────────────────────
+// Record a referral: look up the referrer profile by its username (the ?ref code)
+// and link the new user. Best-effort — never blocks signup / login.
+async function recordReferral(refUsername, referredId) {
+  try {
+    if (!refUsername || !referredId) return
+    const { data: ref } = await supabase.from('profiles').select('id').eq('username', refUsername).maybeSingle()
+    if (!ref || ref.id === referredId) return
+    await supabase.from('referrals').insert({ referrer_id: ref.id, referred_id: referredId, ref_code: refUsername })
+  } catch { /* referrals table / RLS optional */ }
+}
+
+// Fire-and-forget admin notification when a new account is created.
+function notifySignup({ firstName, lastName, email, phone }) {
+  try {
+    fetch('/api/notify-signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: [firstName, lastName].filter(Boolean).join(' '), email, phone, marketFocus: '' }),
+    }).catch(() => {})
+  } catch { /* ignore */ }
+}
+
 function AuthPage({ onAuth }) {
   const [tab, setTab]           = useState('signup')
   const [view, setView]         = useState('auth') // 'auth' | 'forgot'
@@ -659,11 +681,15 @@ function AuthPage({ onAuth }) {
   const [loading, setLoading]   = useState(false)
   const [inviteCode, setInviteCode] = useState(null)
   const [inviteValid, setInviteValid] = useState(null) // null | true | false
+  const [refCode, setRefCode] = useState(null) // referrer username from ?ref=
 
   // Detect ?invite=XXX in URL and validate it
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const code = new URLSearchParams(window.location.search).get('invite')
+    const params = new URLSearchParams(window.location.search)
+    const ref = params.get('ref')
+    if (ref) { setRefCode(ref.trim()); try { localStorage.setItem('pending_ref', ref.trim()) } catch { /* ignore */ } }
+    const code = params.get('invite')
     if (!code) return
     setInviteCode(code)
     ;(async () => {
@@ -715,6 +741,8 @@ function AuthPage({ onAuth }) {
         const { data, error } = await supabase.auth.signUp({ email, password })
         if (error) throw error
         const phone = phoneNum ? `${country.code} ${phoneNum}` : null
+        // Notify the admin a new account was created (works for both confirm paths).
+        notifySignup({ firstName, lastName, email, phone })
         if (data.session) {
           const userId = data.session.user.id
           await supabase.from('profiles').upsert({
@@ -727,12 +755,14 @@ function AuthPage({ onAuth }) {
           if (autoApprove) {
             await supabase.from('invites').update({ used_at: new Date().toISOString(), used_by: userId }).eq('code', inviteCode).is('used_at', null)
           }
+          if (refCode) { recordReferral(refCode, userId); try { localStorage.removeItem('pending_ref') } catch { /* ignore */ } }
           onAuth(data.session)
         } else {
-          // Email confirm required — store invite for later application on first login
+          // Email confirm required — defer invite + referral to first login
           if (autoApprove) {
             try { localStorage.setItem('pending_invite', inviteCode) } catch {}
           }
+          // pending_ref already stored at ?ref detection; applied in loadProfile
           setMessage('Account created — check your email to confirm, then log in.')
           setTab('login')
         }
@@ -1379,6 +1409,21 @@ function PerformanceAnalytics({ trades }) {
   }
   const monthData = Object.entries(monthMap).slice(-6).map(([month, pnl]) => ({ month, pnl: Math.round(pnl) }))
 
+  // ── Performance by tag ──
+  const tagMap = {}
+  for (const t of trades) {
+    if (!Array.isArray(t.tags)) continue
+    for (const tag of t.tags) {
+      if (!tag) continue
+      if (!tagMap[tag]) tagMap[tag] = { pnl: 0, n: 0, w: 0 }
+      tagMap[tag].pnl += (t.pnl || 0); tagMap[tag].n++
+      if ((t.pnl || 0) > 0) tagMap[tag].w++
+    }
+  }
+  const hasTags = Object.keys(tagMap).length > 0
+  const tagWinData = Object.entries(tagMap).map(([name, d]) => ({ name, winRate: Math.round(d.w / d.n * 100), n: d.n })).sort((a, b) => b.winRate - a.winRate).slice(0, 8)
+  const tagPnlData = Object.entries(tagMap).map(([name, d]) => ({ name, pnl: Math.round(d.pnl), n: d.n })).sort((a, b) => b.pnl - a.pnl).slice(0, 8)
+
   const axTick = { fill: 'var(--text-lo)', fontSize: 10 }
   const noAxis = { axisLine: false, tickLine: false }
   const fmt = v => `$${Math.abs(v) >= 1000 ? (v / 1000).toFixed(1) + 'k' : v}`
@@ -1442,6 +1487,12 @@ function PerformanceAnalytics({ trades }) {
         <VBar data={weekData}    xKey="week"    valKey="pnl" label="Weekly P&L Breakdown" />
         <VBar data={monthData}   xKey="month"   valKey="pnl" label="Monthly P&L Comparison" />
       </div>
+      {hasTags && (
+        <div className="ana-grid" style={{ marginTop: '12px' }}>
+          <HBar data={tagWinData} xKey="winRate" yKey="name" label="Win Rate by Tag" />
+          <HBar data={tagPnlData} xKey="pnl"     yKey="name" label="P&L by Tag" />
+        </div>
+      )}
     </div>
   )
 }
@@ -2383,13 +2434,35 @@ function TradeDetailModal({ trade, onClose, onSave, demoMode = false }) {
 }
 
 // ─── Add Trade Modal ──────────────────────────────────────────
+// ─── Trade tags ───────────────────────────────────────────────
+const TRADE_TAG_OPTIONS = ['ICT Setup', 'Liquidity Sweep', 'FVG', 'OTE', 'Rejection Block', 'News Trade', 'Revenge Trade', 'A+ Setup', 'B Setup', 'C Setup']
+const TAG_PALETTE = ['#7cc9ff', '#c28cff', '#5ad1c4', '#ff9f6e', '#9aa7ff', '#e891c4', '#8fd98f']
+const TAG_COLOR_OVERRIDE = { 'Revenge Trade': '#ff8080', 'A+ Setup': '#aaffa0', 'A Setup': '#aaffa0', 'C Setup': '#ff9f6e', 'News Trade': '#ffd966' }
+const tagColor = (tag) => {
+  if (TAG_COLOR_OVERRIDE[tag]) return TAG_COLOR_OVERRIDE[tag]
+  let h = 0
+  for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) >>> 0
+  return TAG_PALETTE[h % TAG_PALETTE.length]
+}
+// Small colored pill — used in trade rows and tag pickers.
+function TagPill({ tag, size = 'sm' }) {
+  const c = tagColor(tag)
+  return (
+    <span style={{
+      display: 'inline-block', padding: size === 'sm' ? '2px 8px' : '4px 10px', borderRadius: '99px',
+      fontSize: size === 'sm' ? '10px' : '11px', fontWeight: 600, lineHeight: 1.4,
+      color: c, background: `${c}1a`, border: `1px solid ${c}33`, whiteSpace: 'nowrap',
+    }}>{tag}</span>
+  )
+}
+
 function AddTradeModal({ open, onClose, session, onTradeAdded }) {
   const BLANK = {
     symbol: '', dir: 'Long', entry: '', exit: '', pnl: '', rr: '',
     date: '', session: 'New York',
     emotional_state: '', trade_rating: '',
     entry_reason: '', did_correctly: '', did_wrong: '',
-    followed_plan: '', notes: '',
+    followed_plan: '', notes: '', tags: [],
   }
   const [form,       setForm]       = useState(BLANK)
   const [mode,       setMode]       = useState('simple')
@@ -2452,6 +2525,7 @@ function AddTradeModal({ open, onClose, session, onTradeAdded }) {
       notes:           form.notes               || null,
       entry:           parseFloat(form.entry)   || null,
       exit:            parseFloat(form.exit)    || null,
+      tags:            Array.isArray(form.tags) && form.tags.length ? form.tags : null,
       chart_url,
     }).select().single()
 
@@ -2743,6 +2817,39 @@ function AddTradeModal({ open, onClose, session, onTradeAdded }) {
             </>
           )}
 
+          {divider}
+
+          {/* Tags (both modes) */}
+          <div>
+            <div style={{ ...lbl, marginBottom: '7px', color: '#666' }}>Tags</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {[...new Set([...TRADE_TAG_OPTIONS, ...form.tags])].map(tag => {
+                const on = form.tags.includes(tag)
+                const c = tagColor(tag)
+                return (
+                  <button key={tag} type="button"
+                    onClick={() => setForm(f => ({ ...f, tags: on ? f.tags.filter(x => x !== tag) : [...f.tags, tag] }))}
+                    style={{ padding: '6px 11px', borderRadius: '99px', cursor: 'pointer', fontFamily: 'inherit', fontSize: '11.5px', fontWeight: on ? 700 : 500, minHeight: 'auto', transition: 'all 0.15s',
+                      border: `1px solid ${on ? c + '88' : '#1c1c1c'}`, background: on ? `${c}1a` : 'transparent', color: on ? c : '#777' }}>
+                    {tag}
+                  </button>
+                )
+              })}
+            </div>
+            <input
+              placeholder="+ Add custom tag, press Enter"
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  const v = e.target.value.trim()
+                  if (v && !form.tags.includes(v)) setForm(f => ({ ...f, tags: [...f.tags, v] }))
+                  e.target.value = ''
+                }
+              }}
+              style={{ ...inp, marginTop: '10px' }}
+            />
+          </div>
+
           {/* Footer */}
           <div style={{ display: 'flex', gap: '8px', marginTop: '26px' }}>
             <button style={{ ...btn, flex: 1, opacity: saving ? 0.6 : 1 }} onClick={saveTrade} disabled={saving}>
@@ -2968,7 +3075,15 @@ function Trades({ trades, session, onTradeAdded, onTradeDeleted, onTradeUpdated,
                       style={{ cursor: 'pointer' }}
                     >
                       <td style={{ ...TD, color: 'var(--text-lo)', fontSize: '12px', whiteSpace: 'nowrap' }}>{formatDate(t.trade_date)}</td>
-                      <td style={{ ...TD, fontWeight: '700', fontSize: '13px' }}>{t.symbol}</td>
+                      <td style={{ ...TD, fontWeight: '700', fontSize: '13px' }}>
+                        <div>{t.symbol}</div>
+                        {Array.isArray(t.tags) && t.tags.length > 0 && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '5px' }}>
+                            {t.tags.slice(0, 3).map(tag => <TagPill key={tag} tag={tag} />)}
+                            {t.tags.length > 3 && <span style={{ fontSize: '10px', color: '#666', fontWeight: 500 }}>+{t.tags.length - 3}</span>}
+                          </div>
+                        )}
+                      </td>
                       <td style={TD}><span style={badge(t.direction === 'Long')}>{t.direction}</span></td>
                       <td style={{ ...TD, color: 'var(--text-md)', fontSize: '12px' }}>{t.rr != null ? Number(t.rr).toFixed(1) : '—'}</td>
                       <td style={{ ...TD, fontWeight: '700', color: pnlColor, textShadow: pnlShadow, whiteSpace: 'nowrap' }}>{pnlDisplay}</td>
@@ -4054,6 +4169,12 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
   const [localGoal,   setLocalGoal]   = useState(profile?.monthly_goal ? String(profile.monthly_goal) : '')
   const [goalSaved,   setGoalSaved]   = useState(false)
 
+  // Referral + leaderboard state
+  const [showLB,    setShowLB]    = useState(!!profile?.show_on_leaderboard)
+  const [refCount,  setRefCount]  = useState(null)
+  const [refCopied, setRefCopied] = useState(false)
+  const referralLink = `app.limitless-journal.com?ref=${profile?.username || ''}`
+
   useEffect(() => {
     setLocalFirstName(profile?.first_name   || '')
     setLocalLastName(profile?.last_name    || '')
@@ -4061,7 +4182,32 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
     setLocalName(profile?.username        || '')
     setLocalMarket(profile?.market_focus  || '')
     setLocalGoal(profile?.monthly_goal ? String(profile.monthly_goal) : '')
+    setShowLB(!!profile?.show_on_leaderboard)
   }, [profile])
+
+  // How many traders joined with this user's link
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { count } = await supabase.from('referrals').select('*', { count: 'exact', head: true }).eq('referrer_id', session.user.id)
+        if (!cancelled) setRefCount(count || 0)
+      } catch { if (!cancelled) setRefCount(0) }
+    })()
+    return () => { cancelled = true }
+  }, [session?.user?.id])
+
+  const copyReferral = async () => {
+    try { await navigator.clipboard.writeText(`https://${referralLink}`); setRefCopied(true); setTimeout(() => setRefCopied(false), 1800) } catch { /* ignore */ }
+  }
+  const toggleLeaderboard = async () => {
+    const next = !showLB
+    setShowLB(next)
+    try {
+      await supabase.from('profiles').update({ show_on_leaderboard: next }).eq('id', session.user.id)
+      setProfile(p => ({ ...p, show_on_leaderboard: next }))
+    } catch { setShowLB(!next) }
+  }
 
   const saveProfile = async () => {
     const updates = {
@@ -4348,6 +4494,44 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
             )}
           </>
         )}
+      </div>
+
+      {/* ── Refer a Trader ── */}
+      <div style={sectionCard}>
+        <div style={sectionTitle}>Refer a Trader</div>
+        <div style={{ height: '1px', background: '#1a1a1a', marginBottom: '20px' }} />
+        {profile?.username ? (
+          <>
+            <div style={{ fontSize: '13px', color: '#888', lineHeight: 1.6, marginBottom: '14px' }}>
+              Share your personal link. <span style={{ color: 'var(--text-hi)', fontWeight: '600' }}>{refCount == null ? '…' : refCount}</span> trader{refCount === 1 ? '' : 's'} joined using your link.
+            </div>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: '200px', display: 'flex', alignItems: 'center', background: '#080808', border: '1px solid #1c1c1c', borderRadius: '10px', padding: '11px 14px', fontSize: '12.5px', color: 'var(--text-md)', fontFamily: 'monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{referralLink}</div>
+              <button onClick={copyReferral} style={{ background: refCopied ? '#1a1a1a' : '#fff', color: refCopied ? '#aaffa0' : '#000', border: 'none', borderRadius: '99px', padding: '0 22px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', minWidth: '110px', minHeight: '44px', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                {refCopied ? '✓ Copied' : <><Link2 size={14} /> Copy</>}
+              </button>
+            </div>
+          </>
+        ) : (
+          <div style={{ fontSize: '13px', color: '#888', lineHeight: 1.6 }}>
+            Set a <span style={{ color: 'var(--text-hi)', fontWeight: '600' }}>username</span> in your Profile above to get your personal referral link.
+          </div>
+        )}
+      </div>
+
+      {/* ── Leaderboard ── */}
+      <div style={sectionCard}>
+        <div style={sectionTitle}>Leaderboard</div>
+        <div style={{ height: '1px', background: '#1a1a1a', marginBottom: '20px' }} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-hi)', marginBottom: '2px' }}>Show me on the leaderboard</div>
+            <div style={{ fontSize: '11px', color: '#555', lineHeight: 1.4 }}>Compete on monthly win rate, P&L, R:R and trade count. Only your username is shown — never personal info. Off by default.</div>
+          </div>
+          <div className={`toggle-track ${showLB ? 'on' : ''}`} onClick={toggleLeaderboard} style={{ flexShrink: 0 }}>
+            <div className="toggle-knob" />
+          </div>
+        </div>
       </div>
 
       {/* ── Support ── */}
@@ -5748,6 +5932,7 @@ function AdminPanel({ session, setPage }) {
   const [trades,       setTrades]       = useState([])
   const [invites,      setInvites]      = useState([])
   const [tickets,      setTickets]      = useState([])
+  const [referrals,    setReferrals]    = useState([])
   const [announcement, setAnnouncement] = useState({ text: '', active: false })
   const [annDraft,     setAnnDraft]     = useState('')
   const [annSaving,    setAnnSaving]    = useState(false)
@@ -5798,12 +5983,13 @@ function AdminPanel({ session, setPage }) {
     setError('')
     const startedAt = Date.now()
     try {
-      const [usersRes, tradesRes, invitesRes, settingsRes, ticketsRes] = await Promise.all([
+      const [usersRes, tradesRes, invitesRes, settingsRes, ticketsRes, referralsRes] = await Promise.all([
         supabase.from('admin_users_view').select('*').order('created_at', { ascending: false }),
         supabase.from('trades').select('id, user_id, pnl, symbol, trade_date, created_at'),
         supabase.from('invites').select('*').order('created_at', { ascending: false }),
         supabase.from('app_settings').select('*').eq('id', 1).maybeSingle(),
         supabase.from('support_tickets').select('*').order('created_at', { ascending: false }),
+        supabase.from('referrals').select('referrer_id'),
       ])
       if (usersRes.error)  throw usersRes.error
       if (tradesRes.error) throw tradesRes.error
@@ -5811,6 +5997,7 @@ function AdminPanel({ session, setPage }) {
       setTrades(tradesRes.data || [])
       if (!invitesRes.error) setInvites(invitesRes.data || [])
       if (!ticketsRes.error) setTickets(ticketsRes.data || [])
+      if (!referralsRes.error) setReferrals(referralsRes.data || [])
       if (!settingsRes.error && settingsRes.data) {
         const ann = { text: settingsRes.data.announcement_text || '', active: !!settingsRes.data.announcement_active }
         setAnnouncement(ann)
@@ -6477,6 +6664,36 @@ function AdminPanel({ session, setPage }) {
       {/* ── Users tab (full management view) ── */}
       {tab === 'users' && <>
 
+      {/* Referral Leaderboard */}
+      <div style={{ ...statCard, marginBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+          <Trophy size={16} color="#ffd966" />
+          <div style={{ ...lbl, color: '#999' }}>Referral Leaderboard</div>
+          <span style={{ fontSize: '10px', color: '#666' }}>{referrals.length} total</span>
+        </div>
+        {(() => {
+          const counts = {}
+          for (const r of referrals) { if (r.referrer_id) counts[r.referrer_id] = (counts[r.referrer_id] || 0) + 1 }
+          const userById = new Map(users.map(u => [u.id, u]))
+          const top = Object.entries(counts).map(([id, n]) => ({ id, n, u: userById.get(id) })).sort((a, b) => b.n - a.n).slice(0, 10)
+          if (top.length === 0) return <div style={{ fontSize: '12px', color: 'var(--text-lo)' }}>No referrals yet.</div>
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {top.map((row, i) => {
+                const name = row.u ? (row.u.username || [row.u.first_name, row.u.last_name].filter(Boolean).join(' ') || row.u.email || 'Unknown') : 'Unknown'
+                return (
+                  <div key={row.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '9px 4px', borderBottom: '1px solid #141414' }}>
+                    <span style={{ width: '20px', fontSize: '13px', fontWeight: 800, color: i === 0 ? '#ffd966' : i === 1 ? '#cfd3da' : i === 2 ? '#d49a6a' : '#555' }}>{i + 1}</span>
+                    <span style={{ flex: 1, minWidth: 0, fontSize: '13px', color: 'var(--text-hi)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span>
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#aaffa0' }}>{row.n} ref{row.n === 1 ? '' : 's'}</span>
+                  </div>
+                )
+              })}
+            </div>
+          )
+        })()}
+      </div>
+
       {/* Invite Links */}
       <div style={{ ...statCard, marginBottom: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
@@ -6982,6 +7199,107 @@ function AdminPanel({ session, setPage }) {
   )
 }
 
+// ─── Leaderboard ──────────────────────────────────────────────
+// Reads aggregated monthly stats for opt-in users via the leaderboard_monthly()
+// Postgres RPC (security definer — bypasses per-user RLS). Degrades to an empty
+// state if the RPC isn't installed yet.
+function Leaderboard({ session, profile }) {
+  const [rows, setRows] = useState(null) // null=loading, []=empty/unavailable
+  const [tab, setTab] = useState('winRate')
+  const myId = session?.user?.id
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data, error } = await supabase.rpc('leaderboard_monthly')
+        if (cancelled) return
+        setRows(!error && Array.isArray(data) ? data : [])
+      } catch { if (!cancelled) setRows([]) }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  const TABS = [
+    { id: 'winRate', label: 'Win Rate', key: 'win_rate', fmt: v => `${Math.round(Number(v) || 0)}%` },
+    { id: 'pnl',     label: 'Net P&L',  key: 'net_pnl',  fmt: v => `${(Number(v) || 0) >= 0 ? '+' : '−'}$${Math.abs(Math.round(Number(v) || 0)).toLocaleString()}` },
+    { id: 'rr',      label: 'Avg R:R',  key: 'avg_rr',   fmt: v => `${(Number(v) || 0).toFixed(1)}R` },
+    { id: 'count',   label: 'Trades',   key: 'trades',   fmt: v => `${Number(v) || 0}` },
+  ]
+  const active = TABS.find(t => t.id === tab)
+  const monthLabel = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  const ranked = (rows || []).filter(r => r && r.username && (Number(r.trades) || 0) > 0)
+    .slice().sort((a, b) => (Number(b[active.key]) || 0) - (Number(a[active.key]) || 0))
+
+  return (
+    <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+        <Trophy size={22} color="#ffd966" />
+        <h1 style={{ fontSize: '28px', fontWeight: '800', letterSpacing: '-1px', color: 'var(--text-hi)' }}>Leaderboard</h1>
+      </div>
+      <div style={{ fontSize: '12px', color: 'var(--text-lo)', marginBottom: '20px' }}>{monthLabel} · opt-in traders only · usernames only</div>
+
+      {/* Ranking tabs */}
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        {TABS.map(t => {
+          const on = tab === t.id
+          return (
+            <button key={t.id} onClick={() => setTab(t.id)} style={{
+              padding: '8px 16px', borderRadius: '99px', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12.5px', fontWeight: on ? 700 : 500, minHeight: 'auto',
+              border: `1px solid ${on ? 'rgba(255,255,255,0.25)' : 'var(--card-border)'}`, background: on ? 'rgba(255,255,255,0.06)' : 'transparent', color: on ? 'var(--text-hi)' : 'var(--text-lo)', transition: 'all 0.15s',
+            }}>{t.label}</button>
+          )
+        })}
+      </div>
+
+      <div style={card}>
+        {rows === null ? (
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-lo)', fontSize: '13px' }}>Loading…</div>
+        ) : ranked.length === 0 ? (
+          <div style={{ padding: '46px 24px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+            <Trophy size={32} color="#333" />
+            <div style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-hi)' }}>No traders ranked yet</div>
+            <div style={{ fontSize: '12.5px', color: 'var(--text-lo)', lineHeight: 1.6, maxWidth: '320px' }}>
+              Opt in from Settings → "Show me on leaderboard" and log trades this month to appear here.
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {ranked.map((r, i) => {
+              const me = r.user_id === myId
+              const rankColor = i === 0 ? '#ffd966' : i === 1 ? '#cfd3da' : i === 2 ? '#d49a6a' : '#555'
+              const initials = String(r.username || '?').slice(0, 2).toUpperCase()
+              return (
+                <div key={r.user_id || i} style={{
+                  display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 14px', borderRadius: '12px',
+                  background: me ? 'rgba(255,255,255,0.06)' : 'transparent',
+                  border: me ? '1px solid rgba(255,255,255,0.14)' : '1px solid transparent',
+                  borderBottom: me ? '1px solid rgba(255,255,255,0.14)' : '1px solid var(--divider)',
+                }}>
+                  <div style={{ width: '26px', textAlign: 'center', fontSize: '15px', fontWeight: '800', color: rankColor, fontVariantNumeric: 'tabular-nums' }}>{i + 1}</div>
+                  <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#141414', border: '1px solid #222', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: '700', color: me ? '#fff' : '#aaa', flexShrink: 0 }}>{initials}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '14px', fontWeight: '600', color: me ? '#fff' : 'var(--text-hi)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {r.username}{me && <span style={{ fontSize: '10px', color: '#888', marginLeft: '7px', letterSpacing: '0.1em' }}>YOU</span>}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-lo)', marginTop: '1px' }}>{Number(r.trades) || 0} trades</div>
+                  </div>
+                  <div style={{ fontSize: '16px', fontWeight: '800', color: me ? '#fff' : 'var(--text-hi)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{active.fmt(r[active.key])}</div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+      {profile && profile.show_on_leaderboard === false && rows !== null && (
+        <div style={{ fontSize: '11.5px', color: 'var(--text-lo)', marginTop: '12px', textAlign: 'center' }}>
+          You're not visible on the leaderboard — enable it in Settings to compete.
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── App Shell ────────────────────────────────────────────────
 export default function App() {
   const [session,        setSession]        = useState(null)
@@ -7091,6 +7409,14 @@ export default function App() {
       try { localStorage.removeItem('pending_invite') } catch {}
     }
 
+    // Apply a deferred referral captured at signup (?ref=) on first login.
+    let pendingRef = null
+    try { pendingRef = localStorage.getItem('pending_ref') } catch { /* ignore */ }
+    if (pendingRef) {
+      recordReferral(pendingRef, sess.user.id)
+      try { localStorage.removeItem('pending_ref') } catch { /* ignore */ }
+    }
+
     setProfile(data)
     if (data.theme)      setTheme(data.theme)
     if (data.color_mode) setColorMode(data.color_mode)
@@ -7136,6 +7462,7 @@ export default function App() {
     { id: 'trades',    Icon: BookOpen,        label: 'Trade Log'    },
     { id: 'plan',      Icon: ClipboardList,   label: 'Trading Plan' },
     ...(featureFlags.newsCalendar ? [{ id: 'news', Icon: CalendarDays, label: 'News' }] : []),
+    { id: 'leaderboard', Icon: Trophy,        label: 'Leaderboard'  },
     { id: 'settings',  Icon: Settings2,       label: 'Settings'     },
   ]
 
@@ -7513,6 +7840,7 @@ export default function App() {
           />
         )}
         {page === 'news' && featureFlags.newsCalendar && <NewsCalendar />}
+        {page === 'leaderboard' && <Leaderboard session={session} profile={profile} />}
         {page === 'network'     && <NetworkPage session={session} setPage={setPage} profile={profile} />}
         {page === 'tos'         && isSuperAdmin(session?.user?.email) && <TOSPage session={session} />}
         {page === 'copy'        && isSuperAdmin(session?.user?.email) && <CopyTraderPage />}

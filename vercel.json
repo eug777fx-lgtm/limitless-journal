@@ -1,0 +1,9 @@
+{
+  "rewrites": [],
+  "crons": [
+    {
+      "path": "/api/weekly-email",
+      "schedule": "0 20 * * 0"
+    }
+  ]
+}

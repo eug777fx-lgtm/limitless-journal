@@ -1,0 +1,13 @@
+{
+  "name": "LIMITLESS Trading Journal",
+  "short_name": "LIMITLESS",
+  "description": "Private trading journal for serious traders",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#080808",
+  "theme_color": "#080808",
+  "icons": [
+    { "src": "/LIMITLESS LOGO FAVICON.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/LIMITLESS LOGO FAVICON.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
