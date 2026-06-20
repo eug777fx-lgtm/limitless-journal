@@ -9,7 +9,6 @@
 const logoUrl = 'https://limitless-journal.com/logo2.png'
 
 const APP_URL = 'https://app.limitless-journal.com'
-const SUPABASE_EDITOR = 'https://supabase.com/dashboard/project/fngdbdcpfamcoctmdhyc/editor'
 const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif"
 
 const esc = (s) => String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))
@@ -24,11 +23,21 @@ function shell(content) {
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<style type="text/css">
+body, #bodyTable { background-color:#000000 !important; }
+#emailContainer { background-color:#0d0d0d !important; }
+@media only screen and (max-width: 600px) {
+  body { background-color:#000000 !important; }
+  table { background-color:#000000 !important; }
+  #emailContainer { width:100% !important; border-radius:0 !important; }
+  .email-content { padding:24px 20px !important; }
+}
+</style>
 </head>
-<body style="margin:0;padding:0;background-color:#000000;font-family:${FONT};" bgcolor="#000000">
-<table border="0" cellpadding="0" cellspacing="0" width="100%" bgcolor="#000000" style="background-color:#000000;">
+<body style="margin:0;padding:0;background-color:#000000 !important;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;font-family:${FONT};" bgcolor="#000000">
+<table id="bodyTable" border="0" cellpadding="0" cellspacing="0" width="100%" bgcolor="#000000" style="background-color:#000000 !important;">
 <tr><td align="center" bgcolor="#000000" style="background-color:#000000;padding:40px 20px;">
-<table border="0" cellpadding="0" cellspacing="0" width="580" bgcolor="#0d0d0d" style="background-color:#0d0d0d;border:1px solid #1a1a1a;border-radius:16px;overflow:hidden;">
+<table id="emailContainer" border="0" cellpadding="0" cellspacing="0" width="580" bgcolor="#0d0d0d" style="background-color:#0d0d0d !important;border:1px solid #1a1a1a;border-radius:16px;overflow:hidden;">
 
 <!-- HEADER -->
 <tr><td align="center" bgcolor="#000000" style="background-color:#000000;padding:32px 40px 24px;border-bottom:1px solid #1a1a1a;">
@@ -89,7 +98,7 @@ const kvRow = (k, v, last) => `<tr>
 // ── Template 1 — signupNotification(user) → admin ─────────────────────────────
 function signupNotification(user = {}) {
   const subject = `New signup — ${user.first_name || 'Someone'} needs approval`
-  const content = `<tr><td bgcolor="#0d0d0d" style="background-color:#0d0d0d;padding:36px 40px;">
+  const content = `<tr><td class="email-content" bgcolor="#0d0d0d" style="background-color:#0d0d0d;padding:36px 40px;">
 <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#ffffff;font-family:${FONT};">New trader signup</p>
 <p style="margin:0 0 24px;font-size:14px;color:#666666;line-height:1.6;font-family:${FONT};">Someone just applied for early access and needs your approval.</p>
 <table border="0" cellpadding="0" cellspacing="0" width="100%" bgcolor="#111111" style="background-color:#111111;border:1px solid #1f1f1f;border-radius:8px;">
@@ -105,7 +114,7 @@ function signupNotification(user = {}) {
 </table>
 <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-top:24px;">
 <tr><td align="center" bgcolor="#aaffa0" style="background-color:#aaffa0;border-radius:8px;padding:16px 32px;">
-<a href="${SUPABASE_EDITOR}" style="color:#000000;font-size:14px;font-weight:700;text-decoration:none;font-family:${FONT};">Approve in Supabase →</a>
+<a href="${APP_URL}" style="color:#000000;font-size:14px;font-weight:700;text-decoration:none;font-family:${FONT};">Open Admin Panel →</a>
 </td></tr>
 </table>
 </td></tr>`
@@ -120,7 +129,7 @@ function approvedEmail(user = {}) {
 <p style="margin:0 0 6px;font-size:18px;color:#aaffa0;font-family:${FONT};">${glyph}</p>
 <p style="margin:0;font-size:11px;color:#888888;font-family:${FONT};">${label}</p>
 </td>`
-  const content = `<tr><td bgcolor="#0d0d0d" style="background-color:#0d0d0d;padding:36px 40px;">
+  const content = `<tr><td class="email-content" bgcolor="#0d0d0d" style="background-color:#0d0d0d;padding:36px 40px;">
 <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:20px;">
 <tr><td align="center">
 <span style="background-color:#0a1f0a;border:1px solid #1a3a1a;border-radius:20px;padding:6px 16px;color:#aaffa0;font-size:12px;font-weight:600;font-family:${FONT};">✓ Approved</span>
@@ -158,7 +167,7 @@ ${ctaButton('Go to your dashboard →', APP_URL)}
 function dailyJournaledEmail(user = {}, stats = {}) {
   const name = user.first_name || 'trader'
   const subject = `You showed up today, ${name} ✓`
-  const content = `<tr><td bgcolor="#0d0d0d" style="background-color:#0d0d0d;padding:36px 40px;">
+  const content = `<tr><td class="email-content" bgcolor="#0d0d0d" style="background-color:#0d0d0d;padding:36px 40px;">
 <table border="0" cellpadding="0" cellspacing="0" width="100%"><tr><td align="center">
 <table border="0" cellpadding="0" cellspacing="0"><tr>
 <td width="64" height="64" align="center" valign="middle" bgcolor="#0a1f0a" style="background-color:#0a1f0a;border:1px solid #1a3a1a;border-radius:32px;"><span style="font-size:30px;color:#aaffa0;line-height:64px;font-family:${FONT};">✓</span></td>
@@ -181,7 +190,7 @@ ${ctaButton('View your dashboard →', APP_URL)}
 function dailyNoJournalEmail(user = {}) {
   const name = user.first_name || 'trader'
   const subject = `Don't let today slip away, ${name}`
-  const content = `<tr><td bgcolor="#0d0d0d" style="background-color:#0d0d0d;padding:36px 40px;">
+  const content = `<tr><td class="email-content" bgcolor="#0d0d0d" style="background-color:#0d0d0d;padding:36px 40px;">
 <p style="margin:0 0 8px;font-size:24px;font-weight:700;color:#ffffff;font-family:${FONT};">Did you trade today, ${esc(name)}?</p>
 <p style="margin:0 0 24px;font-size:14px;color:#666666;line-height:1.6;font-family:${FONT};">Unlogged trades are missed lessons. Your edge lives in the data you capture.</p>
 ${accentCard('#f59e0b', '#e0b877', "Every session you don't review is a session you can't learn from.")}
@@ -215,7 +224,7 @@ function weeklyBody(user, stats, variant) {
   const message = variant === 'loss'
     ? 'Tough week. Review your losses honestly — the data will show you why. Protect capital, then reset for Monday.'
     : 'Profitable week. The process is working. Keep executing with discipline.'
-  return `<tr><td bgcolor="#0d0d0d" style="background-color:#0d0d0d;padding:36px 40px;">
+  return `<tr><td class="email-content" bgcolor="#0d0d0d" style="background-color:#0d0d0d;padding:36px 40px;">
 <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#aaffa0;letter-spacing:0.22em;text-transform:uppercase;text-align:center;font-family:${FONT};">Week in Review</p>
 <p style="margin:0 0 4px;font-size:13px;color:#666666;text-align:center;font-family:${FONT};">${esc(stats.dateRange || '')}</p>
 <p style="margin:8px 0 28px;font-size:24px;font-weight:700;color:#ffffff;text-align:center;font-family:${FONT};">Here's how your week looked, ${esc(name)}.</p>
