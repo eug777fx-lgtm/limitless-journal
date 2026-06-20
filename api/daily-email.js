@@ -8,7 +8,7 @@
 // "Today" is resolved in DAILY_TZ. At 00:00 UTC that's the evening before in NY, so
 // the email reflects the NY trading day that just finished — not an empty new day.
 
-import { journaledHtml, notJournaledHtml } from './_lib/email-templates.js'
+import { dailyJournaledEmail, dailyNoJournalEmail } from './_lib/email-templates.js'
 
 const SUPA_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -51,17 +51,15 @@ export default async function handler(req, res) {
     for (const p of profiles) {
       const email = emailById.get(p.id)
       if (!email) { skipped++; continue }
-      const name = p.first_name || p.username || ''
+      const user = { first_name: p.first_name || p.username || '' }
       const pnls = byUser.get(p.id) || []
       let subject, html
       if (pnls.length > 0) {
         const wins = pnls.filter((v) => v > 0).length
-        const s = { count: pnls.length, pnl: pnls.reduce((a, b) => a + b, 0), winRate: Math.round((wins / pnls.length) * 100), best: Math.max(...pnls) }
-        subject = `You showed up today${name ? `, ${name}` : ''} ✓`
-        html = journaledHtml(name, s)
+        const stats = { trades: pnls.length, pnl: pnls.reduce((a, b) => a + b, 0), winRate: Math.round((wins / pnls.length) * 100), bestTrade: Math.max(...pnls) }
+        ;({ subject, html } = dailyJournaledEmail(user, stats))
       } else {
-        subject = `Don't let today's trades slip away${name ? `, ${name}` : ''}`
-        html = notJournaledHtml(name)
+        ;({ subject, html } = dailyNoJournalEmail(user))
       }
       // Per-user try/catch — one failure never stops the rest.
       try {

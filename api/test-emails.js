@@ -5,7 +5,9 @@
 //   Env: RESEND_API_KEY (required)
 
 import {
-  journaledHtml, notJournaledHtml, weeklyHtml, weeklyMessage, signupNotificationHtml,
+  signupNotification, approvedEmail,
+  dailyJournaledEmail, dailyNoJournalEmail,
+  weeklyProfitableEmail, weeklyLosingEmail,
 } from './_lib/email-templates.js'
 
 const TO = 'eug777fx@gmail.com'
@@ -26,49 +28,21 @@ export default async function handler(req, res) {
   if (!apiKey) return res.status(500).json({ error: 'RESEND_API_KEY not configured' })
   const from = 'LIMITLESS <noreply@limitless-journal.com>'
 
-  const name = 'Eugene'
+  const user = { first_name: 'Eugene', last_name: 'F', email: TO, phone: '+1 (555) 012-3456', market_focus: 'Futures (NQ / ES)' }
   const range = weekRange()
-  const when = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' }) + ' ET'
 
   // Fake stat shapes matching what the production handlers build.
-  const dailyJournaled = { count: 3, pnl: 350, winRate: 67, best: 280 }
-  const weeklyProfitable = {
-    count: 8, net: 1240, winRate: 62, avgRR: 2.1,
-    best: { pnl: 560, symbol: 'NQ' }, worst: { pnl: -180, symbol: 'ES' },
-    wins: 5, losses: 3, be: 0, mostTraded: 'NQ', message: weeklyMessage(8, 1240),
-  }
-  const weeklyLosing = {
-    count: 5, net: -380, winRate: 40, avgRR: 0.9,
-    best: { pnl: 140, symbol: 'ES' }, worst: { pnl: -260, symbol: 'NQ' },
-    wins: 2, losses: 3, be: 0, mostTraded: 'ES', message: weeklyMessage(5, -380),
-  }
+  const dailyStats = { trades: 3, pnl: 350, winRate: 67, bestTrade: 280 }
+  const weeklyProfit = { pnl: 1240, winRate: 62, trades: 8, avgRR: 2.1, bestTrade: 560, wins: 5, losses: 3, mostTraded: 'NQ', dateRange: range }
+  const weeklyLoss = { pnl: -380, winRate: 40, trades: 5, avgRR: 0.9, bestTrade: 140, wins: 2, losses: 3, mostTraded: 'ES', dateRange: range }
 
   const emails = [
-    {
-      type: 'signup_notification',
-      subject: '[TEST] 🔔 New LIMITLESS Signup — Approval Needed',
-      html: signupNotificationHtml({ name, email: TO, phone: '+1 (555) 012-3456', marketFocus: 'Futures (NQ / ES)', when }),
-    },
-    {
-      type: 'daily_journaled',
-      subject: `[TEST] You showed up today, ${name} ✓`,
-      html: journaledHtml(name, dailyJournaled),
-    },
-    {
-      type: 'daily_not_journaled',
-      subject: `[TEST] Don't let today's trades slip away, ${name}`,
-      html: notJournaledHtml(name),
-    },
-    {
-      type: 'weekly_profitable',
-      subject: `[TEST] Your week in review, ${name} — ${range}`,
-      html: weeklyHtml(weeklyProfitable, range),
-    },
-    {
-      type: 'weekly_losing',
-      subject: `[TEST] Your week in review, ${name} — ${range}`,
-      html: weeklyHtml(weeklyLosing, range),
-    },
+    { type: 'signup_notification', ...signupNotification(user) },
+    { type: 'approved', ...approvedEmail(user) },
+    { type: 'daily_journaled', ...dailyJournaledEmail(user, dailyStats) },
+    { type: 'daily_not_journaled', ...dailyNoJournalEmail(user) },
+    { type: 'weekly_profitable', ...weeklyProfitableEmail(user, weeklyProfit) },
+    { type: 'weekly_losing', ...weeklyLosingEmail(user, weeklyLoss) },
   ]
 
   let sent = 0
@@ -78,7 +52,7 @@ export default async function handler(req, res) {
       const r = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ from, to: TO, subject: e.subject, html: e.html }),
+        body: JSON.stringify({ from, to: TO, subject: `[TEST] ${e.subject}`, html: e.html }),
       })
       if (r.ok) { sent++; results.push({ type: e.type, status: 'sent' }) }
       else { results.push({ type: e.type, status: 'failed', error: await r.text().catch(() => '') }) }

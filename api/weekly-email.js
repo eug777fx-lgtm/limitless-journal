@@ -4,7 +4,7 @@
 //   Env: RESEND_API_KEY, SUPABASE_URL (or VITE_SUPABASE_URL), SUPABASE_SERVICE_ROLE_KEY
 //   Optional: WEEKLY_FROM_EMAIL, CRON_SECRET
 
-import { weeklyHtml, weeklyMessage } from './_lib/email-templates.js'
+import { weeklyProfitableEmail, weeklyLosingEmail } from './_lib/email-templates.js'
 
 const SUPA_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -55,35 +55,35 @@ export default async function handler(req, res) {
     for (const p of profiles) {
       const email = emailById.get(p.id)
       if (!email) { skipped++; continue }
-      const name = p.first_name || p.username || ''
+      const user = { first_name: p.first_name || p.username || '' }
       const ts = byUser.get(p.id) || []
       const count = ts.length
       const net = ts.reduce((a, t) => a + (Number(t.pnl) || 0), 0)
       const wins = ts.filter((t) => (Number(t.pnl) || 0) > 0).length
       const losses = ts.filter((t) => (Number(t.pnl) || 0) < 0).length
-      const be = ts.filter((t) => (Number(t.pnl) || 0) === 0).length
       const rrs = ts.map((t) => Number(t.rr)).filter((v) => Number.isFinite(v) && v > 0)
       const avgRR = rrs.length ? rrs.reduce((a, b) => a + b, 0) / rrs.length : 0
-      let best = null, worst = null
+      let best = null
       for (const t of ts) {
         const v = Number(t.pnl) || 0
         if (best === null || v > best.pnl) best = { pnl: v, symbol: t.symbol || '' }
-        if (worst === null || v < worst.pnl) worst = { pnl: v, symbol: t.symbol || '' }
       }
       const symCount = {}; for (const t of ts) { if (t.symbol) symCount[t.symbol] = (symCount[t.symbol] || 0) + 1 }
       const mostTraded = Object.entries(symCount).sort((a, b) => b[1] - a[1])[0]?.[0] || '—'
 
-      const message = weeklyMessage(count, net)
-
-      const s = { count, net, winRate: count ? Math.round((wins / count) * 100) : 0, avgRR, best: count ? best : null, worst: count ? worst : null, wins, losses, be, mostTraded, message }
-      const subject = `Your week in review${name ? `, ${name}` : ''} — ${range}`
+      const stats = {
+        pnl: net, winRate: count ? Math.round((wins / count) * 100) : 0, trades: count, avgRR,
+        bestTrade: count ? best.pnl : null, wins, losses, mostTraded, dateRange: range,
+      }
+      // Profitable vs losing chosen on net P&L.
+      const { subject, html } = net > 0 ? weeklyProfitableEmail(user, stats) : weeklyLosingEmail(user, stats)
 
       // Per-user try/catch — one failure never stops the rest.
       try {
         const r = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify({ from, to: email, subject, html: weeklyHtml(s, range) }),
+          body: JSON.stringify({ from, to: email, subject, html }),
         })
         if (r.ok) { sent++ } else { failed++; console.error('weekly-email send failed:', email, r.status, await r.text().catch(() => '')) }
       } catch (e) {

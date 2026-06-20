@@ -3,7 +3,7 @@
 // signup flow), so it only ever emails the hardcoded admin — never the caller.
 //   Env: RESEND_API_KEY (required), SIGNUP_FROM_EMAIL (optional override).
 
-import { signupNotificationHtml } from './_lib/email-templates.js'
+import { signupNotification } from './_lib/email-templates.js'
 
 const ADMIN_TO = 'eug777fx@gmail.com'
 
@@ -20,15 +20,16 @@ export default async function handler(req, res) {
 
   const body = typeof req.body === 'string' ? (() => { try { return JSON.parse(req.body) } catch { return {} } })() : (req.body || {})
   const { name, email, phone, marketFocus } = body
+  const [first_name, ...rest] = String(name || '').trim().split(/\s+/)
   const when = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' }) + ' ET'
 
-  const html = signupNotificationHtml({ name, email, phone, marketFocus, when })
+  const { subject, html } = signupNotification({ first_name, last_name: rest.join(' '), email, phone, market_focus: marketFocus, when })
 
   try {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ from, to: ADMIN_TO, subject: '🔔 New LIMITLESS Signup — Approval Needed', html }),
+      body: JSON.stringify({ from, to: ADMIN_TO, subject, html }),
     })
     if (!r.ok) return res.status(502).json({ error: await r.text() })
     return res.status(200).json({ ok: true })

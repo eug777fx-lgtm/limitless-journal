@@ -5930,6 +5930,15 @@ function AdminPanel({ session, setPage }) {
     void startedAt
   }
 
+  // Fire-and-forget welcome email on approval — never blocks or fails the action.
+  const sendApprovalEmail = (id) => {
+    fetch('/api/send-approval', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: id }),
+    }).catch(() => {})
+  }
+
   const updateStatus = async (id, status) => {
     console.log('[admin] updateStatus →', { userId: id, status })
     setActioning(id)
@@ -5947,6 +5956,7 @@ function AdminPanel({ session, setPage }) {
         throw new Error('No rows updated — likely an RLS policy is blocking the write. Check Supabase → Authentication → Policies on the profiles table.')
       }
       setUsers(prev => prev.map(u => u.id === id ? { ...u, status } : u))
+      if (status === 'approved') sendApprovalEmail(id)
       toast.success(`User ${past}!`)
     } catch (e) {
       console.error('[admin] updateStatus failed:', e)
@@ -6104,6 +6114,7 @@ function AdminPanel({ session, setPage }) {
       const { error } = await supabase.from('profiles').update({ status: 'approved' }).in('id', ids)
       if (error) throw error
       setUsers(prev => prev.map(u => ids.includes(u.id) ? { ...u, status: 'approved' } : u))
+      ids.forEach(sendApprovalEmail)
     } catch (e) { setError(e.message) }
   }
 
