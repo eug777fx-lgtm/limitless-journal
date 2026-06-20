@@ -21,7 +21,7 @@ export const esc = (s) => String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;
 const statCard = (label, value, color, sub) => `<td width="50%" valign="top" style="padding:6px;">
   <table width="100%" cellpadding="0" cellspacing="0">
     <tr>
-      <td align="center" style="background-color:#111111; border:1px solid #1f1f1f; border-radius:8px; padding:16px;">
+      <td align="center" bgcolor="#111111" style="background-color:#111111; border:1px solid #1f1f1f; border-radius:8px; padding:16px;">
         <p style="margin:0; color:#888888; font-size:10px; font-weight:600; letter-spacing:0.12em; text-transform:uppercase;">${label}</p>
         <p style="margin:8px 0 0; color:${color || '#ffffff'}; font-size:24px; font-weight:700; line-height:1.1;">${value}</p>
         ${sub ? `<p style="margin:3px 0 0; color:#777777; font-size:11px;">${esc(sub)}</p>` : ''}
@@ -32,13 +32,13 @@ const statCard = (label, value, color, sub) => `<td width="50%" valign="top" sty
 
 const accentCard = (border, inner) => `<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:22px;">
   <tr>
-    <td style="background-color:#111111; border:1px solid #1f1f1f; border-left:3px solid ${border}; border-radius:8px; padding:16px 20px;">${inner}</td>
+    <td bgcolor="#111111" style="background-color:#111111; border:1px solid #1f1f1f; border-left:3px solid ${border}; border-radius:8px; padding:16px 20px;">${inner}</td>
   </tr>
 </table>`
 
 const ctaButton = (label, href) => `<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:28px;">
   <tr>
-    <td align="center" style="background-color:#ffffff; border-radius:8px;">
+    <td align="center" bgcolor="#ffffff" style="background-color:#ffffff; border-radius:8px;">
       <a href="${href}" style="display:block; padding:16px 24px; color:#000000; font-size:15px; font-weight:700; text-decoration:none; border-radius:8px;">${label}</a>
     </td>
   </tr>
@@ -52,15 +52,15 @@ export function shell(inner) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body style="margin:0; padding:0; background-color:#000000; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#000000; min-height:100vh;">
+<body bgcolor="#000000" style="margin:0; padding:0; background-color:#000000; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" bgcolor="#000000" style="background-color:#000000; min-height:100vh;">
     <tr>
       <td align="center" style="padding:40px 20px;">
-        <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px; background-color:#0a0a0a; border:1px solid #1a1a1a; border-radius:12px; overflow:hidden;">
+        <table width="100%" cellpadding="0" cellspacing="0" bgcolor="#0a0a0a" style="max-width:600px; background-color:#0a0a0a; border:1px solid #1a1a1a; border-radius:12px; overflow:hidden;">
 
           <!-- HEADER -->
           <tr>
-            <td align="center" style="padding:32px 40px 24px; border-bottom:1px solid #1a1a1a;">
+            <td align="center" bgcolor="#0a0a0a" style="padding:32px 40px 24px; border-bottom:1px solid #1a1a1a;">
               <img src="${LOGO}" width="36" height="36" style="display:block; margin:0 auto 12px auto;" alt="LIMITLESS">
               <p style="margin:0; color:#ffffff; font-size:13px; font-weight:700; letter-spacing:0.2em;">LIMITLESS</p>
             </td>
@@ -68,14 +68,14 @@ export function shell(inner) {
 
           <!-- CONTENT -->
           <tr>
-            <td style="padding:40px;">
+            <td bgcolor="#0a0a0a" style="padding:40px;">
 ${inner}
             </td>
           </tr>
 
           <!-- FOOTER -->
           <tr>
-            <td align="center" style="padding:24px 40px; border-top:1px solid #1a1a1a;">
+            <td align="center" bgcolor="#0a0a0a" style="padding:24px 40px; border-top:1px solid #1a1a1a;">
               <p style="margin:0 0 4px; color:#444444; font-size:12px;">LIMITLESS Trading Journal</p>
               <a href="https://limitless-journal.com" style="color:#aaffa0; font-size:12px; text-decoration:none;">limitless-journal.com</a>
               <p style="margin:8px 0 0; color:#333333; font-size:11px;">You're receiving this as a LIMITLESS member.</p>
@@ -115,7 +115,7 @@ export function notJournaledHtml(name) {
   const step = (n, t) => `<tr><td style="padding:7px 0;">
     <table cellpadding="0" cellspacing="0">
       <tr>
-        <td width="26" height="26" align="center" valign="middle" style="background-color:#111111; border:1px solid #1f1f1f; border-radius:50%; color:#aaffa0; font-size:12px; font-weight:700; line-height:26px;">${n}</td>
+        <td width="26" height="26" align="center" valign="middle" bgcolor="#111111" style="background-color:#111111; border:1px solid #1f1f1f; border-radius:50%; color:#aaffa0; font-size:12px; font-weight:700; line-height:26px;">${n}</td>
         <td valign="middle" style="padding-left:14px; color:#dddddd; font-size:15px;">${t}</td>
       </tr>
     </table>
@@ -170,7 +170,7 @@ export function weeklyHtml(s, range) {
     ${accentCard(border, `<p style="margin:0; color:${msgColor}; font-size:15px; font-weight:600; line-height:1.6;">${esc(s.message)}</p>`)}
     <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:14px;">
       <tr>
-        <td align="center" style="background-color:#111111; border:1px solid #1f1f1f; border-radius:8px; padding:16px; color:#888888; font-size:13px; line-height:1.7;">
+        <td align="center" bgcolor="#111111" style="background-color:#111111; border:1px solid #1f1f1f; border-radius:8px; padding:16px; color:#888888; font-size:13px; line-height:1.7;">
           Wins: <b style="color:#aaffa0;">${s.wins}</b> · Losses: <b style="color:#ff8080;">${s.losses}</b> · BE: <b style="color:#ffffff;">${s.be}</b> · Most Traded: <b style="color:#ffffff;">${esc(s.mostTraded)}</b>
         </td>
       </tr>
@@ -201,15 +201,15 @@ export function signupNotificationHtml({ name, email, phone, marketFocus, when }
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body style="margin:0; padding:0; background-color:#000000; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#000000; min-height:100vh;">
+<body bgcolor="#000000" style="margin:0; padding:0; background-color:#000000; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" bgcolor="#000000" style="background-color:#000000; min-height:100vh;">
     <tr>
       <td align="center" style="padding:40px 20px;">
-        <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px; background-color:#0a0a0a; border:1px solid #1a1a1a; border-radius:12px; overflow:hidden;">
+        <table width="100%" cellpadding="0" cellspacing="0" bgcolor="#0a0a0a" style="max-width:600px; background-color:#0a0a0a; border:1px solid #1a1a1a; border-radius:12px; overflow:hidden;">
 
           <!-- HEADER -->
           <tr>
-            <td align="center" style="padding:32px 40px 24px; border-bottom:1px solid #1a1a1a;">
+            <td align="center" bgcolor="#0a0a0a" style="padding:32px 40px 24px; border-bottom:1px solid #1a1a1a;">
               <img src="${LOGO}" width="36" height="36" style="display:block; margin:0 auto 12px auto;" alt="LIMITLESS">
               <p style="margin:0; color:#ffffff; font-size:13px; font-weight:700; letter-spacing:0.2em;">LIMITLESS</p>
             </td>
@@ -217,12 +217,12 @@ export function signupNotificationHtml({ name, email, phone, marketFocus, when }
 
           <!-- CONTENT -->
           <tr>
-            <td style="padding:40px;">
+            <td bgcolor="#0a0a0a" style="padding:40px;">
               <h1 style="margin:0 0 4px; color:#ffffff; font-size:22px; font-weight:700;">🔔 New Signup — Approval Needed</h1>
               <p style="margin:0 0 22px; color:#888888; font-size:13px;">A new trader just created an account.</p>
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
-                  <td style="background-color:#111111; border:1px solid #1f1f1f; border-radius:8px; padding:8px 18px;">
+                  <td bgcolor="#111111" style="background-color:#111111; border:1px solid #1f1f1f; border-radius:8px; padding:8px 18px;">
                     <table width="100%" cellpadding="0" cellspacing="0">
                       ${row('Name', name)}
                       ${row('Email', email)}
@@ -235,7 +235,7 @@ export function signupNotificationHtml({ name, email, phone, marketFocus, when }
               </table>
               <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:22px;">
                 <tr>
-                  <td align="center" style="background-color:#ffffff; border-radius:8px;">
+                  <td align="center" bgcolor="#ffffff" style="background-color:#ffffff; border-radius:8px;">
                     <a href="${SUPABASE_EDITOR}" style="display:block; padding:14px 22px; color:#000000; font-size:14px; font-weight:700; text-decoration:none; border-radius:8px;">Approve in Supabase →</a>
                   </td>
                 </tr>
@@ -245,7 +245,7 @@ export function signupNotificationHtml({ name, email, phone, marketFocus, when }
 
           <!-- FOOTER -->
           <tr>
-            <td align="center" style="padding:24px 40px; border-top:1px solid #1a1a1a;">
+            <td align="center" bgcolor="#0a0a0a" style="padding:24px 40px; border-top:1px solid #1a1a1a;">
               <p style="margin:0; color:#444444; font-size:11px;">Sent automatically by LIMITLESS Journal</p>
             </td>
           </tr>
