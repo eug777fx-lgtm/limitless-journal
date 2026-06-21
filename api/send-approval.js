@@ -6,6 +6,7 @@
 //   Optional: APPROVAL_FROM_EMAIL
 
 import { approvedEmail } from './_lib/email-templates.js'
+import { logEmail } from './_lib/log-email.js'
 
 const SUPA_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -46,7 +47,13 @@ export default async function handler(req, res) {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({ from, to: email, subject, html }),
     })
-    if (!r.ok) return res.status(502).json({ error: await r.text().catch(() => 'send failed') })
+    if (!r.ok) {
+      const reason = await r.text().catch(() => 'send failed')
+      await logEmail({ userId, recipientEmail: email, emailType: 'approved', status: 'failed', error: reason, sentBy: 'system' })
+      return res.status(502).json({ error: reason })
+    }
+    const resendId = (await r.json().catch(() => ({}))).id || null
+    await logEmail({ userId, recipientEmail: email, emailType: 'approved', status: 'sent', resendId, sentBy: 'system' })
     return res.status(200).json({ ok: true })
   } catch (e) {
     console.error('send-approval error:', e.message)

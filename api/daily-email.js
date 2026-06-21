@@ -9,6 +9,7 @@
 // the email reflects the NY trading day that just finished — not an empty new day.
 
 import { dailyJournaledEmail, dailyNoJournalEmail } from './_lib/email-templates.js'
+import { logEmail } from './_lib/log-email.js'
 
 const SUPA_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -50,9 +51,10 @@ export default async function handler(req, res) {
     let sent = 0, failed = 0, skipped = 0
     for (const p of profiles) {
       const email = emailById.get(p.id)
-      if (!email) { skipped++; continue }
       const user = { first_name: p.first_name || p.username || '' }
       const pnls = byUser.get(p.id) || []
+      const emailType = pnls.length > 0 ? 'daily_journaled' : 'daily_not_journaled'
+      if (!email) { skipped++; await logEmail({ userId: p.id, emailType, status: 'skipped', error: 'no email', sentBy: 'system' }); continue }
       let subject, html
       if (pnls.length > 0) {
         const wins = pnls.filter((v) => v > 0).length
@@ -68,9 +70,19 @@ export default async function handler(req, res) {
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
           body: JSON.stringify({ from, to: email, subject, html }),
         })
-        if (r.ok) { sent++ } else { failed++; console.error('daily-email send failed:', email, r.status, await r.text().catch(() => '')) }
+        if (r.ok) {
+          sent++
+          const resendId = (await r.json().catch(() => ({}))).id || null
+          await logEmail({ userId: p.id, recipientEmail: email, emailType, status: 'sent', resendId, sentBy: 'system' })
+        } else {
+          failed++
+          const reason = await r.text().catch(() => `HTTP ${r.status}`)
+          console.error('daily-email send failed:', email, r.status, reason)
+          await logEmail({ userId: p.id, recipientEmail: email, emailType, status: 'failed', error: reason, sentBy: 'system' })
+        }
       } catch (e) {
         failed++; console.error('daily-email error:', email, e.message)
+        await logEmail({ userId: p.id, recipientEmail: email, emailType, status: 'failed', error: e.message, sentBy: 'system' })
       }
     }
 

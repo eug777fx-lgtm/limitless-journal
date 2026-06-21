@@ -1,10 +1,14 @@
 // Weekly performance report — Vercel Cron (vercel.json: "0 20 * * 6", Saturday 20:00 UTC).
 // For every approved user, summarises this week's (Mon–Sat) trades and emails a
 // premium recap via Resend. Uses the Supabase service role to bypass RLS.
+// Window + per-user stats come from the shared api/_lib/weekly-stats.js helper
+// (same source of truth as the admin broadcast). Every send is logged.
 //   Env: RESEND_API_KEY, SUPABASE_URL (or VITE_SUPABASE_URL), SUPABASE_SERVICE_ROLE_KEY
 //   Optional: WEEKLY_FROM_EMAIL, CRON_SECRET
 
 import { weeklyProfitableEmail, weeklyLosingEmail } from './_lib/email-templates.js'
+import { weeklyWindow, buildWeeklyStats } from './_lib/weekly-stats.js'
+import { logEmail } from './_lib/log-email.js'
 
 const SUPA_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -12,15 +16,6 @@ const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 const sb = (path) => fetch(`${SUPA_URL}/rest/v1/${path}`, {
   headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
 }).then((r) => (r.ok ? r.json() : Promise.reject(new Error(`${path}: ${r.status}`))))
-
-function mondayUTC() {
-  const now = new Date()
-  const monday = new Date(now)
-  monday.setUTCDate(now.getUTCDate() - ((now.getUTCDay() + 6) % 7))
-  monday.setUTCHours(0, 0, 0, 0)
-  return monday
-}
-const fmtDay = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
 
 export default async function handler(req, res) {
   if (process.env.CRON_SECRET && req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -33,10 +28,7 @@ export default async function handler(req, res) {
   const from = process.env.WEEKLY_FROM_EMAIL || 'LIMITLESS <noreply@limitless-journal.com>'
 
   try {
-    const monday = mondayUTC()
-    const since = monday.toISOString().slice(0, 10)
-    const sat = new Date(monday); sat.setUTCDate(monday.getUTCDate() + 5)
-    const range = `${fmtDay(monday)} — ${fmtDay(sat)}`
+    const { since, range } = weeklyWindow()
 
     const [profiles, trades] = await Promise.all([
       sb(`profiles?status=eq.approved&select=id,username,first_name`),
@@ -54,29 +46,12 @@ export default async function handler(req, res) {
     let sent = 0, failed = 0, skipped = 0
     for (const p of profiles) {
       const email = emailById.get(p.id)
-      if (!email) { skipped++; continue }
+      if (!email) { skipped++; await logEmail({ userId: p.id, emailType: 'weekly', status: 'skipped', error: 'no email', sentBy: 'system' }); continue }
       const user = { first_name: p.first_name || p.username || '' }
       const ts = byUser.get(p.id) || []
-      const count = ts.length
-      const net = ts.reduce((a, t) => a + (Number(t.pnl) || 0), 0)
-      const wins = ts.filter((t) => (Number(t.pnl) || 0) > 0).length
-      const losses = ts.filter((t) => (Number(t.pnl) || 0) < 0).length
-      const rrs = ts.map((t) => Number(t.rr)).filter((v) => Number.isFinite(v) && v > 0)
-      const avgRR = rrs.length ? rrs.reduce((a, b) => a + b, 0) / rrs.length : 0
-      let best = null
-      for (const t of ts) {
-        const v = Number(t.pnl) || 0
-        if (best === null || v > best.pnl) best = { pnl: v, symbol: t.symbol || '' }
-      }
-      const symCount = {}; for (const t of ts) { if (t.symbol) symCount[t.symbol] = (symCount[t.symbol] || 0) + 1 }
-      const mostTraded = Object.entries(symCount).sort((a, b) => b[1] - a[1])[0]?.[0] || '—'
-
-      const stats = {
-        pnl: net, winRate: count ? Math.round((wins / count) * 100) : 0, trades: count, avgRR,
-        bestTrade: count ? best.pnl : null, wins, losses, mostTraded, dateRange: range,
-      }
+      const stats = buildWeeklyStats(ts, range)
       // Profitable vs losing chosen on net P&L.
-      const { subject, html } = net > 0 ? weeklyProfitableEmail(user, stats) : weeklyLosingEmail(user, stats)
+      const { subject, html } = stats.pnl > 0 ? weeklyProfitableEmail(user, stats) : weeklyLosingEmail(user, stats)
 
       // Per-user try/catch — one failure never stops the rest.
       try {
@@ -85,9 +60,19 @@ export default async function handler(req, res) {
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
           body: JSON.stringify({ from, to: email, subject, html }),
         })
-        if (r.ok) { sent++ } else { failed++; console.error('weekly-email send failed:', email, r.status, await r.text().catch(() => '')) }
+        if (r.ok) {
+          sent++
+          const resendId = (await r.json().catch(() => ({}))).id || null
+          await logEmail({ userId: p.id, recipientEmail: email, emailType: 'weekly', status: 'sent', resendId, sentBy: 'system' })
+        } else {
+          failed++
+          const reason = await r.text().catch(() => `HTTP ${r.status}`)
+          console.error('weekly-email send failed:', email, r.status, reason)
+          await logEmail({ userId: p.id, recipientEmail: email, emailType: 'weekly', status: 'failed', error: reason, sentBy: 'system' })
+        }
       } catch (e) {
         failed++; console.error('weekly-email error:', email, e.message)
+        await logEmail({ userId: p.id, recipientEmail: email, emailType: 'weekly', status: 'failed', error: e.message, sentBy: 'system' })
       }
     }
 

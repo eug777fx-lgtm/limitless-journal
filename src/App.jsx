@@ -5882,6 +5882,19 @@ function AdminPanel({ session, setPage }) {
   const [healthCheckedAt, setHealthCheckedAt] = useState(null)
   const [healthOk,        setHealthOk]        = useState(null)
 
+  // Email command center (super-admin only)
+  const [emTab,        setEmTab]        = useState('broadcast') // 'broadcast' | 'peruser' | 'log'
+  const [emType,       setEmType]       = useState('approved')  // 'approved' | 'weekly'
+  const [emSelected,   setEmSelected]   = useState(new Set())
+  const [emSending,    setEmSending]    = useState(false)
+  const [emUserModal,  setEmUserModal]  = useState(null)        // user object | null
+  const [emModalBusy,  setEmModalBusy]  = useState(false)
+  const [emLog,        setEmLog]        = useState([])
+  const [emLogLoading, setEmLogLoading] = useState(false)
+  const [emLogType,    setEmLogType]    = useState('all')
+  const [emLogStatus,  setEmLogStatus]  = useState('all')
+  const [emLogSearch,  setEmLogSearch]  = useState('')
+
   // Both super and co-admins may use the panel (user management + tickets).
   const isAdmin = isAnyAdmin(session?.user?.email)
   const isSuper = isSuperAdmin(session?.user?.email)
@@ -5892,6 +5905,45 @@ function AdminPanel({ session, setPage }) {
     const t = setInterval(loadData, 30_000) // auto-refresh every 30s
     return () => clearInterval(t)
   }, [])
+
+  // Load the email delivery log when the super-admin opens the Emails tab.
+  useEffect(() => { if (tab === 'emails' && isSuper) loadEmailLog() }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const loadEmailLog = async () => {
+    setEmLogLoading(true)
+    try {
+      const { data, error } = await supabase.from('email_log').select('*').order('created_at', { ascending: false }).limit(500)
+      if (error) throw error
+      setEmLog(data || [])
+    } catch (e) { setError(e.message) }
+    finally { setEmLogLoading(false) }
+  }
+
+  // Single path for ALL manual sends (bulk + per-user). userIds.length === 1 is per-user.
+  const runBroadcast = async (type, userIds, closeModal) => {
+    if (!userIds || userIds.length === 0) { toast.error('No users selected'); return }
+    setEmSending(true); setEmModalBusy(true)
+    try {
+      const { data: sess } = await supabase.auth.getSession()
+      const token = sess?.session?.access_token || session?.access_token
+      const res = await fetch('/api/admin-broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ type, userIds }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
+      toast.success(`Sent ${data.sent} · Skipped ${data.skipped} · Failed ${data.failed}`)
+      if (data.failures?.length) toast.error(`Failed: ${data.failures.slice(0, 4).map(f => f.email).join(', ')}${data.failures.length > 4 ? '…' : ''}`)
+      setEmSelected(new Set())
+      if (closeModal) setEmUserModal(null)
+      loadEmailLog()
+    } catch (e) { toast.error(`Broadcast failed: ${e.message}`) }
+    finally { setEmSending(false); setEmModalBusy(false) }
+  }
+
+  // Open the per-user email modal; ensure the log is loaded so history shows.
+  const openUserEmail = (u) => { setEmUserModal(u); if (emLog.length === 0) loadEmailLog() }
 
   const loadData = async () => {
     setError('')
@@ -6346,6 +6398,7 @@ function AdminPanel({ session, setPage }) {
           { id: 'users',    label: 'Users',     icon: Users },
           { id: 'waitlist', label: 'Waitlist',  icon: Users, badge: pendingUsers || 0 },
           { id: 'tickets',  label: 'Tickets',   icon: MessageSquare, badge: tickets.filter(t => t.status === 'open').length },
+          ...(isSuper ? [{ id: 'emails', label: 'Emails', icon: Mail }] : []),
           { id: 'health',   label: 'Health',    icon: Activity },
         ].map(t => {
           const active = tab === t.id
@@ -6770,7 +6823,11 @@ function AdminPanel({ session, setPage }) {
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#141414', border: '1px solid #222', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', color: '#aaa', flexShrink: 0 }}>{initialsOf(u)}</div>
                             <div style={{ minWidth: 0 }}>
-                              <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-hi)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fullName}</div>
+                              <div
+                                onClick={isSuper ? (e) => { e.stopPropagation(); openUserEmail(u) } : undefined}
+                                title={isSuper ? 'Email this user' : undefined}
+                                style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-hi)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: isSuper ? 'pointer' : 'default', textDecoration: isSuper ? 'underline' : 'none', textDecorationStyle: 'dotted', textDecorationColor: 'rgba(170,255,160,0.4)', textUnderlineOffset: '3px' }}
+                              >{fullName}</div>
                               {u.username && fullName !== u.username && (
                                 <div style={{ fontSize: '11px', color: 'var(--text-lo)', marginTop: '1px' }}>@{u.username}</div>
                               )}
@@ -7053,6 +7110,172 @@ function AdminPanel({ session, setPage }) {
           </div>
         )
       })()}
+
+      {/* ── Emails: command center (super-admin only) ── */}
+      {tab === 'emails' && isSuper && (() => {
+        const selStyle = { background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: '8px', padding: '7px 10px', fontSize: '12px', color: 'var(--text-hi)', fontFamily: 'inherit' }
+        const nameOf = (u) => [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || u.email || '—'
+        const typeLabel = (t) => ({ approved: 'Approved Welcome', weekly: 'Weekly Report', daily_journaled: 'Daily (logged)', daily_not_journaled: 'Daily (no log)', signup_notification: 'Signup Notify' }[t] || t || '—')
+        const statusColor = (s) => s === 'sent' ? '#aaffa0' : s === 'skipped' ? '#ffd966' : '#ff8080'
+        const approvedList = users.filter(u => (u.status || 'pending') === 'approved')
+        const tcMap = new Map(); trades.forEach(t => tcMap.set(t.user_id, (tcMap.get(t.user_id) || 0) + 1))
+        const lastByUser = new Map(); for (const r of emLog) { if (r.user_id && !lastByUser.has(r.user_id)) lastByUser.set(r.user_id, r) }
+        const counts = { sent: emLog.filter(r => r.status === 'sent').length, skipped: emLog.filter(r => r.status === 'skipped').length, failed: emLog.filter(r => r.status === 'failed').length }
+        const logFiltered = emLog.filter(r => {
+          if (emLogType !== 'all' && r.email_type !== emLogType) return false
+          if (emLogStatus !== 'all' && r.status !== emLogStatus) return false
+          if (emLogSearch.trim()) {
+            const u = userById.get(r.user_id)
+            const hay = `${r.recipient_email || ''} ${u ? nameOf(u) : ''}`.toLowerCase()
+            if (!hay.includes(emLogSearch.trim().toLowerCase())) return false
+          }
+          return true
+        })
+        return (
+          <div>
+            <div style={{ display: 'flex', gap: '4px', marginBottom: '18px' }}>
+              {[{ id: 'broadcast', label: 'Broadcast' }, { id: 'peruser', label: 'Per-User' }, { id: 'log', label: 'Log' }].map(st => (
+                <button key={st.id} onClick={() => setEmTab(st.id)} style={{ background: emTab === st.id ? 'rgba(170,255,160,0.08)' : 'transparent', border: '1px solid ' + (emTab === st.id ? 'rgba(170,255,160,0.25)' : 'var(--card-border)'), color: emTab === st.id ? '#aaffa0' : 'var(--text-md)', borderRadius: '8px', padding: '7px 16px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit' }}>{st.label}</button>
+              ))}
+            </div>
+
+            {/* BROADCAST */}
+            {emTab === 'broadcast' && (
+              <div style={statCard}>
+                <div style={{ ...lbl, color: '#999', marginBottom: '12px' }}>Email Type</div>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '18px' }}>
+                  {[{ id: 'approved', label: 'Approved Welcome' }, { id: 'weekly', label: 'Weekly Report' }].map(o => (
+                    <button key={o.id} onClick={() => setEmType(o.id)} style={{ flex: 1, background: emType === o.id ? 'rgba(170,255,160,0.10)' : '#0a0a0a', border: '1px solid ' + (emType === o.id ? 'rgba(170,255,160,0.30)' : '#1a1a1a'), color: emType === o.id ? '#aaffa0' : 'var(--text-md)', borderRadius: '10px', padding: '12px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit' }}>{o.label}</button>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <div style={{ ...lbl, color: '#999' }}>Approved Users ({approvedList.length})</div>
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    <span style={{ fontSize: '11px', color: '#666' }}>{emSelected.size} selected</span>
+                    <button onClick={() => setEmSelected(new Set(approvedList.map(u => u.id)))} style={{ background: 'transparent', border: 'none', color: '#aaffa0', fontSize: '11px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit' }}>Select All</button>
+                    {emSelected.size > 0 && <button onClick={() => setEmSelected(new Set())} style={{ background: 'transparent', border: 'none', color: '#666', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit' }}>Clear</button>}
+                  </div>
+                </div>
+                <div style={{ maxHeight: '320px', overflowY: 'auto', border: '1px solid #1a1a1a', borderRadius: '10px' }}>
+                  {approvedList.length === 0 ? <div style={{ padding: '20px', textAlign: 'center', fontSize: '12px', color: 'var(--text-lo)' }}>No approved users.</div> :
+                    approvedList.map(u => {
+                      const on = emSelected.has(u.id)
+                      return (
+                        <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 14px', borderBottom: '1px solid #141414', cursor: 'pointer' }}>
+                          <input type="checkbox" checked={on} onChange={() => setEmSelected(prev => { const n = new Set(prev); n.has(u.id) ? n.delete(u.id) : n.add(u.id); return n })} style={{ cursor: 'pointer', width: '14px', height: '14px', accentColor: '#aaffa0' }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-hi)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nameOf(u)}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-lo)' }}>{u.email || '—'}</div>
+                          </div>
+                          <span style={{ fontSize: '12px', color: '#666', whiteSpace: 'nowrap' }}>{tcMap.get(u.id) || 0} trades</span>
+                        </label>
+                      )
+                    })}
+                </div>
+                <button disabled={emSending || emSelected.size === 0} onClick={() => {
+                  const ids = [...emSelected]
+                  if (!confirm(`Send ${emType === 'approved' ? 'Approved Welcome' : 'Weekly Report'} to ${ids.length} user${ids.length === 1 ? '' : 's'}?`)) return
+                  runBroadcast(emType, ids, false)
+                }} style={{ marginTop: '16px', width: '100%', background: emSelected.size === 0 ? '#1a1a1a' : '#aaffa0', color: emSelected.size === 0 ? '#666' : '#000', border: 'none', borderRadius: '10px', padding: '13px', fontSize: '14px', fontWeight: '700', cursor: emSending || emSelected.size === 0 ? 'default' : 'pointer', fontFamily: 'inherit', opacity: emSending ? 0.6 : 1 }}>
+                  {emSending ? 'Sending…' : `Send to ${emSelected.size} user${emSelected.size === 1 ? '' : 's'}`}
+                </button>
+              </div>
+            )}
+
+            {/* PER-USER */}
+            {emTab === 'peruser' && (
+              <div style={statCard}>
+                <div style={{ ...lbl, color: '#999', marginBottom: '12px' }}>Send to one user — click a name</div>
+                <div style={{ maxHeight: '440px', overflowY: 'auto', border: '1px solid #1a1a1a', borderRadius: '10px' }}>
+                  {approvedList.length === 0 ? <div style={{ padding: '20px', textAlign: 'center', fontSize: '12px', color: 'var(--text-lo)' }}>No approved users.</div> :
+                    approvedList.map(u => {
+                      const last = lastByUser.get(u.id)
+                      return (
+                        <div key={u.id} onClick={() => openUserEmail(u)} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 14px', borderBottom: '1px solid #141414', cursor: 'pointer' }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-hi)' }}>{nameOf(u)}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-lo)' }}>{u.email || '—'} · {tcMap.get(u.id) || 0} trades</div>
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#666', whiteSpace: 'nowrap' }}>{last ? `last: ${typeLabel(last.email_type)} · ${formatDate(last.created_at)}` : 'never emailed'}</div>
+                          <Send size={14} color="#aaffa0" />
+                        </div>
+                      )
+                    })}
+                </div>
+              </div>
+            )}
+
+            {/* LOG */}
+            {emTab === 'log' && (
+              <div style={statCard}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '14px' }}>
+                  <div style={{ fontSize: '13px', color: 'var(--text-md)' }}>
+                    <span style={{ color: '#aaffa0', fontWeight: '700' }}>{counts.sent}</span> sent · <span style={{ color: '#ffd966', fontWeight: '700' }}>{counts.skipped}</span> skipped · <span style={{ color: '#ff8080', fontWeight: '700' }}>{counts.failed}</span> failed
+                  </div>
+                  <button onClick={loadEmailLog} style={{ background: 'transparent', border: '1px solid var(--card-border)', color: 'var(--text-md)', borderRadius: '8px', padding: '6px 12px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px' }}><RefreshCw size={12} /> Refresh</button>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                  <select value={emLogType} onChange={e => setEmLogType(e.target.value)} style={selStyle}>
+                    <option value="all">All types</option><option value="approved">Approved</option><option value="weekly">Weekly</option><option value="daily_journaled">Daily (logged)</option><option value="daily_not_journaled">Daily (no log)</option>
+                  </select>
+                  <select value={emLogStatus} onChange={e => setEmLogStatus(e.target.value)} style={selStyle}>
+                    <option value="all">All status</option><option value="sent">Sent</option><option value="skipped">Skipped</option><option value="failed">Failed</option>
+                  </select>
+                  <input value={emLogSearch} onChange={e => setEmLogSearch(e.target.value)} placeholder="Search name / email" style={{ ...selStyle, flex: 1, minWidth: '160px' }} />
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                    <thead><tr style={{ borderBottom: '1px solid #1f1f1f' }}>
+                      {['Recipient', 'Type', 'Status', 'Sent By', 'Date'].map(h => <th key={h} style={{ textAlign: 'left', padding: '8px 10px', color: '#666', fontWeight: '600', whiteSpace: 'nowrap' }}>{h}</th>)}
+                    </tr></thead>
+                    <tbody>
+                      {emLogLoading ? <tr><td colSpan={5} style={{ padding: '20px', textAlign: 'center', color: 'var(--text-lo)' }}>Loading…</td></tr> :
+                        logFiltered.length === 0 ? <tr><td colSpan={5} style={{ padding: '20px', textAlign: 'center', color: 'var(--text-lo)' }}>No log entries.</td></tr> :
+                          logFiltered.slice(0, 300).map(r => {
+                            const u = userById.get(r.user_id)
+                            return (
+                              <tr key={r.id} style={{ borderBottom: '1px solid #141414' }}>
+                                <td style={{ padding: '9px 10px' }}><div style={{ color: 'var(--text-hi)', fontWeight: '600' }}>{u ? nameOf(u) : '—'}</div><div style={{ color: 'var(--text-lo)', fontSize: '11px' }}>{r.recipient_email || '—'}</div></td>
+                                <td style={{ padding: '9px 10px', color: 'var(--text-md)', whiteSpace: 'nowrap' }}>{typeLabel(r.email_type)}</td>
+                                <td style={{ padding: '9px 10px' }}><span style={{ color: statusColor(r.status), fontWeight: '700', textTransform: 'capitalize' }}>{r.status}</span></td>
+                                <td style={{ padding: '9px 10px', color: 'var(--text-lo)', whiteSpace: 'nowrap' }}>{r.sent_by === 'system' ? 'System' : r.sent_by}</td>
+                                <td style={{ padding: '9px 10px', color: 'var(--text-lo)', whiteSpace: 'nowrap' }}>{formatDate(r.created_at)}</td>
+                              </tr>
+                            )
+                          })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })()}
+
+      {/* ── Per-user email action modal ── */}
+      {emUserModal && createPortal(
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => !emModalBusy && setEmUserModal(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ width: '90%', maxWidth: '440px', background: '#0d0d0d', border: '1px solid #1f1f1f', borderRadius: '16px', padding: '24px', boxShadow: '0 32px 100px rgba(0,0,0,0.9)', animation: 'modalIn 0.2s ease both' }}>
+            {(() => {
+              const u = emUserModal
+              const nm = [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || u.email || '—'
+              const last = emLog.find(r => r.user_id === u.id)
+              const typeLabel = (t) => ({ approved: 'Approved Welcome', weekly: 'Weekly Report', daily_journaled: 'Daily (logged)', daily_not_journaled: 'Daily (no log)', signup_notification: 'Signup Notify' }[t] || t || '—')
+              return (<>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
+                  <div style={{ fontSize: '17px', fontWeight: '800', color: '#fff' }}>{nm}</div>
+                  <button onClick={() => setEmUserModal(null)} style={{ background: 'transparent', border: 'none', color: '#666', cursor: 'pointer', fontSize: '22px', lineHeight: 1, fontFamily: 'inherit' }}>×</button>
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--text-lo)', marginBottom: '18px' }}>{u.email || 'no email on file'}</div>
+                <div style={{ fontSize: '10px', color: '#666', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.12em' }}>Last emailed</div>
+                <div style={{ fontSize: '13px', color: last ? 'var(--text-md)' : 'var(--text-lo)', marginBottom: '20px' }}>{last ? `${typeLabel(last.email_type)} · ${last.status} · ${formatDate(last.created_at)}` : 'Never emailed'}</div>
+                <button disabled={emModalBusy || !u.email} onClick={() => { if (confirm(`Send Approved Welcome to ${nm}?`)) runBroadcast('approved', [u.id], true) }} style={{ width: '100%', marginBottom: '10px', background: '#aaffa0', color: '#000', border: 'none', borderRadius: '10px', padding: '12px', fontSize: '13px', fontWeight: '700', cursor: emModalBusy || !u.email ? 'default' : 'pointer', fontFamily: 'inherit', opacity: emModalBusy || !u.email ? 0.5 : 1 }}>Send Approved Welcome</button>
+                <button disabled={emModalBusy || !u.email} onClick={() => { if (confirm(`Send Weekly Report to ${nm}? (skipped if no trades this week)`)) runBroadcast('weekly', [u.id], true) }} style={{ width: '100%', background: '#0a0a0a', color: 'var(--text-hi)', border: '1px solid #1f1f1f', borderRadius: '10px', padding: '12px', fontSize: '13px', fontWeight: '600', cursor: emModalBusy || !u.email ? 'default' : 'pointer', fontFamily: 'inherit', opacity: emModalBusy || !u.email ? 0.5 : 1 }}>Send Weekly Report</button>
+                {emModalBusy && <div style={{ textAlign: 'center', fontSize: '12px', color: '#aaffa0', marginTop: '12px' }}>Sending…</div>}
+              </>)
+            })()}
+          </div>
+        </div>, document.body)}
 
       {/* ── Email compose modal ── */}
       {emailOpen && createPortal(
