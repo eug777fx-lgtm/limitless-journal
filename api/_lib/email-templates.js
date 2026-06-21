@@ -2,25 +2,32 @@
 // Imported by api/notify-signup.js, api/daily-email.js, api/weekly-email.js,
 // api/send-approval.js and api/test-emails.js.
 //
-// Mobile dark-mode strategy (Gmail mobile strips <head><style> entirely):
+// Mobile dark-mode strategy (Gmail mobile strips <head><style> AND force-inverts):
 //   • EVERY <table> and <td> carries an inline background-color directly on it —
 //     no classes, no reliance on parent inheritance, no priority overrides.
 //   • One full-width black master <table> wraps the centered 580px card (no
 //     <div> anywhere — Gmail mobile drops background-color on divs), so the page
 //     background is solid black edge-to-edge with no white gaps.
+//   • Every dark cell also layers a 1-colour raster tile (background attribute +
+//     background-image) UNDER its bgcolor/inline colour. Gmail mobile's inverter
+//     repaints solid backgrounds but won't repaint a raster image, so the tile
+//     locks the dark shade; bgcolor + background-color remain the desktop /
+//     Apple Mail fallback. Each tile matches its exact shade (000/0d0/111).
 //   • The <head> is minimal (meta only) for the desktop clients that read it.
 //   • Shell is identical across all 6 templates — only the content section differs.
 
 const APP_URL = 'https://app.limitless-journal.com'
+const TILE = 'https://limitless-journal.com/email'
 
 const esc = (s) => String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))
 const usd = (n) => { const v = Math.round(Number(n) || 0); return `${v >= 0 ? '+' : '−'}$${Math.abs(v).toLocaleString()}` }
 
-// Coloured-cell attribute builders: bgcolor attribute + inline background-color
-// directly on the element (no class, no priority overrides).
-const blk = (extra = '') => `bgcolor="#000000" style="background-color:#000000;${extra}"`
-const dk = (extra = '') => `bgcolor="#0d0d0d" style="background-color:#0d0d0d;${extra}"`
-const cd = (extra = '') => `bgcolor="#111111" style="background-color:#111111;${extra}"`
+// Coloured-cell attribute builders. Dark cells double up bgcolor + inline colour
+// with a matching raster tile (background attribute + background-image) so Gmail
+// mobile's inverter can't repaint them. White CTA cell stays a flat colour.
+const blk = (extra = '') => `bgcolor="#000000" background="${TILE}/bg-000000.png" style="background-color:#000000;background-image:url('${TILE}/bg-000000.png');background-repeat:repeat;${extra}"`
+const dk = (extra = '') => `bgcolor="#0d0d0d" background="${TILE}/bg-0d0d0d.png" style="background-color:#0d0d0d;background-image:url('${TILE}/bg-0d0d0d.png');background-repeat:repeat;${extra}"`
+const cd = (extra = '') => `bgcolor="#111111" background="${TILE}/bg-111111.png" style="background-color:#111111;background-image:url('${TILE}/bg-111111.png');background-repeat:repeat;${extra}"`
 const wh = (extra = '') => `bgcolor="#ffffff" style="background-color:#ffffff;${extra}"`
 
 const HEAD = `<!DOCTYPE html>
