@@ -13,11 +13,14 @@
 //     repaints solid backgrounds but won't repaint a raster image, so the tile
 //     locks the dark shade; bgcolor + background-color remain the desktop /
 //     Apple Mail fallback. Each tile matches its exact shade (000/0d0/111).
-//   • Backgrounds are locked but Gmail mobile still inverts bright text. A minimal
-//     <head> <style> (the ONLY style block) re-forces key text colours light via
-//     prefers-color-scheme AND Gmail's u+.body / [data-ogsc] hooks. Every text
-//     element carries an ll-* class ALONGSIDE its inline colour (inline stays the
-//     desktop fallback): ll-white / ll-dim / ll-green / ll-amber / ll-red.
+//   • Backgrounds are locked but Gmail mobile inverts/washes out text (grays go
+//     unreadable). A minimal <head> <style> (the ONLY style block) forces ALL
+//     tagged text to pure #ffffff on mobile dark mode via prefers-color-scheme AND
+//     Gmail's u+.body / [data-ogsc] hooks. Every text node carries an ll-* class
+//     ALONGSIDE its inline colour — inline stays the desktop fallback (desktop
+//     keeps its grays/accent colours; mobile renders everything white). The CTA
+//     button text is the one exception: it has no class — Gmail inverts the white
+//     button cleanly on its own, and forcing white could hide it.
 //   • Shell is identical across all 6 templates — only the content section differs.
 
 const APP_URL = 'https://app.limitless-journal.com'
@@ -34,8 +37,8 @@ const dk = (extra = '') => `bgcolor="#0d0d0d" background="${TILE}/bg-0d0d0d.png"
 const cd = (extra = '') => `bgcolor="#111111" background="${TILE}/bg-111111.png" style="background-color:#111111;background-image:url('${TILE}/bg-111111.png');background-repeat:repeat;${extra}"`
 const wh = (extra = '') => `bgcolor="#ffffff" style="background-color:#ffffff;${extra}"`
 
-// Dark-mode text overrides — the ONLY <style> block. Inline colours stay as the
-// desktop/light fallback; these re-light key text under Gmail mobile's inverter.
+// Dark-mode text overrides — the ONLY <style> block. Every ll-* class resolves to
+// pure white on mobile dark mode; inline colours stay as the desktop fallback.
 const HEAD = `<!DOCTYPE html>
 <html>
 <head>
@@ -45,18 +48,14 @@ const HEAD = `<!DOCTYPE html>
 <meta name="supported-color-schemes" content="dark">
 <style>
   @media (prefers-color-scheme: dark) {
-    .ll-white { color:#ffffff !important; }
-    .ll-dim   { color:#9ca3af !important; }
-    .ll-green { color:#aaffa0 !important; }
-    .ll-amber { color:#f59e0b !important; }
-    .ll-red   { color:#ef4444 !important; }
+    .ll-white, .ll-dim, .ll-green, .ll-amber, .ll-red { color:#ffffff !important; }
   }
-  /* Gmail iOS/Android app dark mode */
-  u + .body .ll-white, [data-ogsc] .ll-white { color:#ffffff !important; }
-  u + .body .ll-dim,   [data-ogsc] .ll-dim   { color:#9ca3af !important; }
-  u + .body .ll-green, [data-ogsc] .ll-green { color:#aaffa0 !important; }
-  u + .body .ll-amber, [data-ogsc] .ll-amber { color:#f59e0b !important; }
-  u + .body .ll-red,   [data-ogsc] .ll-red   { color:#ef4444 !important; }
+  /* Gmail iOS/Android app dark mode — force every tagged text node bright white */
+  u + .body .ll-white, [data-ogsc] .ll-white,
+  u + .body .ll-dim,   [data-ogsc] .ll-dim,
+  u + .body .ll-green, [data-ogsc] .ll-green,
+  u + .body .ll-amber, [data-ogsc] .ll-amber,
+  u + .body .ll-red,   [data-ogsc] .ll-red { color:#ffffff !important; }
 </style>
 </head>`
 
@@ -130,7 +129,7 @@ const accentCard = (border, inner) => `<table role="presentation" width="100%" c
 const ctaButton = (label, href) => `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ${dk('margin-top:28px;')}>
   <tr>
     <td align="center" ${wh('border-radius:8px;')}>
-      <a class="ll-white" href="${href}" style="display:block;padding:16px 24px;color:#000000;font-size:15px;font-weight:700;text-decoration:none;border-radius:8px;">${label}</a>
+      <a href="${href}" style="display:block;padding:16px 24px;color:#000000;font-size:15px;font-weight:700;text-decoration:none;border-radius:8px;">${label}</a>
     </td>
   </tr>
 </table>`
@@ -168,7 +167,7 @@ export function signupNotification(user = {}) {
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ${dk('margin-top:22px;')}>
       <tr>
         <td align="center" ${wh('border-radius:8px;')}>
-          <a class="ll-white" href="${APP_URL}" style="display:block;padding:14px 22px;color:#000000;font-size:14px;font-weight:700;text-decoration:none;border-radius:8px;">Open Admin Panel →</a>
+          <a href="${APP_URL}" style="display:block;padding:14px 22px;color:#000000;font-size:14px;font-weight:700;text-decoration:none;border-radius:8px;">Open Admin Panel →</a>
         </td>
       </tr>
     </table>`
