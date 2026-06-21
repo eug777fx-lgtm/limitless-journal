@@ -5,8 +5,9 @@
 // Mobile dark-mode strategy (Gmail mobile strips <head><style> entirely):
 //   • EVERY <table> and <td> carries an inline background-color directly on it —
 //     no classes, no reliance on parent inheritance, no priority overrides.
-//   • A full-bleed black <div> + 100%-width black table wrap the centered 580px
-//     card, so the page background is solid black edge-to-edge (no white gaps).
+//   • One full-width black master <table> wraps the centered 580px card (no
+//     <div> anywhere — Gmail mobile drops background-color on divs), so the page
+//     background is solid black edge-to-edge with no white gaps.
 //   • The <head> is minimal (meta only) for the desktop clients that read it.
 //   • Shell is identical across all 6 templates — only the content section differs.
 
@@ -35,8 +36,7 @@ const HEAD = `<!DOCTYPE html>
 // Identical for every template; only `inner` changes.
 function page(inner) {
   return `${HEAD}
-<body bgcolor="#000000" style="margin:0;padding:0;background-color:#000000;width:100%;">
-<div style="background-color:#000000;margin:0;padding:0;width:100%;">
+<body style="margin:0;padding:0;background-color:#000000;" bgcolor="#000000">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ${blk('width:100%;margin:0;padding:0;')}>
 <tr>
 <td align="center" ${blk('padding:32px 16px;')}>
@@ -73,7 +73,6 @@ ${inner}
 </td>
 </tr>
 </table>
-</div>
 </body>
 </html>`
 }
