@@ -46,7 +46,6 @@ function page(inner) {
 <!-- HEADER -->
 <tr>
 <td align="center" ${blk('padding:32px 40px 24px;border-bottom:1px solid #1a1a1a;border-radius:16px 16px 0 0;')}>
-<img src="https://limitless-journal.com/logo2.png" width="48" alt="LIMITLESS" style="display:block;margin:0 auto 14px auto;border:0;width:48px;height:auto;outline:none;text-decoration:none;" />
 <p style="margin:0;font-size:11px;font-weight:700;color:#ffffff;letter-spacing:0.25em;font-family:Arial,sans-serif;">LIMITLESS</p>
 <p style="margin:4px 0 0;font-size:10px;color:#444444;letter-spacing:0.1em;font-family:Arial,sans-serif;">TRADING JOURNAL</p>
 </td>
