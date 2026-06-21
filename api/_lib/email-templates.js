@@ -2,43 +2,33 @@
 // Imported by api/notify-signup.js, api/daily-email.js, api/weekly-email.js,
 // api/send-approval.js and api/test-emails.js.
 //
-// Mobile dark-mode strategy (Gmail mobile strips <head><style> AND force-inverts):
-//   • EVERY <table> and <td> carries an inline background-color directly on it —
-//     no classes, no reliance on parent inheritance, no priority overrides.
-//   • One full-width black master <table> wraps the centered 580px card (no
-//     <div> anywhere — Gmail mobile drops background-color on divs), so the page
-//     background is solid black edge-to-edge with no white gaps.
-//   • Every dark cell also layers a 1-colour raster tile (background attribute +
-//     background-image) UNDER its bgcolor/inline colour. Gmail mobile's inverter
-//     repaints solid backgrounds but won't repaint a raster image, so the tile
-//     locks the dark shade; bgcolor + background-color remain the desktop /
-//     Apple Mail fallback. Each tile matches its exact shade (000/0d0/111).
-//   • Backgrounds are locked but Gmail mobile inverts/washes out text (grays go
-//     unreadable). A minimal <head> <style> (the ONLY style block) forces ALL
-//     tagged text to pure #ffffff on mobile dark mode via prefers-color-scheme AND
-//     Gmail's u+.body / [data-ogsc] hooks. Every text node carries an ll-* class
-//     ALONGSIDE its inline colour — inline stays the desktop fallback (desktop
-//     keeps its grays/accent colours; mobile renders everything white). The CTA
-//     button text is the one exception: it has no class — Gmail inverts the white
-//     button cleanly on its own, and forcing white could hide it.
+// Dark-email strategy:
+//   • Desktop / Apple Mail render dark via the color-scheme metas + inline colours.
+//   • Gmail mobile ignores those and force-inverts the whole email to a readable
+//     light version — so we DON'T fight it. No bg-image tiles and no dark-forcing
+//     <style>/[data-ogsc] text overrides (a partial override = white-on-white once
+//     Gmail inverts the page). Every cell just keeps its bgcolor + inline
+//     background-color: desktop stays dark, Gmail mobile inverts cleanly to light.
+//   • Tables-only, inline colours everywhere (no <div>, no class-based bg).
+//   • Orphan ll-* classes on text nodes are inert (no matching CSS) — left as-is.
 //   • Shell is identical across all 6 templates — only the content section differs.
 
 const APP_URL = 'https://app.limitless-journal.com'
-const TILE = 'https://limitless-journal.com/email'
 
 const esc = (s) => String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))
 const usd = (n) => { const v = Math.round(Number(n) || 0); return `${v >= 0 ? '+' : '−'}$${Math.abs(v).toLocaleString()}` }
 
-// Coloured-cell attribute builders. Dark cells double up bgcolor + inline colour
-// with a matching raster tile (background attribute + background-image) so Gmail
-// mobile's inverter can't repaint them. White CTA cell stays a flat colour.
-const blk = (extra = '') => `bgcolor="#000000" background="${TILE}/bg-000000.png" style="background-color:#000000;background-image:url('${TILE}/bg-000000.png');background-repeat:repeat;${extra}"`
-const dk = (extra = '') => `bgcolor="#0d0d0d" background="${TILE}/bg-0d0d0d.png" style="background-color:#0d0d0d;background-image:url('${TILE}/bg-0d0d0d.png');background-repeat:repeat;${extra}"`
-const cd = (extra = '') => `bgcolor="#111111" background="${TILE}/bg-111111.png" style="background-color:#111111;background-image:url('${TILE}/bg-111111.png');background-repeat:repeat;${extra}"`
+// Coloured-cell attribute builders: bgcolor attribute + inline background-color on
+// every cell. No background image — Gmail mobile cleanly inverts the whole email
+// to a readable light version; desktop / Apple Mail stay dark via the metas below.
+const blk = (extra = '') => `bgcolor="#000000" style="background-color:#000000;${extra}"`
+const dk = (extra = '') => `bgcolor="#0d0d0d" style="background-color:#0d0d0d;${extra}"`
+const cd = (extra = '') => `bgcolor="#111111" style="background-color:#111111;${extra}"`
 const wh = (extra = '') => `bgcolor="#ffffff" style="background-color:#ffffff;${extra}"`
 
-// Dark-mode text overrides — the ONLY <style> block. Every ll-* class resolves to
-// pure white on mobile dark mode; inline colours stay as the desktop fallback.
+// Minimal <head> — meta only, no <style>. The color-scheme metas keep desktop /
+// Apple Mail dark; Gmail mobile ignores them and inverts the whole email to a
+// clean light version. (Orphan ll-* classes on text nodes are inert — kept as-is.)
 const HEAD = `<!DOCTYPE html>
 <html>
 <head>
@@ -46,17 +36,6 @@ const HEAD = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <meta name="color-scheme" content="dark">
 <meta name="supported-color-schemes" content="dark">
-<style>
-  @media (prefers-color-scheme: dark) {
-    .ll-white, .ll-dim, .ll-green, .ll-amber, .ll-red { color:#ffffff !important; }
-  }
-  /* Gmail iOS/Android app dark mode — force every tagged text node bright white */
-  u + .body .ll-white, [data-ogsc] .ll-white,
-  u + .body .ll-dim,   [data-ogsc] .ll-dim,
-  u + .body .ll-green, [data-ogsc] .ll-green,
-  u + .body .ll-amber, [data-ogsc] .ll-amber,
-  u + .body .ll-red,   [data-ogsc] .ll-red { color:#ffffff !important; }
-</style>
 </head>`
 
 // Full brand shell — full-bleed black wrapper + centered 580px card.
