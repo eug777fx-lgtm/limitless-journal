@@ -6,7 +6,7 @@ import {
 } from './NetworkExtras.jsx'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  BarChart, Bar, Cell,
+  BarChart, Bar, Cell, LineChart, Line, CartesianGrid,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
 } from 'recharts'
 import {
@@ -14,7 +14,7 @@ import {
   Lightbulb, Check, BarChart2, Plus, CalendarDays, Layers, Target,
   Pencil, Trash2, GripVertical, Sparkles, Loader2, Shield, Users, Search, X,
   Bell, Megaphone, Link2, Download, ChevronDown, RefreshCw, LogOut,
-  Mail, Ban, Flag, Activity, MessageSquare, Save,
+  Mail, Ban, Flag, Activity, MessageSquare, Save, Send, Eye, MousePointerClick,
   Globe, Video, Flame, Play, Clock, Award, Heart,
   Trophy, FileText, ExternalLink, Calendar, Brain,
 } from 'lucide-react'
@@ -5841,6 +5841,24 @@ const makeInviteCode = () => {
   return s
 }
 
+// Animated count-up number (eased), used by the email analytics stat cards.
+function CountUp({ value, duration = 900, suffix = '' }) {
+  const [n, setN] = useState(0)
+  useEffect(() => {
+    const to = Number(value) || 0
+    let raf, start
+    const step = (ts) => {
+      if (!start) start = ts
+      const p = Math.min(1, (ts - start) / duration)
+      setN(Math.round(to * (1 - Math.pow(1 - p, 3))))
+      if (p < 1) raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [value, duration])
+  return <>{n.toLocaleString()}{suffix}</>
+}
+
 function AdminPanel({ session, setPage }) {
   const [tab,          setTab]          = useState('overview') // 'overview' | 'waitlist' | 'tickets' | 'health'
   const [users,        setUsers]        = useState([])
@@ -5882,13 +5900,15 @@ function AdminPanel({ session, setPage }) {
   const [healthCheckedAt, setHealthCheckedAt] = useState(null)
   const [healthOk,        setHealthOk]        = useState(null)
 
-  // Email command center (super-admin only)
-  const [emTab,        setEmTab]        = useState('broadcast') // 'broadcast' | 'peruser' | 'log'
-  const [emType,       setEmType]       = useState('approved')  // 'approved' | 'weekly'
+  // Email analytics command center (super-admin only)
+  const [emTab,        setEmTab]        = useState('overview') // 'overview'|'broadcast'|'peruser'|'log'
+  const [emType,       setEmType]       = useState('approved') // 'approved' | 'weekly'
   const [emSelected,   setEmSelected]   = useState(new Set())
   const [emSending,    setEmSending]    = useState(false)
-  const [emUserModal,  setEmUserModal]  = useState(null)        // user object | null
-  const [emModalBusy,  setEmModalBusy]  = useState(false)
+  const [emUserSel,    setEmUserSel]    = useState(null)       // user selected in Per-User panel
+  const [emUserSearch, setEmUserSearch] = useState('')
+  const [emBcastSearch, setEmBcastSearch] = useState('')
+  const [emOverType,   setEmOverType]   = useState('all')      // overview chart type filter
   const [emLog,        setEmLog]        = useState([])
   const [emLogLoading, setEmLogLoading] = useState(false)
   const [emLogType,    setEmLogType]    = useState('all')
@@ -5920,9 +5940,9 @@ function AdminPanel({ session, setPage }) {
   }
 
   // Single path for ALL manual sends (bulk + per-user). userIds.length === 1 is per-user.
-  const runBroadcast = async (type, userIds, closeModal) => {
+  const runBroadcast = async (type, userIds) => {
     if (!userIds || userIds.length === 0) { toast.error('No users selected'); return }
-    setEmSending(true); setEmModalBusy(true)
+    setEmSending(true)
     try {
       const { data: sess } = await supabase.auth.getSession()
       const token = sess?.session?.access_token || session?.access_token
@@ -5936,14 +5956,13 @@ function AdminPanel({ session, setPage }) {
       toast.success(`Sent ${data.sent} · Skipped ${data.skipped} · Failed ${data.failed}`)
       if (data.failures?.length) toast.error(`Failed: ${data.failures.slice(0, 4).map(f => f.email).join(', ')}${data.failures.length > 4 ? '…' : ''}`)
       setEmSelected(new Set())
-      if (closeModal) setEmUserModal(null)
       loadEmailLog()
     } catch (e) { toast.error(`Broadcast failed: ${e.message}`) }
-    finally { setEmSending(false); setEmModalBusy(false) }
+    finally { setEmSending(false) }
   }
 
-  // Open the per-user email modal; ensure the log is loaded so history shows.
-  const openUserEmail = (u) => { setEmUserModal(u); if (emLog.length === 0) loadEmailLog() }
+  // Open a user's Per-User panel (from the Users table name click); ensure log is loaded.
+  const openUserEmail = (u) => { setTab('emails'); setEmTab('peruser'); setEmUserSel(u); if (emLog.length === 0) loadEmailLog() }
 
   const loadData = async () => {
     setError('')
@@ -7131,13 +7150,69 @@ function AdminPanel({ session, setPage }) {
           }
           return true
         })
+        // ── Analytics over the full log ──
+        const A = {
+          sent: emLog.filter(r => r.status === 'sent').length,
+          delivered: emLog.filter(r => r.delivered_at).length,
+          opened: emLog.filter(r => r.opened_at).length,
+          clicked: emLog.filter(r => r.clicked_at).length,
+          failed: emLog.filter(r => r.status === 'failed').length,
+        }
+        A.openRate = A.sent ? Math.round((A.opened / A.sent) * 100) : 0
+        A.clickRate = A.sent ? Math.round((A.clicked / A.sent) * 100) : 0
+        const days30 = []
+        { const today = new Date(); for (let i = 29; i >= 0; i--) { const d = new Date(today); d.setDate(today.getDate() - i); days30.push({ key: d.toISOString().slice(0, 10), label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), count: 0 }) } }
+        const dayMap = new Map(days30.map(d => [d.key, d]))
+        emLog.filter(r => r.status === 'sent' && (emOverType === 'all' || r.email_type === emOverType)).forEach(r => { const d = dayMap.get((r.created_at || '').slice(0, 10)); if (d) d.count++ })
+        const histFor = (uid) => emLog.filter(r => r.user_id === uid) // emLog is newest-first
+        const bcastList = approvedList.filter(u => { if (!emBcastSearch.trim()) return true; return `${nameOf(u)} ${u.email || ''}`.toLowerCase().includes(emBcastSearch.trim().toLowerCase()) })
+        const userList = approvedList.filter(u => { if (!emUserSearch.trim()) return true; return `${nameOf(u)} ${u.email || ''}`.toLowerCase().includes(emUserSearch.trim().toLowerCase()) })
         return (
           <div>
             <div style={{ display: 'flex', gap: '4px', marginBottom: '18px' }}>
-              {[{ id: 'broadcast', label: 'Broadcast' }, { id: 'peruser', label: 'Per-User' }, { id: 'log', label: 'Log' }].map(st => (
+              {[{ id: 'overview', label: 'Overview' }, { id: 'broadcast', label: 'Broadcast' }, { id: 'peruser', label: 'Per-User' }, { id: 'log', label: 'Log' }].map(st => (
                 <button key={st.id} onClick={() => setEmTab(st.id)} style={{ background: emTab === st.id ? 'rgba(170,255,160,0.08)' : 'transparent', border: '1px solid ' + (emTab === st.id ? 'rgba(170,255,160,0.25)' : 'var(--card-border)'), color: emTab === st.id ? '#aaffa0' : 'var(--text-md)', borderRadius: '8px', padding: '7px 16px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit' }}>{st.label}</button>
               ))}
             </div>
+
+            {/* OVERVIEW */}
+            {emTab === 'overview' && (
+              <div>
+                <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px', marginBottom: '16px' }}>
+                  {[
+                    { label: 'Total Sent', val: A.sent, color: '#fff' },
+                    { label: 'Delivered', val: A.delivered, color: '#aaffa0' },
+                    { label: 'Open Rate', val: A.openRate, suffix: '%', color: '#6aa3ff' },
+                    { label: 'Click Rate', val: A.clickRate, suffix: '%', color: '#b794f6' },
+                    { label: 'Failed / Bounced', val: A.failed, color: '#ff8080' },
+                  ].map(s => (
+                    <div key={s.label} style={{ ...statCard, padding: '16px' }}>
+                      <div style={{ fontSize: '24px', fontWeight: '800', letterSpacing: '-1px', color: s.color, lineHeight: 1, marginBottom: '6px' }}><CountUp value={s.val} suffix={s.suffix || ''} /></div>
+                      <div style={{ ...lbl, color: '#777' }}>{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={statCard}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
+                    <div style={{ ...lbl, color: '#999' }}>Emails sent — last 30 days</div>
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      {[{ id: 'all', label: 'All' }, { id: 'approved', label: 'Approved' }, { id: 'weekly', label: 'Weekly' }].map(o => (
+                        <button key={o.id} onClick={() => setEmOverType(o.id)} style={{ background: emOverType === o.id ? 'rgba(170,255,160,0.10)' : 'transparent', border: '1px solid ' + (emOverType === o.id ? 'rgba(170,255,160,0.30)' : 'var(--card-border)'), color: emOverType === o.id ? '#aaffa0' : 'var(--text-md)', borderRadius: '7px', padding: '5px 12px', fontSize: '11px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit' }}>{o.label}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <ResponsiveContainer width="100%" height={240}>
+                    <LineChart data={days30} margin={{ top: 6, right: 12, bottom: 0, left: -18 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" vertical={false} />
+                      <XAxis dataKey="label" tick={{ fill: '#666', fontSize: 10 }} interval={4} axisLine={{ stroke: '#1f1f1f' }} tickLine={false} />
+                      <YAxis allowDecimals={false} tick={{ fill: '#666', fontSize: 10 }} axisLine={false} tickLine={false} width={34} />
+                      <Tooltip contentStyle={{ background: '#0d0d0d', border: '1px solid #1f1f1f', borderRadius: '8px', fontSize: '12px' }} labelStyle={{ color: '#aaa' }} />
+                      <Line type="monotone" dataKey="count" stroke="#aaffa0" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: '#aaffa0' }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
 
             {/* BROADCAST */}
             {emTab === 'broadcast' && (
@@ -7152,13 +7227,14 @@ function AdminPanel({ session, setPage }) {
                   <div style={{ ...lbl, color: '#999' }}>Approved Users ({approvedList.length})</div>
                   <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                     <span style={{ fontSize: '11px', color: '#666' }}>{emSelected.size} selected</span>
-                    <button onClick={() => setEmSelected(new Set(approvedList.map(u => u.id)))} style={{ background: 'transparent', border: 'none', color: '#aaffa0', fontSize: '11px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit' }}>Select All</button>
+                    <button onClick={() => setEmSelected(new Set(bcastList.map(u => u.id)))} style={{ background: 'transparent', border: 'none', color: '#aaffa0', fontSize: '11px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit' }}>Select All</button>
                     {emSelected.size > 0 && <button onClick={() => setEmSelected(new Set())} style={{ background: 'transparent', border: 'none', color: '#666', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit' }}>Clear</button>}
                   </div>
                 </div>
+                <input value={emBcastSearch} onChange={e => setEmBcastSearch(e.target.value)} placeholder="Search recipients…" style={{ ...selStyle, width: '100%', marginBottom: '10px' }} />
                 <div style={{ maxHeight: '320px', overflowY: 'auto', border: '1px solid #1a1a1a', borderRadius: '10px' }}>
-                  {approvedList.length === 0 ? <div style={{ padding: '20px', textAlign: 'center', fontSize: '12px', color: 'var(--text-lo)' }}>No approved users.</div> :
-                    approvedList.map(u => {
+                  {bcastList.length === 0 ? <div style={{ padding: '20px', textAlign: 'center', fontSize: '12px', color: 'var(--text-lo)' }}>No matching users.</div> :
+                    bcastList.map(u => {
                       const on = emSelected.has(u.id)
                       return (
                         <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 14px', borderBottom: '1px solid #141414', cursor: 'pointer' }}>
@@ -7184,23 +7260,65 @@ function AdminPanel({ session, setPage }) {
 
             {/* PER-USER */}
             {emTab === 'peruser' && (
-              <div style={statCard}>
-                <div style={{ ...lbl, color: '#999', marginBottom: '12px' }}>Send to one user — click a name</div>
-                <div style={{ maxHeight: '440px', overflowY: 'auto', border: '1px solid #1a1a1a', borderRadius: '10px' }}>
-                  {approvedList.length === 0 ? <div style={{ padding: '20px', textAlign: 'center', fontSize: '12px', color: 'var(--text-lo)' }}>No approved users.</div> :
-                    approvedList.map(u => {
-                      const last = lastByUser.get(u.id)
-                      return (
-                        <div key={u.id} onClick={() => openUserEmail(u)} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 14px', borderBottom: '1px solid #141414', cursor: 'pointer' }}>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-hi)' }}>{nameOf(u)}</div>
-                            <div style={{ fontSize: '11px', color: 'var(--text-lo)' }}>{u.email || '—'} · {tcMap.get(u.id) || 0} trades</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '12px' }} className="chart-grid">
+                {/* left: searchable user list */}
+                <div style={statCard}>
+                  <input value={emUserSearch} onChange={e => setEmUserSearch(e.target.value)} placeholder="Search users…" style={{ ...selStyle, width: '100%', marginBottom: '10px' }} />
+                  <div style={{ maxHeight: '460px', overflowY: 'auto', border: '1px solid #1a1a1a', borderRadius: '10px' }}>
+                    {userList.length === 0 ? <div style={{ padding: '20px', textAlign: 'center', fontSize: '12px', color: 'var(--text-lo)' }}>No matching users.</div> :
+                      userList.map(u => {
+                        const on = emUserSel && emUserSel.id === u.id
+                        const last = lastByUser.get(u.id)
+                        return (
+                          <div key={u.id} onClick={() => setEmUserSel(u)} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 14px', borderBottom: '1px solid #141414', cursor: 'pointer', background: on ? 'rgba(170,255,160,0.06)' : 'transparent' }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: '13px', fontWeight: '600', color: on ? '#aaffa0' : 'var(--text-hi)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nameOf(u)}</div>
+                              <div style={{ fontSize: '11px', color: 'var(--text-lo)' }}>{u.email || '—'} · {tcMap.get(u.id) || 0} trades</div>
+                            </div>
+                            {last && <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: statusColor(last.status), flexShrink: 0 }} title={`last: ${typeLabel(last.email_type)}`} />}
+                            <Send size={13} color={on ? '#aaffa0' : '#444'} />
                           </div>
-                          <div style={{ fontSize: '11px', color: '#666', whiteSpace: 'nowrap' }}>{last ? `last: ${typeLabel(last.email_type)} · ${formatDate(last.created_at)}` : 'never emailed'}</div>
-                          <Send size={14} color="#aaffa0" />
+                        )
+                      })}
+                  </div>
+                </div>
+                {/* right: selected user detail + timeline + send */}
+                <div style={statCard}>
+                  {!emUserSel ? <div style={{ padding: '48px 12px', textAlign: 'center', fontSize: '13px', color: 'var(--text-lo)' }}>Select a user to view their email history.</div> : (() => {
+                    const u = emUserSel
+                    const hist = histFor(u.id)
+                    return (<>
+                      <div style={{ marginBottom: '3px', fontSize: '17px', fontWeight: '800', color: '#fff' }}>{nameOf(u)}</div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-lo)', marginBottom: '16px' }}>{u.email || 'no email on file'}</div>
+                      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+                        <button disabled={emSending || !u.email} onClick={() => { if (confirm(`Send Approved Welcome to ${nameOf(u)}?`)) runBroadcast('approved', [u.id]) }} style={{ flex: 1, background: '#aaffa0', color: '#000', border: 'none', borderRadius: '9px', padding: '11px', fontSize: '12px', fontWeight: '700', cursor: emSending || !u.email ? 'default' : 'pointer', fontFamily: 'inherit', opacity: emSending || !u.email ? 0.5 : 1 }}>Approved Welcome</button>
+                        <button disabled={emSending || !u.email} onClick={() => { if (confirm(`Send Weekly Report to ${nameOf(u)}? (skipped if no trades this week)`)) runBroadcast('weekly', [u.id]) }} style={{ flex: 1, background: '#0a0a0a', color: 'var(--text-hi)', border: '1px solid #1f1f1f', borderRadius: '9px', padding: '11px', fontSize: '12px', fontWeight: '600', cursor: emSending || !u.email ? 'default' : 'pointer', fontFamily: 'inherit', opacity: emSending || !u.email ? 0.5 : 1 }}>Weekly Report</button>
+                      </div>
+                      <div style={{ ...lbl, color: '#999', marginBottom: '14px' }}>Email history</div>
+                      {hist.length === 0 ? <div style={{ fontSize: '12px', color: 'var(--text-lo)', padding: '8px 0' }}>No emails sent to this user yet.</div> : (
+                        <div style={{ maxHeight: '360px', overflowY: 'auto' }}>
+                          {hist.map((r, i) => (
+                            <div key={r.id} style={{ display: 'flex', gap: '12px' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
+                                <div style={{ width: '9px', height: '9px', borderRadius: '50%', background: statusColor(r.status), marginTop: '4px' }} />
+                                {i < hist.length - 1 && <div style={{ flex: 1, width: '1.5px', background: '#1a1a1a', marginTop: '3px' }} />}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0, paddingBottom: '16px' }}>
+                                <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-hi)' }}>{typeLabel(r.email_type)}</div>
+                                <div style={{ fontSize: '11px', color: 'var(--text-lo)', marginTop: '2px' }}>{formatDate(r.created_at)} · <span style={{ color: statusColor(r.status), textTransform: 'capitalize' }}>{r.status}</span></div>
+                                {(r.opened_at || r.clicked_at) && (
+                                  <div style={{ display: 'flex', gap: '12px', marginTop: '5px' }}>
+                                    {r.opened_at && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: '#6aa3ff' }}><Eye size={12} /> Opened{r.open_count > 1 ? ` ×${r.open_count}` : ''}</span>}
+                                    {r.clicked_at && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: '#b794f6' }}><MousePointerClick size={12} /> Clicked{r.click_count > 1 ? ` ×${r.click_count}` : ''}</span>}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      )
-                    })}
+                      )}
+                    </>)
+                  })()}
                 </div>
               </div>
             )}
@@ -7226,11 +7344,11 @@ function AdminPanel({ session, setPage }) {
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                     <thead><tr style={{ borderBottom: '1px solid #1f1f1f' }}>
-                      {['Recipient', 'Type', 'Status', 'Sent By', 'Date'].map(h => <th key={h} style={{ textAlign: 'left', padding: '8px 10px', color: '#666', fontWeight: '600', whiteSpace: 'nowrap' }}>{h}</th>)}
+                      {['Recipient', 'Type', 'Status', 'Opened', 'Clicked', 'Sent By', 'Date'].map(h => <th key={h} style={{ textAlign: 'left', padding: '8px 10px', color: '#666', fontWeight: '600', whiteSpace: 'nowrap' }}>{h}</th>)}
                     </tr></thead>
                     <tbody>
-                      {emLogLoading ? <tr><td colSpan={5} style={{ padding: '20px', textAlign: 'center', color: 'var(--text-lo)' }}>Loading…</td></tr> :
-                        logFiltered.length === 0 ? <tr><td colSpan={5} style={{ padding: '20px', textAlign: 'center', color: 'var(--text-lo)' }}>No log entries.</td></tr> :
+                      {emLogLoading ? <tr><td colSpan={7} style={{ padding: '20px', textAlign: 'center', color: 'var(--text-lo)' }}>Loading…</td></tr> :
+                        logFiltered.length === 0 ? <tr><td colSpan={7} style={{ padding: '20px', textAlign: 'center', color: 'var(--text-lo)' }}>No log entries.</td></tr> :
                           logFiltered.slice(0, 300).map(r => {
                             const u = userById.get(r.user_id)
                             return (
@@ -7238,6 +7356,8 @@ function AdminPanel({ session, setPage }) {
                                 <td style={{ padding: '9px 10px' }}><div style={{ color: 'var(--text-hi)', fontWeight: '600' }}>{u ? nameOf(u) : '—'}</div><div style={{ color: 'var(--text-lo)', fontSize: '11px' }}>{r.recipient_email || '—'}</div></td>
                                 <td style={{ padding: '9px 10px', color: 'var(--text-md)', whiteSpace: 'nowrap' }}>{typeLabel(r.email_type)}</td>
                                 <td style={{ padding: '9px 10px' }}><span style={{ color: statusColor(r.status), fontWeight: '700', textTransform: 'capitalize' }}>{r.status}</span></td>
+                                <td style={{ padding: '9px 10px', whiteSpace: 'nowrap' }}>{r.opened_at ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: '#6aa3ff' }}><Eye size={12} /> {formatDate(r.opened_at)}{r.open_count > 1 ? ` ×${r.open_count}` : ''}</span> : <span style={{ color: '#444' }}>—</span>}</td>
+                                <td style={{ padding: '9px 10px', whiteSpace: 'nowrap' }}>{r.clicked_at ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: '#b794f6' }}><MousePointerClick size={12} /> {formatDate(r.clicked_at)}{r.click_count > 1 ? ` ×${r.click_count}` : ''}</span> : <span style={{ color: '#444' }}>—</span>}</td>
                                 <td style={{ padding: '9px 10px', color: 'var(--text-lo)', whiteSpace: 'nowrap' }}>{r.sent_by === 'system' ? 'System' : r.sent_by}</td>
                                 <td style={{ padding: '9px 10px', color: 'var(--text-lo)', whiteSpace: 'nowrap' }}>{formatDate(r.created_at)}</td>
                               </tr>
@@ -7251,31 +7371,6 @@ function AdminPanel({ session, setPage }) {
           </div>
         )
       })()}
-
-      {/* ── Per-user email action modal ── */}
-      {emUserModal && createPortal(
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => !emModalBusy && setEmUserModal(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ width: '90%', maxWidth: '440px', background: '#0d0d0d', border: '1px solid #1f1f1f', borderRadius: '16px', padding: '24px', boxShadow: '0 32px 100px rgba(0,0,0,0.9)', animation: 'modalIn 0.2s ease both' }}>
-            {(() => {
-              const u = emUserModal
-              const nm = [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || u.email || '—'
-              const last = emLog.find(r => r.user_id === u.id)
-              const typeLabel = (t) => ({ approved: 'Approved Welcome', weekly: 'Weekly Report', daily_journaled: 'Daily (logged)', daily_not_journaled: 'Daily (no log)', signup_notification: 'Signup Notify' }[t] || t || '—')
-              return (<>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
-                  <div style={{ fontSize: '17px', fontWeight: '800', color: '#fff' }}>{nm}</div>
-                  <button onClick={() => setEmUserModal(null)} style={{ background: 'transparent', border: 'none', color: '#666', cursor: 'pointer', fontSize: '22px', lineHeight: 1, fontFamily: 'inherit' }}>×</button>
-                </div>
-                <div style={{ fontSize: '12px', color: 'var(--text-lo)', marginBottom: '18px' }}>{u.email || 'no email on file'}</div>
-                <div style={{ fontSize: '10px', color: '#666', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.12em' }}>Last emailed</div>
-                <div style={{ fontSize: '13px', color: last ? 'var(--text-md)' : 'var(--text-lo)', marginBottom: '20px' }}>{last ? `${typeLabel(last.email_type)} · ${last.status} · ${formatDate(last.created_at)}` : 'Never emailed'}</div>
-                <button disabled={emModalBusy || !u.email} onClick={() => { if (confirm(`Send Approved Welcome to ${nm}?`)) runBroadcast('approved', [u.id], true) }} style={{ width: '100%', marginBottom: '10px', background: '#aaffa0', color: '#000', border: 'none', borderRadius: '10px', padding: '12px', fontSize: '13px', fontWeight: '700', cursor: emModalBusy || !u.email ? 'default' : 'pointer', fontFamily: 'inherit', opacity: emModalBusy || !u.email ? 0.5 : 1 }}>Send Approved Welcome</button>
-                <button disabled={emModalBusy || !u.email} onClick={() => { if (confirm(`Send Weekly Report to ${nm}? (skipped if no trades this week)`)) runBroadcast('weekly', [u.id], true) }} style={{ width: '100%', background: '#0a0a0a', color: 'var(--text-hi)', border: '1px solid #1f1f1f', borderRadius: '10px', padding: '12px', fontSize: '13px', fontWeight: '600', cursor: emModalBusy || !u.email ? 'default' : 'pointer', fontFamily: 'inherit', opacity: emModalBusy || !u.email ? 0.5 : 1 }}>Send Weekly Report</button>
-                {emModalBusy && <div style={{ textAlign: 'center', fontSize: '12px', color: '#aaffa0', marginTop: '12px' }}>Sending…</div>}
-              </>)
-            })()}
-          </div>
-        </div>, document.body)}
 
       {/* ── Email compose modal ── */}
       {emailOpen && createPortal(

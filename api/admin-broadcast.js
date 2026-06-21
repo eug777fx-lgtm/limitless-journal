@@ -90,6 +90,10 @@ export default async function handler(req, res) {
     }
 
     // ── Send via Resend batch endpoint, chunked to 100 ──
+    // Open/click tracking is a Resend DOMAIN setting (dashboard → Domains →
+    // limitless-journal.com → enable Open + Click Tracking). It is not a per-send
+    // payload field. We store the returned resend_id below; api/resend-webhook.js
+    // matches Resend's email.opened/clicked/etc. events back to that id.
     for (const group of chunk(toSend, 100)) {
       let data = null, chunkErr = null
       try {
