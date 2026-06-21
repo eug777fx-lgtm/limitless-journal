@@ -2,15 +2,13 @@
 // Imported by api/notify-signup.js, api/daily-email.js, api/weekly-email.js,
 // api/send-approval.js and api/test-emails.js.
 //
-// Dark-email strategy:
-//   • Desktop / Apple Mail render dark via the color-scheme metas + inline colours.
-//   • Gmail mobile ignores those and force-inverts the whole email to a readable
-//     light version — so we DON'T fight it. No bg-image tiles and no dark-forcing
-//     <style>/[data-ogsc] text overrides (a partial override = white-on-white once
-//     Gmail inverts the page). Every cell just keeps its bgcolor + inline
-//     background-color: desktop stays dark, Gmail mobile inverts cleanly to light.
-//   • Tables-only, inline colours everywhere (no <div>, no class-based bg).
-//   • Orphan ll-* classes on text nodes are inert (no matching CSS) — left as-is.
+// Mobile dark-mode strategy (Gmail mobile strips <head><style> entirely):
+//   • EVERY <table> and <td> carries an inline background-color directly on it —
+//     no classes, no reliance on parent inheritance, no priority overrides.
+//   • One full-width black master <table> wraps the centered 580px card (no
+//     <div> anywhere — Gmail mobile drops background-color on divs), so the page
+//     background is solid black edge-to-edge with no white gaps.
+//   • The <head> is minimal (meta only) for the desktop clients that read it.
 //   • Shell is identical across all 6 templates — only the content section differs.
 
 const APP_URL = 'https://app.limitless-journal.com'
@@ -18,17 +16,13 @@ const APP_URL = 'https://app.limitless-journal.com'
 const esc = (s) => String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))
 const usd = (n) => { const v = Math.round(Number(n) || 0); return `${v >= 0 ? '+' : '−'}$${Math.abs(v).toLocaleString()}` }
 
-// Coloured-cell attribute builders: bgcolor attribute + inline background-color on
-// every cell. No background image — Gmail mobile cleanly inverts the whole email
-// to a readable light version; desktop / Apple Mail stay dark via the metas below.
+// Coloured-cell attribute builders: bgcolor attribute + inline background-color
+// directly on the element (no class, no priority overrides).
 const blk = (extra = '') => `bgcolor="#000000" style="background-color:#000000;${extra}"`
 const dk = (extra = '') => `bgcolor="#0d0d0d" style="background-color:#0d0d0d;${extra}"`
 const cd = (extra = '') => `bgcolor="#111111" style="background-color:#111111;${extra}"`
 const wh = (extra = '') => `bgcolor="#ffffff" style="background-color:#ffffff;${extra}"`
 
-// Minimal <head> — meta only, no <style>. The color-scheme metas keep desktop /
-// Apple Mail dark; Gmail mobile ignores them and inverts the whole email to a
-// clean light version. (Orphan ll-* classes on text nodes are inert — kept as-is.)
 const HEAD = `<!DOCTYPE html>
 <html>
 <head>
@@ -42,7 +36,7 @@ const HEAD = `<!DOCTYPE html>
 // Identical for every template; only `inner` changes.
 function page(inner) {
   return `${HEAD}
-<body class="body" style="margin:0;padding:0;background-color:#000000;" bgcolor="#000000">
+<body style="margin:0;padding:0;background-color:#000000;" bgcolor="#000000">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ${blk('width:100%;margin:0;padding:0;')}>
 <tr>
 <td align="center" ${blk('padding:32px 16px;')}>
@@ -53,8 +47,8 @@ function page(inner) {
 <tr>
 <td align="center" ${blk('padding:32px 40px 24px;border-bottom:1px solid #1a1a1a;border-radius:16px 16px 0 0;')}>
 <img src="https://limitless-journal.com/logo2.png" width="48" alt="LIMITLESS" style="display:block;margin:0 auto 14px auto;border:0;width:48px;height:auto;outline:none;text-decoration:none;" />
-<p class="ll-white" style="margin:0;font-size:11px;font-weight:700;color:#ffffff;letter-spacing:0.25em;font-family:Arial,sans-serif;">LIMITLESS</p>
-<p class="ll-dim" style="margin:4px 0 0;font-size:10px;color:#444444;letter-spacing:0.1em;font-family:Arial,sans-serif;">TRADING JOURNAL</p>
+<p style="margin:0;font-size:11px;font-weight:700;color:#ffffff;letter-spacing:0.25em;font-family:Arial,sans-serif;">LIMITLESS</p>
+<p style="margin:4px 0 0;font-size:10px;color:#444444;letter-spacing:0.1em;font-family:Arial,sans-serif;">TRADING JOURNAL</p>
 </td>
 </tr>
 
@@ -68,9 +62,9 @@ ${inner}
 <!-- FOOTER -->
 <tr>
 <td align="center" ${blk('padding:24px 40px;border-top:1px solid #1a1a1a;border-radius:0 0 16px 16px;')}>
-<p class="ll-white" style="margin:0 0 6px;font-size:11px;color:#444444;font-family:Arial,sans-serif;">LIMITLESS Trading Journal</p>
-<a class="ll-green" href="https://limitless-journal.com" style="font-size:11px;color:#aaffa0;text-decoration:none;font-family:Arial,sans-serif;">limitless-journal.com</a>
-<p class="ll-dim" style="margin:10px 0 0;font-size:10px;color:#333333;font-family:Arial,sans-serif;">You're receiving this as a LIMITLESS member.</p>
+<p style="margin:0 0 6px;font-size:11px;color:#444444;font-family:Arial,sans-serif;">LIMITLESS Trading Journal</p>
+<a href="https://limitless-journal.com" style="font-size:11px;color:#aaffa0;text-decoration:none;font-family:Arial,sans-serif;">limitless-journal.com</a>
+<p style="margin:10px 0 0;font-size:10px;color:#333333;font-family:Arial,sans-serif;">You're receiving this as a LIMITLESS member.</p>
 </td>
 </tr>
 
@@ -84,20 +78,17 @@ ${inner}
 }
 
 // ── Brand building blocks (every table & td carries its own inline bg) ────────
-const statCard = (label, value, color, sub) => {
-  const vc = color === '#aaffa0' ? 'll-green' : color === '#ff8080' ? 'll-red' : 'll-white'
-  return `<td width="50%" valign="top" ${dk('padding:6px;')}>
+const statCard = (label, value, color, sub) => `<td width="50%" valign="top" ${dk('padding:6px;')}>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ${dk()}>
     <tr>
       <td align="center" ${cd('border:1px solid #1f1f1f;border-radius:8px;padding:16px;')}>
-        <p class="ll-dim" style="margin:0;color:#888888;font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;">${label}</p>
-        <p class="${vc}" style="margin:8px 0 0;color:${color || '#ffffff'};font-size:24px;font-weight:700;line-height:1.1;">${value}</p>
-        ${sub ? `<p class="ll-dim" style="margin:3px 0 0;color:#777777;font-size:11px;">${esc(sub)}</p>` : ''}
+        <p style="margin:0;color:#888888;font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;">${label}</p>
+        <p style="margin:8px 0 0;color:${color || '#ffffff'};font-size:24px;font-weight:700;line-height:1.1;">${value}</p>
+        ${sub ? `<p style="margin:3px 0 0;color:#777777;font-size:11px;">${esc(sub)}</p>` : ''}
       </td>
     </tr>
   </table>
 </td>`
-}
 
 const accentCard = (border, inner) => `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ${dk('margin-top:22px;')}>
   <tr>
@@ -119,15 +110,15 @@ export function signupNotification(user = {}) {
   const row = (label, value) => {
     const shown = value == null || value === '' ? '—' : esc(value)
     return `<tr>
-      <td class="ll-dim" ${cd('padding:8px 0;color:#888888;font-size:13px;width:130px;')}>${label}</td>
-      <td class="ll-white" align="right" ${cd('padding:8px 0;color:#ffffff;font-size:13px;font-weight:600;')}>${shown}</td>
+      <td ${cd('padding:8px 0;color:#888888;font-size:13px;width:130px;')}>${label}</td>
+      <td align="right" ${cd('padding:8px 0;color:#ffffff;font-size:13px;font-weight:600;')}>${shown}</td>
     </tr>`
   }
   const inner = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ${dk()}>
       <tr><td ${dk()}>
-        <h1 class="ll-white" style="margin:0 0 4px;color:#ffffff;font-size:22px;font-weight:700;">🔔 New Signup — Approval Needed</h1>
-        <p class="ll-dim" style="margin:0 0 22px;color:#888888;font-size:13px;">A new trader just created an account.</p>
+        <h1 style="margin:0 0 4px;color:#ffffff;font-size:22px;font-weight:700;">🔔 New Signup — Approval Needed</h1>
+        <p style="margin:0 0 22px;color:#888888;font-size:13px;">A new trader just created an account.</p>
       </td></tr>
     </table>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ${dk()}>
@@ -159,13 +150,13 @@ export function approvedEmail(user = {}) {
   const inner = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ${dk()}>
       <tr><td align="center" ${dk()}>
-        <p class="ll-green" style="margin:0;font-size:48px;line-height:1;color:#aaffa0;">&#10003;</p>
-        <h1 class="ll-white" style="margin:18px 0 10px;color:#ffffff;font-size:28px;font-weight:700;">You're in, ${esc(name)}.</h1>
-        <p class="ll-dim" style="margin:0 auto;max-width:440px;color:#888888;font-size:16px;line-height:1.6;">Your account is approved and ready. Start journaling your trades and building your edge today.</p>
+        <p style="margin:0;font-size:48px;line-height:1;color:#aaffa0;">&#10003;</p>
+        <h1 style="margin:18px 0 10px;color:#ffffff;font-size:28px;font-weight:700;">You're in, ${esc(name)}.</h1>
+        <p style="margin:0 auto;max-width:440px;color:#888888;font-size:16px;line-height:1.6;">Your account is approved and ready. Start journaling your trades and building your edge today.</p>
       </td></tr>
     </table>
-    ${accentCard('#aaffa0', `<p class="ll-white" style="margin:0 0 10px;color:#ffffff;font-size:14px;font-weight:700;">What to do next</p>
-      <p class="ll-green" style="margin:0;color:#cde8c6;font-size:14px;line-height:1.9;">1. Log your first trade<br>2. Set your monthly goal in settings<br>3. Review your performance weekly</p>`)}
+    ${accentCard('#aaffa0', `<p style="margin:0 0 10px;color:#ffffff;font-size:14px;font-weight:700;">What to do next</p>
+      <p style="margin:0;color:#cde8c6;font-size:14px;line-height:1.9;">1. Log your first trade<br>2. Set your monthly goal in settings<br>3. Review your performance weekly</p>`)}
     ${ctaButton('Go to Your Dashboard →', APP_URL)}`
   return { subject: `You're in, ${name}. Welcome to LIMITLESS.`, html: page(inner) }
 }
@@ -177,16 +168,16 @@ export function dailyJournaledEmail(user = {}, stats = {}) {
   const inner = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ${dk()}>
       <tr><td align="center" ${dk()}>
-        <p class="ll-green" style="margin:0;font-size:48px;line-height:1;color:#aaffa0;">&#10003;</p>
-        <h1 class="ll-white" style="margin:18px 0 10px;color:#ffffff;font-size:28px;font-weight:700;">Great session, ${esc(name)}.</h1>
-        <p class="ll-dim" style="margin:0 auto;max-width:420px;color:#888888;font-size:16px;line-height:1.6;">You showed up. You logged. That's what separates serious traders.</p>
+        <p style="margin:0;font-size:48px;line-height:1;color:#aaffa0;">&#10003;</p>
+        <h1 style="margin:18px 0 10px;color:#ffffff;font-size:28px;font-weight:700;">Great session, ${esc(name)}.</h1>
+        <p style="margin:0 auto;max-width:420px;color:#888888;font-size:16px;line-height:1.6;">You showed up. You logged. That's what separates serious traders.</p>
       </td></tr>
     </table>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ${dk('margin-top:24px;')}>
       <tr>${statCard('Trades Today', String(stats.trades ?? 0))}${statCard("Today's P&amp;L", usd(stats.pnl), (stats.pnl ?? 0) >= 0 ? '#aaffa0' : '#ff8080')}</tr>
       <tr>${statCard('Win Rate', `${stats.winRate ?? 0}%`)}${statCard('Best Trade', stats.bestTrade != null ? usd(stats.bestTrade) : '—', '#aaffa0')}</tr>
     </table>
-    ${accentCard('#aaffa0', `<p class="ll-green" style="margin:0;color:#cde8c6;font-size:15px;line-height:1.65;font-style:italic;">"Every trade logged is data. Every data point builds your edge. Keep going."</p>`)}
+    ${accentCard('#aaffa0', `<p style="margin:0;color:#cde8c6;font-size:15px;line-height:1.65;font-style:italic;">"Every trade logged is data. Every data point builds your edge. Keep going."</p>`)}
     ${ctaButton('View Your Dashboard →', APP_URL)}`
   return { subject: `You showed up today, ${name} ✓`, html: page(inner) }
 }
@@ -197,8 +188,8 @@ export function dailyNoJournalEmail(user = {}) {
   const step = (n, t) => `<tr><td ${dk('padding:7px 0;')}>
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" ${dk()}>
       <tr>
-        <td class="ll-green" width="26" height="26" align="center" valign="middle" ${cd('border:1px solid #1f1f1f;border-radius:50%;color:#aaffa0;font-size:12px;font-weight:700;line-height:26px;')}>${n}</td>
-        <td class="ll-white" valign="middle" ${dk('padding-left:14px;color:#dddddd;font-size:15px;')}>${esc(t)}</td>
+        <td width="26" height="26" align="center" valign="middle" ${cd('border:1px solid #1f1f1f;border-radius:50%;color:#aaffa0;font-size:12px;font-weight:700;line-height:26px;')}>${n}</td>
+        <td valign="middle" ${dk('padding-left:14px;color:#dddddd;font-size:15px;')}>${esc(t)}</td>
       </tr>
     </table>
   </td></tr>`
@@ -206,11 +197,11 @@ export function dailyNoJournalEmail(user = {}) {
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ${dk()}>
       <tr><td align="center" ${dk()}>
         <p style="margin:0;font-size:44px;line-height:1;">&#128197;</p>
-        <h1 class="ll-white" style="margin:16px 0 10px;color:#ffffff;font-size:28px;font-weight:700;">Did you trade today, ${esc(name)}?</h1>
-        <p class="ll-dim" style="margin:0 auto;max-width:440px;color:#888888;font-size:16px;line-height:1.6;">Unlogged trades are missed lessons. Your edge lives in the data.</p>
+        <h1 style="margin:16px 0 10px;color:#ffffff;font-size:28px;font-weight:700;">Did you trade today, ${esc(name)}?</h1>
+        <p style="margin:0 auto;max-width:440px;color:#888888;font-size:16px;line-height:1.6;">Unlogged trades are missed lessons. Your edge lives in the data.</p>
       </td></tr>
     </table>
-    ${accentCard('#f59e0b', `<p class="ll-amber" style="margin:0;color:#e0b877;font-size:15px;line-height:1.6;">Every session you don't review is a session you can't learn from.</p>`)}
+    ${accentCard('#f59e0b', `<p style="margin:0;color:#e0b877;font-size:15px;line-height:1.6;">Every session you don't review is a session you can't learn from.</p>`)}
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ${dk('margin-top:22px;')}>
       ${step('1', 'Open your journal')}
       ${step('2', 'Log what happened')}
@@ -218,8 +209,8 @@ export function dailyNoJournalEmail(user = {}) {
     </table>
     ${ctaButton("Log Today's Trades →", APP_URL)}
     ${accentCard('#444444', `
-      <p class="ll-white" style="margin:0 0 6px;color:#ffffff;font-size:15px;font-weight:700;">Didn't trade today? Good.</p>
-      <p class="ll-dim" style="margin:0;color:#888888;font-size:14px;line-height:1.7;">Not every day has a valid setup. Protecting capital IS trading well.</p>`)}`
+      <p style="margin:0 0 6px;color:#ffffff;font-size:15px;font-weight:700;">Didn't trade today? Good.</p>
+      <p style="margin:0;color:#888888;font-size:14px;line-height:1.7;">Not every day has a valid setup. Protecting capital IS trading well.</p>`)}`
   return { subject: `Don't let today slip away, ${name}`, html: page(inner) }
 }
 
@@ -229,16 +220,15 @@ function weeklyBody(name, stats, variant) {
   const pnl = stats.pnl ?? 0
   const pnlColor = pnl >= 0 ? '#aaffa0' : '#ff8080'
   const accent = variant === 'loss' ? '#ef4444' : '#aaffa0'
-  const accentClass = variant === 'loss' ? 'll-red' : 'll-green'
   const message = variant === 'loss'
     ? 'Tough week. Review your losses honestly — the data will show you why. Protect capital, then reset for Monday.'
     : 'Profitable week. The process is working. Keep executing with discipline.'
   const inner = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ${dk()}>
       <tr><td align="center" ${dk()}>
-        <p class="ll-green" style="margin:0;font-size:11px;font-weight:700;letter-spacing:0.22em;color:#aaffa0;text-transform:uppercase;">Week in Review</p>
-        <p class="ll-dim" style="margin:8px 0 0;color:#888888;font-size:14px;">${esc(stats.dateRange || '')}</p>
-        <h1 class="ll-white" style="margin:14px 0 0;color:#ffffff;font-size:28px;font-weight:700;">Here's how your week looked, ${esc(name)}.</h1>
+        <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:0.22em;color:#aaffa0;text-transform:uppercase;">Week in Review</p>
+        <p style="margin:8px 0 0;color:#888888;font-size:14px;">${esc(stats.dateRange || '')}</p>
+        <h1 style="margin:14px 0 0;color:#ffffff;font-size:28px;font-weight:700;">Here's how your week looked, ${esc(name)}.</h1>
       </td></tr>
     </table>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ${dk('margin-top:24px;')}>
@@ -246,18 +236,18 @@ function weeklyBody(name, stats, variant) {
       <tr>${statCard('Total Trades', String(stats.trades ?? 0))}${statCard('Avg R:R', stats.avgRR ? Number(stats.avgRR).toFixed(1) : '—')}</tr>
       <tr>${statCard('Best Trade', stats.bestTrade != null ? usd(stats.bestTrade) : '—', '#aaffa0')}${statCard('Most Traded', stats.mostTraded || '—')}</tr>
     </table>
-    ${accentCard(accent, `<p class="${accentClass}" style="margin:0;color:${accent};font-size:15px;font-weight:600;line-height:1.6;">${esc(message)}</p>`)}
+    ${accentCard(accent, `<p style="margin:0;color:${accent};font-size:15px;font-weight:600;line-height:1.6;">${esc(message)}</p>`)}
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ${dk('margin-top:14px;')}>
       <tr>
-        <td class="ll-dim" align="center" ${cd('border:1px solid #1f1f1f;border-radius:8px;padding:16px;color:#888888;font-size:13px;line-height:1.7;')}>
-          Wins: <b class="ll-green" style="color:#aaffa0;">${stats.wins ?? 0}</b> · Losses: <b class="ll-red" style="color:#ff8080;">${stats.losses ?? 0}</b> · Most Traded: <b class="ll-white" style="color:#ffffff;">${esc(stats.mostTraded || '—')}</b>
+        <td align="center" ${cd('border:1px solid #1f1f1f;border-radius:8px;padding:16px;color:#888888;font-size:13px;line-height:1.7;')}>
+          Wins: <b style="color:#aaffa0;">${stats.wins ?? 0}</b> · Losses: <b style="color:#ff8080;">${stats.losses ?? 0}</b> · Most Traded: <b style="color:#ffffff;">${esc(stats.mostTraded || '—')}</b>
         </td>
       </tr>
     </table>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ${dk('margin-top:24px;')}>
       <tr>
-        <td class="ll-dim" align="center" ${dk('color:#888888;font-size:14px;line-height:1.8;')}>
-          Stay focused on process.<br>One valid setup at a time.<br><span class="ll-green" style="color:#aaffa0;">See you next week.</span>
+        <td align="center" ${dk('color:#888888;font-size:14px;line-height:1.8;')}>
+          Stay focused on process.<br>One valid setup at a time.<br><span style="color:#aaffa0;">See you next week.</span>
         </td>
       </tr>
     </table>
