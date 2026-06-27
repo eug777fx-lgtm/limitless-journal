@@ -2487,16 +2487,19 @@ function TradeDetailModal({ trade, onClose, onSave, demoMode = false, readOnly =
                   style={{ width: '100%', height: chartUrls.length === 1 ? '200px' : '180px', objectFit: 'cover', display: 'block' }}
                 />
                 </div>
+{!readOnly && (
                 <button
                   onClick={() => removeChart(idx)}
                   style={{ position: 'absolute', top: '6px', right: '6px', width: '20px', height: '20px', borderRadius: '50%', background: 'rgba(0,0,0,0.7)', border: '1px solid #555', color: '#ccc', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit', lineHeight: 1, padding: 0 }}
                 >✕</button>
+)}
               </div>
             ))}
           </div>
         )}
 
         {/* Upload button */}
+        {!readOnly && (
         <div style={{ marginBottom: '22px' }}>
           <input ref={fileRef} type="file" accept="image/*" multiple onChange={uploadCharts} style={{ display: 'none' }} />
           {chartUrls.length < 5 && (
@@ -2509,6 +2512,7 @@ function TradeDetailModal({ trade, onClose, onSave, demoMode = false, readOnly =
             </button>
           )}
         </div>
+)}
 
         </fieldset>
 
