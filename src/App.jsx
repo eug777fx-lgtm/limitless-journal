@@ -16,11 +16,18 @@ import {
   Bell, Megaphone, Link2, Download, ChevronDown, RefreshCw, LogOut,
   Mail, Ban, Flag, Activity, MessageSquare, Save, Send, Eye, MousePointerClick,
   Globe, Video, Flame, Play, Clock, Award, Heart,
-  Trophy, FileText, ExternalLink, Calendar, Brain,
+  Trophy, FileText, ExternalLink, Calendar, Brain, Crown,
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import { TOSPage } from './TOS.jsx'
 import { CopyTraderPage } from './CopyTrader.jsx'
+
+// ─── Beta Closed mode ─────────────────────────────────────────
+// When true, new signups are placed on a waitlist (status='waitlist') instead
+// of the normal pending-approval queue, and are shown the WaitlistScreen with
+// no app access. Existing approved users keep full access, and valid invite
+// links still auto-approve. Flip to false to reopen the beta.
+const BETA_CLOSED = true
 
 // ─── Global CSS ───────────────────────────────────────────────
 const ANIM_CSS = `
@@ -656,6 +663,18 @@ function notifySignup({ firstName, lastName, email, phone }) {
   } catch { /* ignore */ }
 }
 
+// Fire-and-forget "you're on the waitlist" email to a brand-new signup while
+// the beta is closed. Mirrors notifySignup — best-effort, never blocks signup.
+function notifyWaitlist({ firstName, email }) {
+  try {
+    fetch('/api/notify-waitlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ firstName, email }),
+    }).catch(() => {})
+  } catch { /* ignore */ }
+}
+
 function AuthPage({ onAuth }) {
   const [tab, setTab]           = useState('signup')
   const [view, setView]         = useState('auth') // 'auth' | 'forgot'
@@ -670,6 +689,8 @@ function AuthPage({ onAuth }) {
   const [loading, setLoading]   = useState(false)
   const [inviteCode, setInviteCode] = useState(null)
   const [inviteValid, setInviteValid] = useState(null) // null | true | false
+  // Beta-closed: null | 'instant' (session created) | 'confirm' (email confirm needed)
+  const [waitlisted, setWaitlisted] = useState(null)
 
   // Detect ?invite=XXX in URL and validate it
   useEffect(() => {
@@ -724,11 +745,16 @@ function AuthPage({ onAuth }) {
           const { data: inv } = await supabase.from('invites').select('code,used_at').eq('code', inviteCode).maybeSingle()
           autoApprove = !!inv && !inv.used_at
         }
+        // Beta closed → new signups go on the waitlist (no access), unless they
+        // arrived through a valid invite link (those still auto-approve).
+        const goWaitlist = BETA_CLOSED && !autoApprove
         const { data, error } = await supabase.auth.signUp({ email, password })
         if (error) throw error
         const phone = phoneNum ? `${country.code} ${phoneNum}` : null
         // Notify the admin a new account was created (works for both confirm paths).
         notifySignup({ firstName, lastName, email, phone })
+        // Let the user know they're on the waitlist instead of the pending email.
+        if (goWaitlist) notifyWaitlist({ firstName, email })
         if (data.session) {
           const userId = data.session.user.id
           await supabase.from('profiles').upsert({
@@ -736,16 +762,26 @@ function AuthPage({ onAuth }) {
             first_name: firstName || null,
             last_name:  lastName  || null,
             phone:      phone,
-            ...(autoApprove ? { status: 'approved' } : {}),
+            ...(autoApprove ? { status: 'approved' } : goWaitlist ? { status: 'waitlist' } : {}),
           }, { onConflict: 'id' })
           if (autoApprove) {
             await supabase.from('invites').update({ used_at: new Date().toISOString(), used_by: userId }).eq('code', inviteCode).is('used_at', null)
           }
-          onAuth(data.session)
+          if (goWaitlist) {
+            // Don't sign them into the app — show the waitlist screen instead.
+            setWaitlisted('instant')
+          } else {
+            onAuth(data.session)
+          }
         } else {
-          // Email confirm required — defer invite to first login
+          // Email confirm required — defer invite / waitlist to first login
           if (autoApprove) {
             try { localStorage.setItem('pending_invite', inviteCode) } catch {}
+          }
+          if (goWaitlist) {
+            try { localStorage.setItem('pending_waitlist', '1') } catch {}
+            setWaitlisted('confirm')
+            return
           }
           setMessage('Account created — check your email to confirm, then log in.')
           setTab('login')
@@ -759,6 +795,16 @@ function AuthPage({ onAuth }) {
   }
 
   const onKey = (e) => { if (e.key === 'Enter') submit() }
+
+  // Beta closed: after a fresh signup, replace the auth card with the waitlist screen.
+  if (waitlisted) {
+    return (
+      <WaitlistScreen
+        pendingConfirm={waitlisted === 'confirm'}
+        onBack={() => { setWaitlisted(null); setTab('login'); setError(''); setMessage('') }}
+      />
+    )
+  }
 
   const switchTab = (t) => { setTab(t); setError(''); setMessage('') }
 
@@ -1335,6 +1381,65 @@ function PendingScreen({ onLogout }) {
           >
             Log out
           </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Waitlist Screen (Beta Closed) ────────────────────────────
+// Shown to new signups while BETA_CLOSED is true. `onLogout` is passed when the
+// user is signed in (the app-level gate); `onBack` returns to the auth card
+// straight after signup. `pendingConfirm` adds the confirm-your-email note.
+function WaitlistScreen({ onLogout, onBack, pendingConfirm = false }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100vw', height: '100vh', background: '#080808', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif", position: 'relative', overflowY: 'auto' }}>
+      <style dangerouslySetInnerHTML={{ __html: ANIM_CSS }} />
+      <AuroraBackground theme="white" />
+      <div style={{ position: 'relative', zIndex: 2, textAlign: 'center', animation: 'pageFade 0.3s ease both', margin: '40px auto', padding: '0 16px' }}>
+        <img src="/logo2.png" alt="logo" style={{ height: '64px', display: 'block', margin: '0 auto 16px' }} />
+        <div style={{ fontSize: '22px', fontWeight: '800', letterSpacing: '0.22em', color: '#fff', lineHeight: 1 }}>LIMITLESS</div>
+        <div style={{ fontSize: '9px', color: '#444', letterSpacing: '0.3em', marginTop: '7px', textTransform: 'uppercase', fontWeight: '600', marginBottom: '40px' }}>Trading Journal</div>
+
+        <div style={{ background: 'rgba(10,10,10,0.85)', border: '1px solid #1c1c1c', borderRadius: '18px', padding: '40px 44px', maxWidth: '440px', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}>
+          {/* Crown badge */}
+          <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(255,217,102,0.08)', border: '1px solid rgba(255,217,102,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 22px', boxShadow: '0 0 0 6px rgba(255,217,102,0.04)' }}>
+            <Crown size={26} color="#ffd966" />
+          </div>
+
+          <div style={{ fontSize: '11px', fontWeight: '700', letterSpacing: '0.18em', textTransform: 'uppercase', color: '#ffd966', marginBottom: '12px' }}>Beta is Full</div>
+          <div style={{ fontSize: '23px', fontWeight: '800', color: '#fff', marginBottom: '14px', letterSpacing: '-0.5px', lineHeight: 1.2 }}>You're on the waitlist</div>
+
+          <div style={{ fontSize: '13px', color: '#999', lineHeight: 1.8, marginBottom: '8px' }}>
+            We've reached our <span style={{ color: '#fff', fontWeight: '600' }}>100 beta traders</span>. Subscriptions are coming soon.
+          </div>
+          <div style={{ fontSize: '13px', color: '#888', lineHeight: 1.8, marginBottom: pendingConfirm ? '20px' : '28px' }}>
+            You'll be the first to know when spots open — <span style={{ color: '#aaffa0', fontWeight: '600' }}>we'll email you</span>.
+          </div>
+
+          {pendingConfirm && (
+            <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid #1c1c1c', borderRadius: '10px', padding: '12px 16px', fontSize: '12px', color: '#888', lineHeight: 1.6, marginBottom: '28px' }}>
+              One more thing — confirm your email using the link we just sent so we can reach you.
+            </div>
+          )}
+
+          {onLogout ? (
+            <button
+              onClick={onLogout}
+              style={{ background: 'transparent', border: '1px solid #2a2a2a', borderRadius: '8px', color: '#666', fontSize: '12px', padding: '9px 28px', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s', letterSpacing: '0.04em' }}
+              className="action-btn"
+            >
+              Log out
+            </button>
+          ) : onBack ? (
+            <button
+              onClick={onBack}
+              style={{ background: 'transparent', border: '1px solid #2a2a2a', borderRadius: '8px', color: '#888', fontSize: '12px', padding: '9px 28px', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s', letterSpacing: '0.04em' }}
+              className="action-btn"
+            >
+              Back to login
+            </button>
+          ) : null}
         </div>
       </div>
     </div>
@@ -2174,7 +2279,7 @@ async function uploadImages(files, userId) {
 }
 
 // ─── Trade Detail Modal ───────────────────────────────────────
-function TradeDetailModal({ trade, onClose, onSave, demoMode = false }) {
+function TradeDetailModal({ trade, onClose, onSave, demoMode = false, readOnly = false }) {
   const [form, setForm] = useState({
     symbol:          trade.symbol          || '',
     dir:             trade.direction       || 'Long',
@@ -2271,10 +2376,11 @@ function TradeDetailModal({ trade, onClose, onSave, demoMode = false }) {
       >
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-          <div style={{ fontSize: '18px', fontWeight: '800', letterSpacing: '-0.5px', color: '#fff' }}>Edit Trade</div>
+          <div style={{ fontSize: '18px', fontWeight: '800', letterSpacing: '-0.5px', color: '#fff' }}>{readOnly ? 'Trade Details' : 'Edit Trade'}</div>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', fontSize: '22px', lineHeight: 1, padding: '0 4px' }}>✕</button>
         </div>
 
+        <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
         {/* Symbol · Direction · Date · Session */}
         <div className="form-grid-4">
           <div>
@@ -2404,12 +2510,18 @@ function TradeDetailModal({ trade, onClose, onSave, demoMode = false }) {
           )}
         </div>
 
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button style={{ ...btn, flex: 1, opacity: saving ? 0.6 : 1 }} onClick={save} disabled={saving}>
-            {saving ? 'Saving…' : 'Save Changes'}
-          </button>
-          <button style={{ ...btn, background: 'transparent', color: '#888', border: '1px solid #1c1c1c' }} onClick={onClose}>Cancel</button>
-        </div>
+        </fieldset>
+
+        {readOnly ? (
+          <button style={{ ...btn, width: '100%', background: 'transparent', color: '#aaa', border: '1px solid #1c1c1c' }} onClick={onClose}>Close</button>
+        ) : (
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button style={{ ...btn, flex: 1, opacity: saving ? 0.6 : 1 }} onClick={save} disabled={saving}>
+              {saving ? 'Saving…' : 'Save Changes'}
+            </button>
+            <button style={{ ...btn, background: 'transparent', color: '#888', border: '1px solid #1c1c1c' }} onClick={onClose}>Cancel</button>
+          </div>
+        )}
       </div>
     </div>
     </>,
@@ -2850,7 +2962,7 @@ function AddTradeModal({ open, onClose, session, onTradeAdded }) {
 }
 
 // ─── Trade Log ────────────────────────────────────────────────
-function Trades({ trades, session, onTradeAdded, onTradeDeleted, onTradeUpdated, onAddTrade, loading, demoMode = false }) {
+function Trades({ trades, session, onTradeAdded, onTradeDeleted, onTradeUpdated, onAddTrade, loading, demoMode = false, readOnly = false }) {
   if (loading) return <TradesSkeleton />
   const [selectedTrade, setSelectedTrade] = useState(null)
   const [csvPreview, setCsvPreview]     = useState(null)
@@ -2946,6 +3058,7 @@ function Trades({ trades, session, onTradeAdded, onTradeDeleted, onTradeUpdated,
         <div>
           <h1 style={{ fontSize: '28px', fontWeight: '800', letterSpacing: '-1px' }}>Trade Log</h1>
         </div>
+        {!readOnly && (
         <div style={{ display: 'flex', gap: '8px' }}>
           <input ref={csvInputRef} type="file" accept=".csv" onChange={handleCSVFile} style={{ display: 'none' }} />
           <button
@@ -2958,6 +3071,7 @@ function Trades({ trades, session, onTradeAdded, onTradeDeleted, onTradeUpdated,
             + Add Trade
           </button>
         </div>
+        )}
       </div>
 
       {/* CSV success banner */}
@@ -3075,7 +3189,7 @@ function Trades({ trades, session, onTradeAdded, onTradeDeleted, onTradeUpdated,
                       <td style={TD}><span style={resultStyle}>{resultLabel}</span></td>
                       <td style={TD}>
                         <div style={{ display: 'flex', gap: '4px', alignItems: 'center', justifyContent: 'flex-end' }}>
-                          {isAdmin && !demoMode && (
+                          {!readOnly && isAdmin && !demoMode && (
                             <button
                               onClick={e => { e.stopPropagation(); featureTrade(t) }}
                               style={{ background: 'transparent', border: '1px solid transparent', color: '#5a4500', fontSize: '13px', cursor: 'pointer', padding: '3px 6px', borderRadius: '6px', fontFamily: 'inherit', transition: 'all 0.15s', minHeight: 'auto', lineHeight: 1 }}
@@ -3084,12 +3198,14 @@ function Trades({ trades, session, onTradeAdded, onTradeDeleted, onTradeUpdated,
                               title="Feature in Hall of Fame"
                             >🏆</button>
                           )}
+                          {!readOnly && (
                           <button
                             className="del-btn"
                             onClick={e => { e.stopPropagation(); deleteTrade(t.id) }}
                             style={{ background: 'transparent', border: '1px solid transparent', color: '#444', fontSize: '11px', cursor: 'pointer', padding: '3px 8px', borderRadius: '6px', fontFamily: 'inherit', transition: 'all 0.15s' }}
                             title="Delete trade"
                           >✕</button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -3107,6 +3223,7 @@ function Trades({ trades, session, onTradeAdded, onTradeDeleted, onTradeUpdated,
           onClose={() => setSelectedTrade(null)}
           onSave={updated => { onTradeUpdated(updated); setSelectedTrade(null) }}
           demoMode={demoMode}
+          readOnly={readOnly}
         />
       )}
     </div>
@@ -5859,7 +5976,7 @@ function CountUp({ value, duration = 900, suffix = '' }) {
   return <>{n.toLocaleString()}{suffix}</>
 }
 
-function AdminPanel({ session, setPage }) {
+function AdminPanel({ session, setPage, onViewUser }) {
   const [tab,          setTab]          = useState('overview') // 'overview' | 'waitlist' | 'tickets' | 'health'
   const [users,        setUsers]        = useState([])
   const [trades,       setTrades]       = useState([])
@@ -6177,10 +6294,12 @@ function AdminPanel({ session, setPage }) {
   }
 
   // ── Bulk actions ──
+  // Approves everyone currently "waiting" — both legacy pending users and the
+  // beta-closed waitlist. Grants them full access (status → approved).
   const bulkApprove = async () => {
-    const ids = users.filter(u => (u.status || 'pending') === 'pending').map(u => u.id)
+    const ids = users.filter(u => { const s = u.status || 'pending'; return s === 'pending' || s === 'waitlist' }).map(u => u.id)
     if (ids.length === 0) return
-    if (!confirm(`Approve all ${ids.length} pending users?`)) return
+    if (!confirm(`Approve all ${ids.length} waiting ${ids.length === 1 ? 'user' : 'users'}? They'll get full access.`)) return
     try {
       const { error } = await supabase.from('profiles').update({ status: 'approved' }).in('id', ids)
       if (error) throw error
@@ -6242,6 +6361,7 @@ function AdminPanel({ session, setPage }) {
   const totalUsers    = users.length
   const pendingUsers  = users.filter(u => u.status === 'pending').length
   const approvedUsers = users.filter(u => u.status === 'approved').length
+  const waitlistUsers = users.filter(u => u.status === 'waitlist').length
   const totalTrades   = trades.length
   const totalPnlAll   = trades.reduce((s, t) => s + (Number(t.pnl) || 0), 0)
   const todayKey      = new Date().toISOString().slice(0, 10)
@@ -6306,7 +6426,9 @@ function AdminPanel({ session, setPage }) {
         ? { bg: 'rgba(255,128,128,0.08)', border: 'rgba(255,128,128,0.25)', color: '#ff8080', label: 'Rejected' }
         : s === 'banned'
           ? { bg: 'rgba(80,80,80,0.15)', border: 'rgba(180,180,180,0.25)', color: '#bbb', label: 'Banned' }
-          : { bg: 'rgba(255,217,102,0.08)', border: 'rgba(255,217,102,0.25)', color: '#ffd966', label: 'Pending' }
+          : s === 'waitlist'
+            ? { bg: 'rgba(124,201,255,0.08)', border: 'rgba(124,201,255,0.25)', color: '#7cc9ff', label: 'Waitlist' }
+            : { bg: 'rgba(255,217,102,0.08)', border: 'rgba(255,217,102,0.25)', color: '#ffd966', label: 'Pending' }
     return (
       <span style={{
         background: cfg.bg, border: `1px solid ${cfg.border}`,
@@ -6415,7 +6537,7 @@ function AdminPanel({ session, setPage }) {
         {[
           { id: 'overview', label: 'Overview',  icon: BarChart2 },
           { id: 'users',    label: 'Users',     icon: Users },
-          { id: 'waitlist', label: 'Waitlist',  icon: Users, badge: pendingUsers || 0 },
+          { id: 'waitlist', label: 'Waitlist',  icon: Crown, badge: waitlistUsers || 0 },
           { id: 'tickets',  label: 'Tickets',   icon: MessageSquare, badge: tickets.filter(t => t.status === 'open').length },
           ...(isSuper ? [{ id: 'emails', label: 'Emails', icon: Mail }] : []),
           { id: 'health',   label: 'Health',    icon: Activity },
@@ -6452,7 +6574,9 @@ function AdminPanel({ session, setPage }) {
       <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px' }}>
         {[
           { label: 'Total Users',      val: totalUsers,    Icon: Users,         color: '#fff',    iconColor: '#aaa',    accent: 'rgba(255,255,255,0.06)' },
-          { label: 'Pending Approval', val: pendingUsers,  Icon: Bell,          color: '#ffd966', iconColor: '#ffd966', accent: 'rgba(255,217,102,0.10)', highlight: pendingUsers > 0 },
+          BETA_CLOSED
+            ? { label: 'On Waitlist',     val: waitlistUsers, Icon: Crown,         color: '#7cc9ff', iconColor: '#7cc9ff', accent: 'rgba(124,201,255,0.10)', highlight: waitlistUsers > 0 }
+            : { label: 'Pending Approval', val: pendingUsers,  Icon: Bell,          color: '#ffd966', iconColor: '#ffd966', accent: 'rgba(255,217,102,0.10)', highlight: pendingUsers > 0 },
           { label: 'Approved Users',   val: approvedUsers, Icon: Check,         color: '#aaffa0', iconColor: '#aaffa0', accent: 'rgba(170,255,160,0.08)' },
           { label: 'Total Trades',     val: totalTrades,   Icon: BarChart2,     color: '#fff',    iconColor: '#aaa',    accent: 'rgba(255,255,255,0.06)' },
         ].map(s => {
@@ -6488,7 +6612,7 @@ function AdminPanel({ session, setPage }) {
               {users.slice(0, 5).map(u => {
                 const fullName = [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || u.email || '—'
                 const busy = actioning === u.id
-                const isPending = (u.status || 'pending') === 'pending'
+                const isPending = ['pending', 'waitlist'].includes(u.status || 'pending')
                 return (
                   <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 0', borderBottom: '1px solid #141414' }}>
                     <div style={{ width: '34px', height: '34px', borderRadius: '50%', background: '#141414', border: '1px solid #222', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', color: '#aaa', flexShrink: 0 }}>{initialsOf(u)}</div>
@@ -6709,6 +6833,7 @@ function AdminPanel({ session, setPage }) {
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
           {[
             { id: 'all',      label: 'All',      n: users.length    },
+            { id: 'waitlist', label: 'Waitlist', n: waitlistUsers   },
             { id: 'pending',  label: 'Pending',  n: pendingUsers    },
             { id: 'approved', label: 'Approved', n: approvedUsers   },
             { id: 'rejected', label: 'Rejected', n: users.filter(u => u.status === 'rejected').length },
@@ -6868,6 +6993,7 @@ function AdminPanel({ session, setPage }) {
                         </td>
                         <td style={{ padding: '12px 16px' }} onClick={e => e.stopPropagation()}>
                           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            <button onClick={() => onViewUser && onViewUser(u)} disabled={busy} title="View this user's dashboard (read-only)" style={{ background: 'rgba(255,193,7,0.08)', border: '1px solid rgba(255,193,7,0.25)', color: '#ffc107', borderRadius: '6px', padding: '5px 9px', fontSize: '11px', fontWeight: '600', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', display: 'flex', alignItems: 'center', gap: '4px', opacity: busy ? 0.6 : 1 }}><Eye size={11} /> View</button>
                             {u.status !== 'approved' && (
                               <button onClick={() => updateStatus(u.id, 'approved')} disabled={busy} style={{ background: 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', color: '#aaffa0', borderRadius: '6px', padding: '5px 11px', fontSize: '11px', fontWeight: '600', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', opacity: busy ? 0.6 : 1 }}>Approve</button>
                             )}
@@ -6961,8 +7087,9 @@ function AdminPanel({ session, setPage }) {
 
       {/* ── Waitlist tab ── */}
       {tab === 'waitlist' && (() => {
-        const pendingAll = users.filter(u => (u.status || 'pending') === 'pending')
-        const sorted = [...pendingAll].sort((a, b) => {
+        // Beta-closed waitlist + any legacy pending users still awaiting a decision.
+        const waitlistAll = users.filter(u => { const s = u.status || ''; return s === 'waitlist' || s === 'pending' })
+        const sorted = [...waitlistAll].sort((a, b) => {
           if (waitSort === 'name') {
             const an = (a.first_name || a.username || a.email || '').toLowerCase()
             const bn = (b.first_name || b.username || b.email || '').toLowerCase()
@@ -6974,7 +7101,7 @@ function AdminPanel({ session, setPage }) {
           <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-hi)' }}>{pendingAll.length} awaiting approval</div>
+                <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-hi)' }}>{waitlistAll.length} {waitlistAll.length === 1 ? 'person' : 'people'} waiting</div>
                 <select
                   value={waitSort}
                   onChange={e => setWaitSort(e.target.value)}
@@ -6986,10 +7113,10 @@ function AdminPanel({ session, setPage }) {
               </div>
               <button
                 onClick={bulkApprove}
-                disabled={pendingAll.length === 0}
-                style={{ background: pendingAll.length === 0 ? 'transparent' : 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', color: pendingAll.length === 0 ? '#444' : '#aaffa0', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: '600', cursor: pendingAll.length === 0 ? 'not-allowed' : 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px' }}
+                disabled={waitlistAll.length === 0}
+                style={{ background: waitlistAll.length === 0 ? 'transparent' : 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', color: waitlistAll.length === 0 ? '#444' : '#aaffa0', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: '600', cursor: waitlistAll.length === 0 ? 'not-allowed' : 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px' }}
               >
-                <Check size={13} /> Approve All Pending
+                <Check size={13} /> Approve All
               </button>
             </div>
 
@@ -6997,7 +7124,7 @@ function AdminPanel({ session, setPage }) {
               {sorted.length === 0 ? (
                 <div style={{ padding: '48px 24px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
                   <Check size={28} color="#aaffa0" />
-                  <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-hi)' }}>No pending users</div>
+                  <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-hi)' }}>Nobody waiting</div>
                   <div style={{ fontSize: '12px', color: 'var(--text-lo)' }}>The waitlist is clear</div>
                 </div>
               ) : sorted.map(u => {
@@ -7433,6 +7560,27 @@ export default function App() {
   const [glassMode,      setGlassMode]      = useState(() => localStorage.getItem('glass_mode') === 'true')
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
 
+  // ── Admin "View as user" (read-only impersonation) ──
+  const [viewUser,    setViewUser]    = useState(null)        // merged profile of the user being viewed, or null
+  const [viewTrades,  setViewTrades]  = useState([])
+  const [viewLoading, setViewLoading] = useState(false)
+  const [viewTab,     setViewTab]     = useState('dashboard') // 'dashboard' | 'trades' | 'plan'
+
+  const enterViewAs = async (u) => {
+    if (!isAnyAdmin(session?.user?.email)) return // hard gate
+    setViewUser(u); setViewTab('dashboard'); setViewTrades([]); setViewLoading(true)
+    try {
+      const [tradesRes, profRes] = await Promise.all([
+        supabase.from('trades').select('*').eq('user_id', u.id).order('trade_date', { ascending: false }),
+        supabase.from('profiles').select('*').eq('id', u.id).maybeSingle(),
+      ])
+      setViewTrades(tradesRes.data || [])
+      if (profRes.data) setViewUser((prev) => ({ ...(prev || {}), ...profRes.data, email: prev?.email }))
+    } catch (e) { console.error('view-as load failed:', e) }
+    finally { setViewLoading(false) }
+  }
+  const exitViewAs = () => { setViewUser(null); setViewTrades([]); setViewLoading(false) }
+
   // ── Premium boot loader (defined in index.html) — fade out once auth resolves ──
   useEffect(() => {
     if (authLoading) return // keep showing until we know logged-in or not
@@ -7529,6 +7677,21 @@ export default function App() {
       try { localStorage.removeItem('pending_invite') } catch {}
     }
 
+    // Beta-closed: a signup that needed email confirmation lands on the waitlist
+    // the first time it logs in (mirrors the deferred-invite handling above).
+    // Only touches brand-new / pending profiles — never an approved user.
+    let pendingWaitlist = null
+    try { pendingWaitlist = localStorage.getItem('pending_waitlist') } catch {}
+    if (pendingWaitlist) {
+      if (data && (!data.status || data.status === 'pending')) {
+        try {
+          await supabase.from('profiles').update({ status: 'waitlist' }).eq('id', sess.user.id)
+          data = { ...data, status: 'waitlist' }
+        } catch {}
+      }
+      try { localStorage.removeItem('pending_waitlist') } catch {}
+    }
+
     setProfile(data)
     if (data.theme)      setTheme(data.theme)
     if (data.color_mode) setColorMode(data.color_mode)
@@ -7621,6 +7784,11 @@ export default function App() {
   // ── Banned gate (admins still get access) ──
   if (profile.status === 'banned' && !isAnyAdmin(session?.user?.email)) {
     return <BannedScreen onLogout={logout} />
+  }
+
+  // ── Waitlist gate (beta closed — admins still get access) ──
+  if (profile.status === 'waitlist' && !isAnyAdmin(session?.user?.email)) {
+    return <WaitlistScreen onLogout={logout} />
   }
 
   // ── Approval gate ──
@@ -7956,7 +8124,7 @@ export default function App() {
         {page === 'copy'        && isSuperAdmin(session?.user?.email) && <CopyTraderPage />}
         {page === 'plan'        && <TradingPlan flags={featureFlags} />}
         {page === 'settings'    && <Settings theme={theme} setTheme={handleSetTheme} session={session} profile={profile} setProfile={setProfile} glassMode={glassMode} setGlassMode={v => { setGlassMode(v); localStorage.setItem('glass_mode', v) }} onLogout={logout} trades={effectiveTrades} demoMode={demoMode} setDemoMode={setDemoMode} setTrades={setTrades} setPage={setPage} />}
-        {page === 'admin'       && <AdminPanel session={session} setPage={setPage} />}
+        {page === 'admin'       && <AdminPanel session={session} setPage={setPage} onViewUser={enterViewAs} />}
       </main>
 
       <AddTradeModal
@@ -7965,6 +8133,35 @@ export default function App() {
         session={session}
         onTradeAdded={t => setTrades(prev => [t, ...prev])}
       />
+
+      {/* ── Admin "View as user" read-only overlay ── */}
+      {viewUser && isAnyAdmin(session?.user?.email) && createPortal(
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'var(--bg, #000)', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ flexShrink: 0, background: 'linear-gradient(90deg, rgba(255,193,7,0.16), rgba(255,193,7,0.05))', borderBottom: '1px solid rgba(255,193,7,0.35)', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+              <Eye size={16} color="#ffc107" />
+              <div style={{ fontSize: '13px', fontWeight: '700', color: '#ffc107', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Viewing {[viewUser.first_name, viewUser.last_name].filter(Boolean).join(' ') || viewUser.username || viewUser.email || 'user'}'s dashboard <span style={{ color: 'rgba(255,193,7,0.65)', fontWeight: 500 }}>— Read Only</span></div>
+            </div>
+            <button onClick={exitViewAs} style={{ background: '#ffc107', color: '#000', border: 'none', borderRadius: '8px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}><X size={13} /> Exit View</button>
+          </div>
+          <div style={{ flexShrink: 0, display: 'flex', gap: '4px', padding: '10px 20px 0', borderBottom: '1px solid var(--divider)', overflowX: 'auto', background: 'var(--bg, #000)' }}>
+            {[{ id: 'dashboard', label: 'Dashboard' }, { id: 'trades', label: 'Trade Log' }, { id: 'plan', label: 'Trading Plan' }].map(t => (
+              <button key={t.id} onClick={() => setViewTab(t.id)} style={{ background: 'transparent', border: 'none', borderBottom: viewTab === t.id ? '2px solid #ffc107' : '2px solid transparent', color: viewTab === t.id ? 'var(--text-hi)' : 'var(--text-md)', fontSize: '13px', fontWeight: viewTab === t.id ? '700' : '500', padding: '10px 14px', cursor: 'pointer', fontFamily: 'inherit', marginBottom: '-1px', whiteSpace: 'nowrap' }}>{t.label}</button>
+            ))}
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+            {viewTab === 'dashboard' && <Dashboard trades={viewTrades} onAddTrade={() => {}} loading={viewLoading} profile={viewUser} flags={featureFlags} />}
+            {viewTab === 'trades' && <Trades trades={viewTrades} session={session} onTradeAdded={() => {}} onTradeDeleted={() => {}} onTradeUpdated={() => {}} onAddTrade={() => {}} loading={viewLoading} readOnly />}
+            {viewTab === 'plan' && (
+              <div style={{ maxWidth: '620px', margin: '48px auto', padding: '0 24px', textAlign: 'center' }}>
+                <div style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-hi)', marginBottom: '10px' }}>Trading Plan isn't available for review</div>
+                <div style={{ fontSize: '13px', color: 'var(--text-lo)', lineHeight: 1.7 }}>Each trader's plan, checklist and rules are stored locally in their own browser (they're never synced to the server), so they can't be viewed from here. Their logged trades and full analytics are on the Dashboard and Trade Log tabs.</div>
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* ── Mobile slide-in sidebar — always in DOM, CSS transition for smooth open/close ── */}
       {createPortal(
