@@ -22,6 +22,9 @@ const todayISO = () => new Intl.DateTimeFormat('en-CA', {
   timeZone: process.env.DAILY_TZ || 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit',
 }).format(new Date())
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const chunk = (arr, n) => { const out = []; for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n)); return out }
+
 export default async function handler(req, res) {
   if (process.env.CRON_SECRET && req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
     return res.status(401).json({ error: 'Unauthorized' })
@@ -48,13 +51,15 @@ export default async function handler(req, res) {
       byUser.get(t.user_id).push(Number(t.pnl) || 0)
     }
 
-    let sent = 0, failed = 0, skipped = 0
+    // Build each user's personalised message first.
+    let skipped = 0
+    const toSend = [] // { userId, email, emailType, subject, html }
     for (const p of profiles) {
       const email = emailById.get(p.id)
       const user = { first_name: p.first_name || p.username || '' }
       const pnls = byUser.get(p.id) || []
       const emailType = pnls.length > 0 ? 'daily_journaled' : 'daily_not_journaled'
-      if (!email) { skipped++; await logEmail({ userId: p.id, emailType, status: 'skipped', error: 'no email', sentBy: 'system' }); continue }
+      if (!email) { skipped++; await logEmail({ userId: p.id, emailType, status: 'skipped', error: 'no email on file', sentBy: 'system' }); continue }
       let subject, html
       if (pnls.length > 0) {
         const wins = pnls.filter((v) => v > 0).length
@@ -63,27 +68,52 @@ export default async function handler(req, res) {
       } else {
         ;({ subject, html } = dailyNoJournalEmail(user))
       }
-      // Per-user try/catch — one failure never stops the rest.
-      try {
-        const r = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify({ from, to: email, subject, html }),
-        })
-        if (r.ok) {
+      toSend.push({ userId: p.id, email, emailType, subject, html })
+    }
+
+    // Send via Resend's BATCH endpoint (≤100/call) — one request instead of one
+    // per recipient, so we don't trip the per-second rate limit by blasting ~85
+    // sends in a tight loop. A rate-limited (429) batch is retried once after a
+    // short backoff. Every failure records the real HTTP status + Resend message
+    // (the status is always included, so the error column is never blank).
+    let sent = 0, failed = 0
+    const groups = chunk(toSend, 100)
+    for (let ci = 0; ci < groups.length; ci++) {
+      const group = groups[ci]
+      let data = null, errText = null
+      for (let attempt = 0; attempt < 2; attempt++) {
+        let r
+        try {
+          r = await fetch('https://api.resend.com/emails/batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+            body: JSON.stringify(group.map((m) => ({ from, to: m.email, subject: m.subject, html: m.html }))),
+          })
+        } catch (e) {
+          errText = `network error: ${e.message || e}`
+          if (attempt === 0) { await sleep(1500); continue }
+          break
+        }
+        if (r.ok) { data = (await r.json().catch(() => ({}))).data || []; errText = null; break }
+        const body = await r.text().catch(() => '')
+        errText = `HTTP ${r.status} ${r.statusText || ''}`.trim() + (body ? ` — ${body.slice(0, 300)}` : '')
+        if (r.status === 429 && attempt === 0) { await sleep(2000); continue } // retry once on rate limit
+        break
+      }
+      for (let i = 0; i < group.length; i++) {
+        const m = group[i]
+        const resendId = data && data[i] && data[i].id
+        if (data && resendId) {
           sent++
-          const resendId = (await r.json().catch(() => ({}))).id || null
-          await logEmail({ userId: p.id, recipientEmail: email, emailType, status: 'sent', resendId, sentBy: 'system' })
+          await logEmail({ userId: m.userId, recipientEmail: m.email, emailType: m.emailType, status: 'sent', resendId, sentBy: 'system' })
         } else {
           failed++
-          const reason = await r.text().catch(() => `HTTP ${r.status}`)
-          console.error('daily-email send failed:', email, r.status, reason)
-          await logEmail({ userId: p.id, recipientEmail: email, emailType, status: 'failed', error: reason, sentBy: 'system' })
+          const reason = errText || (data ? 'no id returned by Resend' : 'send failed')
+          console.error('daily-email failed:', m.email, reason)
+          await logEmail({ userId: m.userId, recipientEmail: m.email, emailType: m.emailType, status: 'failed', error: reason, sentBy: 'system' })
         }
-      } catch (e) {
-        failed++; console.error('daily-email error:', email, e.message)
-        await logEmail({ userId: p.id, recipientEmail: email, emailType, status: 'failed', error: e.message, sentBy: 'system' })
       }
+      if (ci < groups.length - 1) await sleep(600) // gentle gap between chunks
     }
 
     console.log(`daily-email ${today}: sent ${sent}, failed ${failed}, skipped ${skipped}`)
