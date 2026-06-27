@@ -163,23 +163,45 @@ export function approvedEmail(user = {}) {
 // ── Template 2b — waitlistEmail(user) → new signup while beta is closed ────────
 export function waitlistEmail(user = {}) {
   const name = user.first_name || 'trader'
+  // "What's coming" bullet — green ▸ marker + label, each on its own row.
+  const coming = (label) => `<tr><td ${dk('padding:6px 0;')}>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" ${dk()}>
+      <tr>
+        <td valign="top" ${dk('color:#aaffa0;font-size:15px;line-height:1.5;padding-right:12px;')}>&#9656;</td>
+        <td valign="top" ${dk('color:#dddddd;font-size:15px;line-height:1.5;')}>${esc(label)}</td>
+      </tr>
+    </table>
+  </td></tr>`
   const inner = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ${dk()}>
       <tr><td align="center" ${dk()}>
-        <p style="margin:0;font-size:42px;line-height:1;">&#128081;</p>
+        <p style="margin:0;font-size:46px;line-height:1;">&#128081;</p>
         <p style="margin:18px 0 0;font-size:11px;font-weight:700;letter-spacing:0.22em;color:#ffd966;text-transform:uppercase;">Beta is Full</p>
-        <h1 style="margin:10px 0 12px;color:#ffffff;font-size:28px;font-weight:700;">You're on the waitlist, ${esc(name)}.</h1>
-        <p style="margin:0 auto;max-width:440px;color:#888888;font-size:16px;line-height:1.6;">We've reached our 100 beta traders, so we've saved your spot in line. Subscriptions are coming soon.</p>
+        <h1 style="margin:10px 0 12px;color:#ffffff;font-size:28px;font-weight:700;">You're on the waitlist.</h1>
+        <p style="margin:0 auto;max-width:440px;color:#888888;font-size:16px;line-height:1.6;">We've reached our 100 beta traders. Subscriptions are coming soon.</p>
       </td></tr>
     </table>
-    ${accentCard('#ffd966', `<p style="margin:0 0 8px;color:#ffffff;font-size:14px;font-weight:700;">What happens next</p>
-      <p style="margin:0;color:#e0cf9a;font-size:14px;line-height:1.8;">You'll be the first to know the moment spots open. We'll email you right here — no need to check back.</p>`)}
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ${dk('margin-top:24px;')}>
-      <tr><td align="center" ${dk('color:#777777;font-size:13px;line-height:1.7;')}>
-        Hang tight — your edge is worth the wait.
+    ${accentCard('#aaffa0', `<p style="margin:0;color:#cde8c6;font-size:15px;line-height:1.7;">You're locked in to be among the first notified when spots open. We'll email you the moment LIMITLESS opens up.</p>`)}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ${dk('margin-top:22px;')}>
+      <tr>
+        <td ${cd('border:1px solid #1f1f1f;border-radius:8px;padding:18px 22px;')}>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ${cd()}>
+            <tr><td ${cd('padding:0 0 12px;')}>
+              <p style="margin:0;color:#ffffff;font-size:14px;font-weight:700;letter-spacing:0.02em;">What's coming</p>
+            </td></tr>
+            ${coming('Full access to the journal')}
+            ${coming('All premium features')}
+            ${coming('Early bird pricing')}
+          </table>
+        </td>
+      </tr>
+    </table>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ${dk('margin-top:28px;')}>
+      <tr><td align="center" ${dk()}>
+        <a href="https://limitless-journal.com" style="color:#aaffa0;font-size:14px;font-weight:600;text-decoration:none;font-family:Arial,sans-serif;">Follow our progress &#8594;</a>
       </td></tr>
     </table>`
-  return { subject: `You're on the LIMITLESS waitlist, ${name}`, html: page(inner) }
+  return { subject: `You're on the waitlist, ${name}`, html: page(inner) }
 }
 
 // ── Template 3 — dailyJournaledEmail(user, stats) ─────────────────────────────
