@@ -14,7 +14,7 @@ import {
   Lightbulb, Check, BarChart2, Plus, CalendarDays, Layers, Target,
   Pencil, Trash2, GripVertical, Sparkles, Loader2, Shield, Users, Search, X,
   Bell, Megaphone, Link2, Download, ChevronDown, RefreshCw, LogOut,
-  Mail, Ban, Flag, Activity, MessageSquare, Save, Send, Eye, MousePointerClick,
+  Mail, Ban, Flag, Activity, MessageSquare, Save, Send, Eye, MousePointerClick, ImageOff,
   Globe, Video, Flame, Play, Clock, Award, Heart,
   Trophy, FileText, ExternalLink, Calendar, Brain, Crown,
 } from 'lucide-react'
@@ -2495,6 +2495,13 @@ function TradeDetailModal({ trade, onClose, onSave, demoMode = false, readOnly =
 )}
               </div>
             ))}
+          </div>
+        )}
+
+        {readOnly && chartUrls.length === 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '28px', background: '#0a0a0a', border: '1px solid #1c1c1c', borderRadius: '10px', marginBottom: '10px' }}>
+            <ImageOff size={22} color="#555" />
+            <div style={{ fontSize: '12px', color: '#666' }}>No chart attached</div>
           </div>
         )}
 
