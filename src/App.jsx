@@ -27,7 +27,7 @@ import { CopyTraderPage } from './CopyTrader.jsx'
 // of the normal pending-approval queue, and are shown the WaitlistScreen with
 // no app access. Existing approved users keep full access, and valid invite
 // links still auto-approve. Flip to false to reopen the beta.
-const BETA_CLOSED = true
+const BETA_CLOSED = false
 
 // ─── Global CSS ───────────────────────────────────────────────
 const ANIM_CSS = `
@@ -1411,7 +1411,7 @@ function WaitlistScreen({ onLogout, onBack, pendingConfirm = false }) {
           <div style={{ fontSize: '23px', fontWeight: '800', color: '#fff', marginBottom: '14px', letterSpacing: '-0.5px', lineHeight: 1.2 }}>You're on the waitlist</div>
 
           <div style={{ fontSize: '13px', color: '#999', lineHeight: 1.8, marginBottom: '8px' }}>
-            We've reached our <span style={{ color: '#fff', fontWeight: '600' }}>100 beta traders</span>. Subscriptions are coming soon.
+            We've reached our <span style={{ color: '#fff', fontWeight: '600' }}>150 beta traders</span>. Subscriptions are coming soon.
           </div>
           <div style={{ fontSize: '13px', color: '#888', lineHeight: 1.8, marginBottom: pendingConfirm ? '20px' : '28px' }}>
             You'll be the first to know when spots open — <span style={{ color: '#aaffa0', fontWeight: '600' }}>we'll email you</span>.
@@ -2476,6 +2476,9 @@ function TradeDetailModal({ trade, onClose, onSave, demoMode = false, readOnly =
         {divider}
 
         {/* Chart thumbnails */}
+        {readOnly && (
+          <div style={{ fontSize: '10px', fontWeight: '600', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#888', marginBottom: '10px' }}>Attached Charts</div>
+        )}
         {chartUrls.length > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: chartUrls.length === 1 ? '1fr' : '1fr 1fr', gap: '8px', marginBottom: '10px' }}>
             {chartUrls.map((url, idx) => (
@@ -5943,7 +5946,7 @@ function NetworkPage({ session, setPage, profile }) {
 // SUPER_ADMIN: full access (TOS, TradeSync, Network, Demo Mode, Hall of Fame…).
 // CO_ADMINS: user management + support tickets only (no super-only modules).
 const SUPER_ADMIN = 'eug777fx@gmail.com'
-const CO_ADMINS = ['pirchmark@gmail.com']
+const CO_ADMINS = ['pirchmark@gmail.com', 'clozoya333@gmail.com']
 const isSuperAdmin = (email) => email === SUPER_ADMIN
 const isCoAdmin = (email) => CO_ADMINS.includes(email)
 const isAnyAdmin = (email) => isSuperAdmin(email) || isCoAdmin(email)
@@ -6406,7 +6409,28 @@ function AdminPanel({ session, setPage, onViewUser }) {
   ]
     .filter(a => a.ts)
     .sort((a, b) => new Date(b.ts) - new Date(a.ts))
-    .slice(0, 10)
+    .slice(0, 15)
+
+  // Platform analytics + 30-day growth (admin backend)
+  const tradeCountByUserAll = new Map()
+  trades.forEach(t => tradeCountByUserAll.set(t.user_id, (tradeCountByUserAll.get(t.user_id) || 0) + 1))
+  const avgTradesPerUser = totalUsers ? totalTrades / totalUsers : 0
+  const mostActive = (() => {
+    let best = null
+    for (const [uid, c] of tradeCountByUserAll) { if (!best || c > best.count) best = { uid, count: c } }
+    if (!best) return null
+    const mu = userById.get(best.uid)
+    return { name: mu ? ([mu.first_name, mu.last_name].filter(Boolean).join(' ') || mu.username || mu.email || 'User') : 'Unknown', count: best.count }
+  })()
+  const growth30 = (() => {
+    const days = []
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - i)
+      const key = d.toISOString().slice(0, 10)
+      days.push({ label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), count: users.filter(u => (u.created_at || '').slice(0, 10) === key).length })
+    }
+    return days
+  })()
 
   // Filtering
   const term = search.trim().toLowerCase()
@@ -6606,6 +6630,56 @@ function AdminPanel({ session, setPage, onViewUser }) {
             </div>
           )
         })}
+      </div>
+
+      {/* === Platform analytics === */}
+      <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '12px' }}>
+        {[
+          { label: 'Total P&L Logged', val: (totalPnlAll >= 0 ? '+' : '−') + '$' + Math.abs(Math.round(totalPnlAll)).toLocaleString(), color: totalPnlAll >= 0 ? '#aaffa0' : '#ff8080' },
+          { label: 'Avg Trades / User', val: avgTradesPerUser.toFixed(1), color: '#fff' },
+          { label: mostActive ? 'Most Active · ' + mostActive.count + ' trades' : 'Most Active User', val: mostActive ? mostActive.name : '—', color: '#fff', small: true },
+        ].map(s => (
+          <div key={s.label} style={{ ...statCard, padding: '20px' }}>
+            <div style={{ fontSize: s.small ? '18px' : '26px', fontWeight: '800', letterSpacing: '-0.5px', color: s.color, lineHeight: 1.15, marginBottom: '6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{loading ? '—' : s.val}</div>
+            <div style={{ ...lbl, color: '#777' }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* === User growth (30 days) === */}
+      <div style={{ ...statCard, marginBottom: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+          <Users size={14} color="#aaffa0" />
+          <div style={{ ...lbl, color: '#888' }}>User Growth — last 30 days</div>
+        </div>
+        <ResponsiveContainer width="100%" height={220}>
+          <LineChart data={growth30} margin={{ top: 6, right: 12, bottom: 0, left: -18 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" vertical={false} />
+            <XAxis dataKey="label" tick={{ fill: '#666', fontSize: 10 }} interval={4} axisLine={{ stroke: '#1f1f1f' }} tickLine={false} />
+            <YAxis allowDecimals={false} tick={{ fill: '#666', fontSize: 10 }} axisLine={false} tickLine={false} width={30} />
+            <Tooltip contentStyle={{ background: '#0d0d0d', border: '1px solid #1f1f1f', borderRadius: '8px', fontSize: '12px' }} labelStyle={{ color: '#aaa' }} />
+            <Line type="monotone" dataKey="count" stroke="#aaffa0" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: '#aaffa0' }} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* === Activity feed === */}
+      <div style={{ ...statCard, marginBottom: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Activity size={14} color="#aaffa0" /><div style={{ ...lbl, color: '#888' }}>Activity Feed</div></div>
+          <div style={{ fontSize: '11px', color: '#555' }}>Recent signups & trades</div>
+        </div>
+        {activity.length === 0 ? <div style={{ padding: '16px 0', textAlign: 'center', fontSize: '12px', color: 'var(--text-lo)' }}>No activity yet</div> : (
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {activity.map((a, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 0', borderTop: i === 0 ? 'none' : '1px solid #141414' }}>
+                <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: a.type === 'signup' ? '#7cc9ff' : '#aaffa0', flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0, fontSize: '12px', color: 'var(--text-md)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.text}</div>
+                <div style={{ fontSize: '11px', color: '#555', flexShrink: 0, whiteSpace: 'nowrap' }}>{relativeTime(a.ts)}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* === Second row: Recent Signups + Quick Stats === */}
@@ -7030,6 +7104,7 @@ function AdminPanel({ session, setPage, onViewUser }) {
                                 { l: 'Total P&L',  v: tradeCount > 0 ? `${userPnl >= 0 ? '+' : '−'}$${Math.abs(Math.round(userPnl)).toLocaleString()}` : '—', c: userPnl >= 0 ? '#aaffa0' : '#ff8080' },
                                 { l: 'Last Trade', v: lastTradeDate ? formatDate(lastTradeDate) : 'Never' },
                                 { l: 'Top Symbol', v: topSymbol || '—' },
+                                { l: 'Account Age', v: (() => { if (!u.created_at) return '—'; const d = Math.floor((Date.now() - new Date(u.created_at)) / 86400000); return d < 1 ? 'Today' : d < 30 ? d + 'd' : d < 365 ? Math.floor(d / 30) + 'mo' : (d / 365).toFixed(1) + 'y' })() },
                               ].map(s => (
                                 <div key={s.l} style={{ background: '#080808', border: '1px solid #1a1a1a', borderRadius: '10px', padding: '12px 14px' }}>
                                   <div style={{ fontSize: '10px', color: '#666', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '6px' }}>{s.l}</div>
