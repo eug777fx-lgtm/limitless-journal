@@ -2298,6 +2298,14 @@ function TradeDetailModal({ trade, onClose, onSave, demoMode = false, readOnly =
   const [saving,    setSaving]    = useState(false)
   const [uploading, setUploading] = useState(false)
   const [chartUrls, setChartUrls] = useState(() => parseChartUrls(trade.chart_url))
+
+  // ── DEBUG: chart image diagnostics — open console (Cmd+Option+J) when a trade
+  //    is clicked in view-as. Remove this block once the images are confirmed. ──
+  useEffect(() => {
+    console.log('FULL TRADE:', trade)
+    console.log('TRADE CHART_URL:', trade.chart_url)
+    console.log('PARSED IMAGES:', parseChartUrls(trade.chart_url))
+  }, [trade])
   const [lightbox,  setLightbox]  = useState(null)
   const fileRef = useRef(null)
 
