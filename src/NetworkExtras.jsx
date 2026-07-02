@@ -366,7 +366,17 @@ export function NetworkHallOfFame({ isAdmin }) {
             const t = e.trade
             const pnl = Number(t.pnl) || 0
             const isWin = pnl > 0
-            const chartUrl = t.chart_url ? (() => { try { const parsed = JSON.parse(t.chart_url); return Array.isArray(parsed) ? parsed[0] : t.chart_url } catch { return t.chart_url } })() : null
+            const chartUrl = t.chart_url ? (() => {
+              try {
+                const parsed = JSON.parse(t.chart_url)
+                if (Array.isArray(parsed)) return parsed.find(u => typeof u === 'string' && u.startsWith('http')) || null
+                if (typeof parsed === 'string' && parsed.startsWith('http')) return parsed
+                return null
+              } catch {
+                // Plain string URL (old format)
+                return typeof t.chart_url === 'string' && t.chart_url.startsWith('http') ? t.chart_url : null
+              }
+            })() : null
             const featuredMonth = new Date(e.featured_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
             return (
               <div key={e.id} style={{
