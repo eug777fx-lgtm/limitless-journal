@@ -6146,7 +6146,6 @@ function AdminPanel({ session, setPage, onViewUser }) {
   }
 
   const updateStatus = async (id, status) => {
-    console.log('[admin] updateStatus →', { userId: id, status })
     setActioning(id)
     const verb = status === 'approved' ? 'approve' : status === 'rejected' ? 'reject' : status === 'banned' ? 'ban' : 'update'
     const past = status === 'approved' ? 'approved' : status === 'rejected' ? 'rejected' : status === 'banned' ? 'banned' : 'updated'
@@ -6156,7 +6155,6 @@ function AdminPanel({ session, setPage, onViewUser }) {
         .update({ status })
         .eq('id', id)
         .select()
-      console.log('[admin] supabase response →', { data, error })
       if (error) throw error
       if (!data || data.length === 0) {
         throw new Error('No rows updated — likely an RLS policy is blocking the write. Check Supabase → Authentication → Policies on the profiles table.')
@@ -6175,11 +6173,9 @@ function AdminPanel({ session, setPage, onViewUser }) {
 
   const deleteUser = async (id) => {
     if (!confirm('Delete this user from profiles? (auth.users entry remains.)')) return
-    console.log('[admin] deleteUser →', { userId: id })
     setActioning(id)
     try {
       const { data, error } = await supabase.from('profiles').delete().eq('id', id).select()
-      console.log('[admin] supabase response →', { data, error })
       if (error) throw error
       if (!data || data.length === 0) {
         throw new Error('No rows deleted — likely an RLS policy is blocking the delete.')
