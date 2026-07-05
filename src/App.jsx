@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Fragment } from 'react'
+import { useState, useEffect, useRef, Fragment, createContext, useContext } from 'react'
 import { createPortal } from 'react-dom'
 import toast, { Toaster } from 'react-hot-toast'
 import {
@@ -298,6 +298,38 @@ input:focus, textarea:focus, select:focus { border-color: #444 !important; outli
   .add-modal-overlay { padding: 0 !important; align-items: stretch !important; }
   .add-modal-inner { max-width: 100% !important; max-height: 100% !important; height: 100%; border-radius: 0 !important; }
 }
+/* ═══ UI v2 preview — every rule below is scoped under html[data-uiv2="true"], so
+   nothing here can affect the default (v1) look. Toggled in Settings → Developer. ═══ */
+html[data-uiv2="true"] {
+  --card-bg: linear-gradient(180deg, #0f0f0f 0%, #0a0a0a 100%);
+  --card-border: rgba(255,255,255,0.06);
+  --card-shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.3);
+  --v2-card-shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.3);
+  --text-md: #94949c;
+  --text-lo: #6f6f77;
+  --text-dim: #46464d;
+}
+html[data-uiv2="true"] body { font-variant-numeric: tabular-nums; }
+html[data-uiv2="true"] h1, html[data-uiv2="true"] h2, html[data-uiv2="true"] h3 { letter-spacing: -0.035em !important; }
+html[data-uiv2="true"] button:active:not(:disabled) { transform: scale(0.98); }
+html[data-uiv2="true"] .toggle-knob { transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1), background 0.25s !important; }
+@keyframes v2CheckSpring { 0% { transform: scale(0.7); } 55% { transform: scale(1.18); } 100% { transform: scale(1); } }
+html[data-uiv2="true"] .v2check-on { animation: v2CheckSpring 0.3s cubic-bezier(0.34,1.56,0.64,1); }
+html[data-uiv2="true"] .v2nav svg { transition: transform 0.15s ease; }
+html[data-uiv2="true"] .v2nav:hover svg { transform: scale(1.12); }
+html[data-uiv2="true"] .app-sidebar { gap: 5px !important; }
+html[data-uiv2="true"] .v2profile { border: 1px solid rgba(255,255,255,0.07) !important; border-radius: 12px; padding: 8px !important; background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)); box-shadow: 0 0 18px rgba(255,255,255,0.04); transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+html[data-uiv2="true"] .v2profile:hover { border-color: rgba(255,255,255,0.13) !important; box-shadow: 0 0 26px rgba(255,255,255,0.08); }
+@keyframes v2PageIn  { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes v2PageOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-6px); } }
+@media (min-width: 769px) {
+  html[data-uiv2="true"] .page-wrap { animation: v2PageIn 0.2s cubic-bezier(0.22,1,0.36,1) both !important; }
+  html[data-uiv2="true"][data-pageout="true"] .page-wrap { animation: v2PageOut 0.15s ease both !important; }
+  html[data-uiv2="true"] .card-lift { transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.3s ease, border-color 0.3s ease !important; }
+  html[data-uiv2="true"] .card-lift:hover { transform: translateY(-2px) !important; box-shadow: 0 2px 4px rgba(0,0,0,0.45), 0 16px 40px rgba(0,0,0,0.45) !important; }
+  html[data-uiv2="true"] .chart-grid > div, html[data-uiv2="true"] .radar-grid > div, html[data-uiv2="true"] .ana-grid > div { transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.3s ease, border-color 0.3s ease !important; }
+  html[data-uiv2="true"] .chart-grid > div:hover, html[data-uiv2="true"] .radar-grid > div:hover, html[data-uiv2="true"] .ana-grid > div:hover { transform: translateY(-2px); box-shadow: 0 2px 4px rgba(0,0,0,0.45), 0 16px 40px rgba(0,0,0,0.45) !important; }
+}
 `
 
 // ─── Theme Config ─────────────────────────────────────────────
@@ -405,6 +437,28 @@ const inp = {
   boxSizing: 'border-box',
   fontFamily: 'inherit',
   transition: 'border-color 0.15s',
+}
+
+// ─── UI v2 preview ────────────────────────────────────────────
+// Visual-only redesign gated behind localStorage 'ui_v2_enabled'. The toggle
+// lives in Settings → Developer (super-admin only). Components read the flag
+// via useUIV2(); all v2 CSS is scoped under html[data-uiv2="true"].
+const UIV2Context = createContext(false)
+const useUIV2 = () => useContext(UIV2Context)
+
+// Tiny inline sparkline for v2 stat-card corners
+function Sparkline({ data, color = '#8a8a92', width = 54, height = 18 }) {
+  if (!data || data.length < 2) return null
+  const min = Math.min(...data), max = Math.max(...data)
+  const range = max - min || 1
+  const pts = data
+    .map((v, i) => `${((i / (data.length - 1)) * width).toFixed(1)},${(height - 2 - ((v - min) / range) * (height - 4)).toFixed(1)}`)
+    .join(' ')
+  return (
+    <svg width={width} height={height} style={{ display: 'block' }} aria-hidden="true">
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.55" />
+    </svg>
+  )
 }
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -1072,10 +1126,13 @@ function AuthPage({ onAuth }) {
 
 // ─── PnlTooltip ───────────────────────────────────────────────
 function PnlTooltip({ active, payload, label: day }) {
+  const uiV2 = useUIV2()
   if (!active || !payload?.length) return null
   const val = payload[0].value
   return (
-    <div style={{ background: '#0d0d0d', border: '1px solid #222', borderRadius: '10px', padding: '10px 14px' }}>
+    <div style={uiV2
+      ? { background: 'rgba(12,12,12,0.72)', border: '1px solid rgba(255,255,255,0.09)', borderRadius: '10px', padding: '10px 14px', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }
+      : { background: '#0d0d0d', border: '1px solid #222', borderRadius: '10px', padding: '10px 14px' }}>
       <div style={{ fontSize: '10px', color: '#666', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '4px' }}>{day}</div>
       <div style={{ fontSize: '15px', fontWeight: '700', color: val >= 0 ? '#aaffa0' : '#ff8080' }}>
         {val >= 0 ? '+' : '−'}${Math.abs(val)?.toLocaleString()}
@@ -1888,6 +1945,7 @@ function GoalTrackerWidget({ monthPnl, monthlyGoal }) {
 
 // ─── Dashboard ────────────────────────────────────────────────
 function Dashboard({ trades, onAddTrade, loading, profile, flags = {} }) {
+  const uiV2 = useUIV2()
   const [calViewDate,  setCalViewDate]  = useState(() => new Date())
   const [chartVisible, setChartVisible] = useState(false)
 
@@ -1965,12 +2023,20 @@ function Dashboard({ trades, onAddTrade, loading, profile, flags = {} }) {
   const goalEnabled = typeof window !== 'undefined' && localStorage.getItem('goal_tracker_enabled') === 'true'
   const monthlyGoal = Number(profile?.monthly_goal) || 0
 
+  // ── v2: per-stat sparkline series (oldest → newest, last 20 points) ──
+  let sparkCum = 0, sparkWins = 0, sparkGW = 0, sparkGL = 0, sparkRWins = 0, sparkRSum = 0, sparkStk = 0
+  const sparkPnl    = sortedAsc.map(t => (sparkCum += (t.pnl || 0))).slice(-20)
+  const sparkWR     = sortedAsc.map((t, i) => { if ((t.pnl || 0) > 0) sparkWins++; return (sparkWins / (i + 1)) * 100 }).slice(-20)
+  const sparkRR     = sortedAsc.map(t => { if ((t.pnl || 0) > 0) { sparkRWins++; sparkRSum += (t.rr || 0) } return sparkRWins ? sparkRSum / sparkRWins : 0 }).slice(-20)
+  const sparkPF     = sortedAsc.map(t => { const p = t.pnl || 0; if (p > 0) sparkGW += p; else sparkGL += Math.abs(p); return sparkGL > 0 ? Math.min(sparkGW / sparkGL, 5) : sparkGW > 0 ? 5 : 0 }).slice(-20)
+  const sparkStreak = sortedAsc.map(t => (sparkStk = (t.pnl || 0) > 0 ? sparkStk + 1 : 0)).slice(-20)
+
   const stats = [
-    { label: 'Net P&L',       val: `${animPnlRounded >= 0 ? '+' : '−'}$${Math.abs(animPnlRounded).toLocaleString()}`, color: totalPnl >= 0 ? '#aaffa0' : '#ff8080', shadow: totalPnl > 0 ? '0 0 20px rgba(170,255,160,0.3)' : totalPnl < 0 ? '0 0 20px rgba(255,128,128,0.3)' : 'none', sub: 'Month to date' },
-    { label: 'Win Rate',       val: `${animWRRounded}%`,                                                               color: '#fff', shadow: 'none', sub: `${wins.length} / ${trades.length} trades`   },
-    { label: 'Avg Win / Loss', val: wins.length ? `${animAvgRR.toFixed(1)}R` : '—',                                   color: '#fff', shadow: 'none', sub: avgWin ? `$${avgWin.toLocaleString()} avg win` : 'No wins yet' },
-    { label: 'Profit Factor',  val: grossLosses > 0 ? animPF.toFixed(2) : profitFactor,                               color: '#fff', shadow: 'none', sub: 'Gross P / gross L'                           },
-    { label: 'Win Streak',     val: streak > 0 ? `${animStreakRounded}W` : '—',                                       color: '#fff', shadow: 'none', sub: streak > 0 ? `${streak} in a row` : 'No active streak' },
+    { label: 'Net P&L',       val: `${animPnlRounded >= 0 ? '+' : '−'}$${Math.abs(animPnlRounded).toLocaleString()}`, color: totalPnl >= 0 ? '#aaffa0' : '#ff8080', shadow: totalPnl > 0 ? '0 0 20px rgba(170,255,160,0.3)' : totalPnl < 0 ? '0 0 20px rgba(255,128,128,0.3)' : 'none', sub: 'Month to date', glow: totalPnl > 0, spark: sparkPnl, sparkColor: totalPnl >= 0 ? '#aaffa0' : '#ff8080' },
+    { label: 'Win Rate',       val: `${animWRRounded}%`,                                                               color: '#fff', shadow: 'none', sub: `${wins.length} / ${trades.length} trades`,   spark: sparkWR     },
+    { label: 'Avg Win / Loss', val: wins.length ? `${animAvgRR.toFixed(1)}R` : '—',                                   color: '#fff', shadow: 'none', sub: avgWin ? `$${avgWin.toLocaleString()} avg win` : 'No wins yet', spark: sparkRR },
+    { label: 'Profit Factor',  val: grossLosses > 0 ? animPF.toFixed(2) : profitFactor,                               color: '#fff', shadow: 'none', sub: 'Gross P / gross L',                           spark: sparkPF     },
+    { label: 'Win Streak',     val: streak > 0 ? `${animStreakRounded}W` : '—',                                       color: '#fff', shadow: 'none', sub: streak > 0 ? `${streak} in a row` : 'No active streak', spark: sparkStreak },
   ]
 
   // ── Empty state ──
@@ -2013,10 +2079,18 @@ function Dashboard({ trades, onAddTrade, loading, profile, flags = {} }) {
       {/* Stat cards */}
       <div className="stat-grid">
         {stats.map(s => (
-          <div key={s.label} className="card-lift" style={{ ...card, padding: '18px 20px' }}>
-            <div style={{ ...lbl, marginBottom: '10px', color: '#999' }}>{s.label}</div>
-            <div style={{ fontSize: '24px', fontWeight: '800', letterSpacing: '-1px', color: s.color, textShadow: s.shadow, lineHeight: 1, marginBottom: '8px' }}>{s.val}</div>
-            <div style={{ fontSize: '11px', color: '#888' }}>{s.sub}</div>
+          <div key={s.label} className="card-lift" style={{ ...card, padding: '18px 20px', ...(uiV2 ? { position: 'relative', overflow: 'hidden' } : {}) }}>
+            {uiV2 && s.glow && (
+              <div aria-hidden="true" style={{ position: 'absolute', top: '-14px', left: '-14px', width: '110px', height: '110px', background: 'radial-gradient(circle, rgba(170,255,160,0.14) 0%, transparent 70%)', pointerEvents: 'none' }} />
+            )}
+            {uiV2 && s.spark && s.spark.length >= 2 && (
+              <div style={{ position: 'absolute', top: '16px', right: '16px', pointerEvents: 'none' }}>
+                <Sparkline data={s.spark} color={s.sparkColor} />
+              </div>
+            )}
+            <div style={{ ...lbl, marginBottom: '10px', color: '#999', position: 'relative' }}>{s.label}</div>
+            <div style={{ fontSize: uiV2 ? '27px' : '24px', fontWeight: '800', letterSpacing: uiV2 ? '-1.4px' : '-1px', color: s.color, textShadow: s.shadow, lineHeight: 1, marginBottom: '8px', position: 'relative' }}>{s.val}</div>
+            <div style={{ fontSize: '11px', color: '#888', position: 'relative' }}>{s.sub}</div>
           </div>
         ))}
       </div>
@@ -2035,19 +2109,20 @@ function Dashboard({ trades, onAddTrade, loading, profile, flags = {} }) {
               {totalPnl >= 0 ? '+' : '−'}${Math.abs(Math.round(totalPnl)).toLocaleString()} MTD
             </div>
           </div>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, ...(chartVisible ? { animation: `chartReveal ${ANIM_MS}ms ease-out both` } : { clipPath: 'inset(0 100% 0 0)' }) }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, ...(chartVisible ? { animation: `chartReveal ${uiV2 ? 1100 : ANIM_MS}ms ${uiV2 ? 'cubic-bezier(0.22,1,0.36,1)' : 'ease-out'} both` } : { clipPath: 'inset(0 100% 0 0)' }) }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={pnlCurve} margin={{ top: 4, right: 4, bottom: 0, left: 10 }}>
                 <defs>
                   <linearGradient id="pnlGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%"   stopColor="#aaffa0" stopOpacity={0.14} />
+                    <stop offset="0%"   stopColor="#aaffa0" stopOpacity={uiV2 ? 0.26 : 0.14} />
+                    {uiV2 && <stop offset="45%" stopColor="#aaffa0" stopOpacity={0.09} />}
                     <stop offset="100%" stopColor="#aaffa0" stopOpacity={0}    />
                   </linearGradient>
                 </defs>
                 <XAxis dataKey="day" tick={{ fill: '#555', fontSize: 10 }} axisLine={false} tickLine={false} interval={Math.max(0, Math.floor(pnlCurve.length / 6) - 1)} />
                 <YAxis tick={{ fill: '#555', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `$${Math.abs(v) >= 1000 ? Math.round(v / 1000) + 'k' : v}`} width={36} />
                 <Tooltip content={<PnlTooltip />} cursor={{ stroke: '#2a2a2a', strokeWidth: 1 }} />
-                <Area type="monotone" dataKey="pnl" stroke="#aaffa0" strokeWidth={1.5} fill="url(#pnlGrad)" dot={false} activeDot={{ r: 4, fill: '#aaffa0', stroke: '#080808', strokeWidth: 2 }} isAnimationActive={false} />
+                <Area type="monotone" dataKey="pnl" stroke="#aaffa0" strokeWidth={uiV2 ? 2 : 1.5} fill="url(#pnlGrad)" dot={false} activeDot={{ r: uiV2 ? 5 : 4, fill: '#aaffa0', stroke: '#080808', strokeWidth: 2 }} isAnimationActive={false} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -2067,7 +2142,7 @@ function Dashboard({ trades, onAddTrade, loading, profile, flags = {} }) {
       <div className="radar-grid">
         <div style={{ ...card, display: 'flex', flexDirection: 'column' }}>
           <div style={{ ...lbl, color: '#999' }}>Performance Radar</div>
-          <div style={chartVisible ? { animation: `chartReveal ${ANIM_MS}ms ease-out both` } : { clipPath: 'inset(0 100% 0 0)' }}>
+          <div style={chartVisible ? { animation: `chartReveal ${uiV2 ? 1100 : ANIM_MS}ms ${uiV2 ? 'cubic-bezier(0.22,1,0.36,1)' : 'ease-out'} both` } : { clipPath: 'inset(0 100% 0 0)' }}>
             <ResponsiveContainer width="100%" height={220}>
               <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="56%" margin={{ top: 18, right: 42, bottom: 18, left: 42 }}>
                 <PolarGrid stroke="#1e1e1e" strokeDasharray="3 3" />
@@ -4079,7 +4154,7 @@ function TradingPlan({ flags = {} }) {
                 />
 
                 {/* Checkbox */}
-                <div style={{
+                <div className={on && !isEditing ? 'v2check-on' : undefined} style={{
                   width: '18px', height: '18px', borderRadius: '5px', flexShrink: 0,
                   border: `1.5px solid ${on ? '#aaffa0' : 'var(--inp-border)'}`,
                   background: on ? '#aaffa0' : 'transparent',
@@ -4251,7 +4326,7 @@ function TradingPlan({ flags = {} }) {
 
 
 // ─── Settings ─────────────────────────────────────────────────
-function Settings({ theme, setTheme, session, profile, setProfile, glassMode, setGlassMode, onLogout, trades = [], demoMode = false, setDemoMode = () => {}, setTrades = () => {}, setPage = () => {} }) {
+function Settings({ theme, setTheme, session, profile, setProfile, glassMode, setGlassMode, onLogout, trades = [], demoMode = false, setDemoMode = () => {}, setTrades = () => {}, setPage = () => {}, uiV2 = false, setUiV2 = () => {} }) {
   // Support ticket
   const [ticketSubj, setTicketSubj] = useState('')
   const [ticketBody, setTicketBody] = useState('')
@@ -4665,6 +4740,16 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
               <div style={{ fontSize: '11px', color: '#555', lineHeight: 1.4 }}>Swap real journal data for the demo dataset</div>
             </div>
             <div className={`toggle-track ${demoMode ? 'on' : ''}`} onClick={() => setDemoMode(!demoMode)} style={{ flexShrink: 0 }}>
+              <div className="toggle-knob" />
+            </div>
+          </div>
+          <div style={divider} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-hi)', marginBottom: '2px' }}>UI v2 Preview</div>
+              <div style={{ fontSize: '11px', color: '#555', lineHeight: 1.4 }}>Preview the upgraded visual design — only applies in this browser until release</div>
+            </div>
+            <div className={`toggle-track ${uiV2 ? 'on' : ''}`} onClick={() => setUiV2(!uiV2)} style={{ flexShrink: 0 }}>
               <div className="toggle-knob" />
             </div>
           </div>
@@ -7639,12 +7724,50 @@ export default function App() {
   const [tradesLoading,  setTradesLoading]  = useState(true)
   const [profile,        setProfile]        = useState(null)
   const [trades,         setTrades]         = useState([])
-  const [page,           setPage]           = useState('dashboard')
+  const [page,           setPageRaw]        = useState('dashboard')
   const [showAddTrade,   setShowAddTrade]   = useState(false)
   const [theme,          setTheme]          = useState('white')
   const [colorMode,      setColorMode]      = useState('dark')
   const [glassMode,      setGlassMode]      = useState(() => localStorage.getItem('glass_mode') === 'true')
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+
+  // ── UI v2 preview (visual-only redesign; toggle in Settings → Developer) ──
+  const [uiV2, setUiV2Raw] = useState(() => { try { return localStorage.getItem('ui_v2_enabled') === 'true' } catch { return false } })
+  const setUiV2 = (v) => {
+    setUiV2Raw(v)
+    try { localStorage.setItem('ui_v2_enabled', v ? 'true' : 'false') } catch {}
+  }
+  // The flag lives on <html> so scoped CSS also reaches portaled modals/toasts
+  useEffect(() => {
+    document.documentElement.setAttribute('data-uiv2', uiV2 ? 'true' : 'false')
+  }, [uiV2])
+
+  // v2 page transition: fade the old page out for 150ms, then swap (v1 swaps instantly)
+  const pageRef   = useRef('dashboard')
+  const pageTimer = useRef(null)
+  pageRef.current = page
+  const setPage = (id) => {
+    if (document.documentElement.getAttribute('data-uiv2') !== 'true') { setPageRaw(id); return }
+    if (pageRef.current === id && !pageTimer.current) return
+    if (pageTimer.current) clearTimeout(pageTimer.current)
+    document.documentElement.setAttribute('data-pageout', 'true')
+    pageTimer.current = setTimeout(() => {
+      pageTimer.current = null
+      setPageRaw(id)
+      document.documentElement.removeAttribute('data-pageout')
+    }, 150)
+  }
+  useEffect(() => () => { if (pageTimer.current) clearTimeout(pageTimer.current) }, [])
+
+  // v2 sidebar: measured position of the active nav item for the sliding pill
+  const navRefs = useRef({})
+  const [navPill, setNavPill] = useState(null)
+  useEffect(() => {
+    if (!uiV2) { setNavPill(null); return }
+    const el = navRefs.current[page]
+    if (el) setNavPill({ top: el.offsetTop, height: el.offsetHeight })
+    else setNavPill(null)
+  }, [uiV2, page, featureFlags.newsCalendar, session])
 
   // ── Admin "View as user" (read-only impersonation) ──
   const [viewUser,    setViewUser]    = useState(null)        // merged profile of the user being viewed, or null
@@ -7884,6 +8007,7 @@ export default function App() {
 
   // ── Main app ──
   return (
+    <UIV2Context.Provider value={uiV2}>
     <div
       data-mode={colorMode}
       data-glass={glassMode ? 'true' : 'false'}
@@ -7906,8 +8030,13 @@ export default function App() {
       <Toaster
         position="top-right"
         toastOptions={{
-          style: { background: '#0d0d0d', color: '#eee', border: '1px solid #1f1f1f', fontSize: '13px', fontFamily: "'Inter', sans-serif" },
-          success: { iconTheme: { primary: '#aaffa0', secondary: '#000' } },
+          style: uiV2
+            ? { background: 'rgba(13,13,13,0.88)', color: '#eee', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', boxShadow: '0 8px 30px rgba(0,0,0,0.5)', fontSize: '13px', fontFamily: "'Inter', sans-serif" }
+            : { background: '#0d0d0d', color: '#eee', border: '1px solid #1f1f1f', fontSize: '13px', fontFamily: "'Inter', sans-serif" },
+          success: {
+            iconTheme: { primary: '#aaffa0', secondary: '#000' },
+            ...(uiV2 ? { style: { border: '1px solid rgba(74,222,128,0.35)', boxShadow: '0 0 0 1px rgba(74,222,128,0.08), 0 8px 30px rgba(74,222,128,0.16)' } } : {}),
+          },
           error:   { iconTheme: { primary: '#ff8080', secondary: '#000' }, duration: 5000 },
         }}
       />
@@ -7952,19 +8081,26 @@ export default function App() {
           Add Trade
         </button>
 
+        {/* v2: sliding pill behind the active nav item */}
+        {uiV2 && navPill && (
+          <span aria-hidden="true" style={{ position: 'absolute', left: '14px', right: '14px', top: navPill.top + 'px', height: navPill.height + 'px', borderRadius: '10px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 4px 16px rgba(0,0,0,0.35)', transition: 'top 0.28s cubic-bezier(0.22,1,0.36,1), height 0.28s cubic-bezier(0.22,1,0.36,1)', pointerEvents: 'none' }} />
+        )}
+
         {/* Nav */}
         {nav.map(n => {
           const active = page === n.id
           return (
             <button
               key={n.id}
+              ref={el => { navRefs.current[n.id] = el }}
+              className="v2nav"
               onClick={() => setPage(n.id)}
               onMouseEnter={e => { if (page !== n.id) { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; e.currentTarget.style.color = '#fff' } }}
               onMouseLeave={e => { if (page !== n.id) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#6E6E76' } }}
               style={{
                 position: 'relative',
-                background: active ? 'rgba(255,255,255,0.04)' : 'transparent',
-                border: active ? '1px solid rgba(255,255,255,0.06)' : '1px solid transparent',
+                background: active && !uiV2 ? 'rgba(255,255,255,0.04)' : 'transparent',
+                border: active && !uiV2 ? '1px solid rgba(255,255,255,0.06)' : '1px solid transparent',
                 color: active ? '#fff' : '#6E6E76',
                 borderRadius: '10px',
                 padding: '10px 12px',
@@ -7997,13 +8133,15 @@ export default function App() {
         {/* TOS — private system, admin only, gold accent */}
         {isSuperAdmin(session?.user?.email) && (
           <button
+            ref={el => { navRefs.current.tos = el }}
+            className="v2nav"
             onClick={() => setPage('tos')}
             onMouseEnter={e => { if (page !== 'tos') e.currentTarget.style.background = 'rgba(212,175,55,0.05)' }}
             onMouseLeave={e => { if (page !== 'tos') e.currentTarget.style.background = 'transparent' }}
             style={{
               position: 'relative',
-              background: page === 'tos' ? 'rgba(255,255,255,0.04)' : 'transparent',
-              border: page === 'tos' ? '1px solid rgba(255,255,255,0.06)' : '1px solid transparent',
+              background: page === 'tos' && !uiV2 ? 'rgba(255,255,255,0.04)' : 'transparent',
+              border: page === 'tos' && !uiV2 ? '1px solid rgba(255,255,255,0.06)' : '1px solid transparent',
               color: '#D4AF37',
               borderRadius: '10px',
               padding: '10px 12px',
@@ -8038,13 +8176,15 @@ export default function App() {
         {/* TRADESYNC — private module, admin only, cyan accent */}
         {isSuperAdmin(session?.user?.email) && (
           <button
+            ref={el => { navRefs.current.copy = el }}
+            className="v2nav"
             onClick={() => setPage('copy')}
             onMouseEnter={e => { if (page !== 'copy') e.currentTarget.style.background = 'rgba(34,211,238,0.05)' }}
             onMouseLeave={e => { if (page !== 'copy') e.currentTarget.style.background = 'transparent' }}
             style={{
               position: 'relative',
-              background: page === 'copy' ? 'rgba(255,255,255,0.04)' : 'transparent',
-              border: page === 'copy' ? '1px solid rgba(255,255,255,0.06)' : '1px solid transparent',
+              background: page === 'copy' && !uiV2 ? 'rgba(255,255,255,0.04)' : 'transparent',
+              border: page === 'copy' && !uiV2 ? '1px solid rgba(255,255,255,0.06)' : '1px solid transparent',
               color: '#22D3EE',
               borderRadius: '10px',
               padding: '10px 12px',
@@ -8079,13 +8219,15 @@ export default function App() {
         {/* Network — admin only, accent purple, NEW badge */}
         {isSuperAdmin(session?.user?.email) && (
           <button
+            ref={el => { navRefs.current.network = el }}
+            className="v2nav"
             onClick={() => setPage('network')}
             onMouseEnter={e => { if (page !== 'network') e.currentTarget.style.background = 'rgba(168,85,247,0.06)' }}
             onMouseLeave={e => { if (page !== 'network') e.currentTarget.style.background = 'transparent' }}
             style={{
               position: 'relative',
-              background: page === 'network' ? 'rgba(255,255,255,0.04)' : 'transparent',
-              border: page === 'network' ? '1px solid rgba(255,255,255,0.06)' : '1px solid transparent',
+              background: page === 'network' && !uiV2 ? 'rgba(255,255,255,0.04)' : 'transparent',
+              border: page === 'network' && !uiV2 ? '1px solid rgba(255,255,255,0.06)' : '1px solid transparent',
               color: '#C084FC',
               borderRadius: '10px',
               padding: '10px 12px',
@@ -8119,7 +8261,7 @@ export default function App() {
 
         {/* User footer — pinned to bottom */}
         <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '14px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '0 2px' }}>
+          <div className="v2profile" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '0 2px' }}>
             <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'linear-gradient(135deg, #2A2A30, #16161A)', border: '1px solid rgba(255,255,255,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: '600', flexShrink: 0, color: '#6E6E76' }}>
               {initials}
             </div>
@@ -8209,7 +8351,7 @@ export default function App() {
         {page === 'tos'         && isSuperAdmin(session?.user?.email) && <TOSPage session={session} />}
         {page === 'copy'        && isSuperAdmin(session?.user?.email) && <CopyTraderPage />}
         {page === 'plan'        && <TradingPlan flags={featureFlags} />}
-        {page === 'settings'    && <Settings theme={theme} setTheme={handleSetTheme} session={session} profile={profile} setProfile={setProfile} glassMode={glassMode} setGlassMode={v => { setGlassMode(v); localStorage.setItem('glass_mode', v) }} onLogout={logout} trades={effectiveTrades} demoMode={demoMode} setDemoMode={setDemoMode} setTrades={setTrades} setPage={setPage} />}
+        {page === 'settings'    && <Settings theme={theme} setTheme={handleSetTheme} session={session} profile={profile} setProfile={setProfile} glassMode={glassMode} setGlassMode={v => { setGlassMode(v); localStorage.setItem('glass_mode', v) }} onLogout={logout} trades={effectiveTrades} demoMode={demoMode} setDemoMode={setDemoMode} setTrades={setTrades} setPage={setPage} uiV2={uiV2} setUiV2={setUiV2} />}
         {page === 'admin'       && <AdminPanel session={session} setPage={setPage} onViewUser={enterViewAs} />}
       </main>
 
@@ -8423,5 +8565,6 @@ export default function App() {
         document.body
       )}
     </div>
+    </UIV2Context.Provider>
   )
 }
