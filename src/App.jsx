@@ -301,34 +301,76 @@ input:focus, textarea:focus, select:focus { border-color: #444 !important; outli
 /* ═══ UI v2 preview — every rule below is scoped under html[data-uiv2="true"], so
    nothing here can affect the default (v1) look. Toggled in Settings → Developer. ═══ */
 html[data-uiv2="true"] {
-  --card-bg: linear-gradient(180deg, #0f0f0f 0%, #0a0a0a 100%);
-  --card-border: rgba(255,255,255,0.06);
-  --card-shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.3);
-  --v2-card-shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.3);
+  --card-bg: linear-gradient(180deg, #0e0e0e 0%, #0a0a0a 100%);
+  --card-border: rgba(255,255,255,0.05);
+  --card-shadow: 0 1px 2px rgba(0,0,0,0.5), 0 8px 32px rgba(0,0,0,0.25);
+  --v2-card-shadow: 0 1px 2px rgba(0,0,0,0.5), 0 8px 32px rgba(0,0,0,0.25);
+  --v2-td-py: 14px;
   --text-md: #94949c;
   --text-lo: #6f6f77;
   --text-dim: #46464d;
 }
 html[data-uiv2="true"] body { font-variant-numeric: tabular-nums; }
-html[data-uiv2="true"] h1, html[data-uiv2="true"] h2, html[data-uiv2="true"] h3 { letter-spacing: -0.035em !important; }
-html[data-uiv2="true"] button:active:not(:disabled) { transform: scale(0.98); }
+/* Buttons — one interaction language: springy press, visible keyboard focus, calm disabled */
+html[data-uiv2="true"] button { transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1), opacity 0.15s ease-out, background 0.15s ease-out, border-color 0.15s ease-out, box-shadow 0.15s ease-out, color 0.15s ease-out; }
+html[data-uiv2="true"] button:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(255,255,255,0.2) !important; }
+html[data-uiv2="true"] button:disabled { opacity: 0.4; }
+/* Inputs — soft focus ring glow */
+html[data-uiv2="true"] input, html[data-uiv2="true"] textarea, html[data-uiv2="true"] select { transition: border-color 0.15s ease-out, box-shadow 0.15s ease-out, background 0.15s ease-out; }
+html[data-uiv2="true"] input:focus, html[data-uiv2="true"] textarea:focus, html[data-uiv2="true"] select:focus { border-color: rgba(255,255,255,0.25) !important; box-shadow: 0 0 0 3px rgba(255,255,255,0.08) !important; }
 html[data-uiv2="true"] .toggle-knob { transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1), background 0.25s !important; }
 @keyframes v2CheckSpring { 0% { transform: scale(0.7); } 55% { transform: scale(1.18); } 100% { transform: scale(1); } }
 html[data-uiv2="true"] .v2check-on { animation: v2CheckSpring 0.3s cubic-bezier(0.34,1.56,0.64,1); }
-html[data-uiv2="true"] .v2nav svg { transition: transform 0.15s ease; }
-html[data-uiv2="true"] .v2nav:hover svg { transform: scale(1.12); }
+@keyframes v2SavePop { 0% { transform: scale(0.85); opacity: 0.6; } 60% { transform: scale(1.04); } 100% { transform: scale(1); opacity: 1; } }
+html[data-uiv2="true"] .v2saved { animation: v2SavePop 0.3s cubic-bezier(0.34,1.56,0.64,1); }
+@keyframes v2Unfold { from { opacity: 0; transform: translateY(-4px) scaleY(0.96); } to { opacity: 1; transform: translateY(0) scaleY(1); } }
+html[data-uiv2="true"] .v2dd { animation: v2Unfold 0.18s cubic-bezier(0.16,1,0.3,1); transform-origin: top; }
+html[data-uiv2="true"] .v2nav svg { transition: transform 0.15s cubic-bezier(0.34,1.56,0.64,1); }
+html[data-uiv2="true"] .v2nav:hover svg { transform: scale(1.05); }
 html[data-uiv2="true"] .app-sidebar { gap: 5px !important; }
 html[data-uiv2="true"] .v2profile { border: 1px solid rgba(255,255,255,0.07) !important; border-radius: 12px; padding: 8px !important; background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)); box-shadow: 0 0 18px rgba(255,255,255,0.04); transition: border-color 0.2s ease, box-shadow 0.2s ease; }
 html[data-uiv2="true"] .v2profile:hover { border-color: rgba(255,255,255,0.13) !important; box-shadow: 0 0 26px rgba(255,255,255,0.08); }
 @keyframes v2PageIn  { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes v2PageOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-6px); } }
+@keyframes v2CardIn  { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes v2RowIn   { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 @media (min-width: 769px) {
-  html[data-uiv2="true"] .page-wrap { animation: v2PageIn 0.2s cubic-bezier(0.22,1,0.36,1) both !important; }
+  html[data-uiv2="true"] .page-wrap { padding: 40px 48px !important; animation: v2PageIn 0.2s cubic-bezier(0.22,1,0.36,1) both !important; }
   html[data-uiv2="true"][data-pageout="true"] .page-wrap { animation: v2PageOut 0.15s ease both !important; }
-  html[data-uiv2="true"] .card-lift { transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.3s ease, border-color 0.3s ease !important; }
-  html[data-uiv2="true"] .card-lift:hover { transform: translateY(-2px) !important; box-shadow: 0 2px 4px rgba(0,0,0,0.45), 0 16px 40px rgba(0,0,0,0.45) !important; }
-  html[data-uiv2="true"] .chart-grid > div, html[data-uiv2="true"] .radar-grid > div, html[data-uiv2="true"] .ana-grid > div { transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.3s ease, border-color 0.3s ease !important; }
-  html[data-uiv2="true"] .chart-grid > div:hover, html[data-uiv2="true"] .radar-grid > div:hover, html[data-uiv2="true"] .ana-grid > div:hover { transform: translateY(-2px); box-shadow: 0 2px 4px rgba(0,0,0,0.45), 0 16px 40px rgba(0,0,0,0.45) !important; }
+  /* 8px-grid rhythm */
+  html[data-uiv2="true"] .stat-grid  { gap: 12px; margin-bottom: 20px; }
+  html[data-uiv2="true"] .chart-grid { gap: 16px; margin-bottom: 16px; }
+  html[data-uiv2="true"] .radar-grid { gap: 16px; }
+  html[data-uiv2="true"] .ana-grid   { gap: 16px; margin-top: 16px; }
+  /* cards: lift + border brighten on hover */
+  html[data-uiv2="true"] .card-lift { transition: transform 0.2s cubic-bezier(0.16,1,0.3,1), box-shadow 0.2s cubic-bezier(0.16,1,0.3,1), border-color 0.2s cubic-bezier(0.16,1,0.3,1), background 0.3s ease !important; }
+  html[data-uiv2="true"] .card-lift:hover { transform: translateY(-2px) !important; border-color: rgba(255,255,255,0.09) !important; box-shadow: 0 2px 4px rgba(0,0,0,0.5), 0 16px 48px rgba(0,0,0,0.4) !important; }
+  html[data-uiv2="true"] .chart-grid > div, html[data-uiv2="true"] .radar-grid > div, html[data-uiv2="true"] .ana-grid > div { transition: transform 0.2s cubic-bezier(0.16,1,0.3,1), box-shadow 0.2s cubic-bezier(0.16,1,0.3,1), border-color 0.2s cubic-bezier(0.16,1,0.3,1), background 0.3s ease !important; }
+  html[data-uiv2="true"] .chart-grid > div:hover, html[data-uiv2="true"] .radar-grid > div:hover, html[data-uiv2="true"] .ana-grid > div:hover { transform: translateY(-2px); border-color: rgba(255,255,255,0.09) !important; box-shadow: 0 2px 4px rgba(0,0,0,0.5), 0 16px 48px rgba(0,0,0,0.4) !important; }
+  /* staggered entrance — backwards fill so hover transforms take over after settling */
+  html[data-uiv2="true"] .stat-grid > * { animation: v2CardIn 0.5s cubic-bezier(0.16,1,0.3,1) backwards; }
+  html[data-uiv2="true"] .stat-grid > *:nth-child(2) { animation-delay: 60ms; }
+  html[data-uiv2="true"] .stat-grid > *:nth-child(3) { animation-delay: 120ms; }
+  html[data-uiv2="true"] .stat-grid > *:nth-child(4) { animation-delay: 180ms; }
+  html[data-uiv2="true"] .stat-grid > *:nth-child(5) { animation-delay: 240ms; }
+  html[data-uiv2="true"] .chart-grid > * { animation: v2CardIn 0.5s cubic-bezier(0.16,1,0.3,1) 150ms backwards; }
+  html[data-uiv2="true"] .chart-grid > *:nth-child(2) { animation-delay: 210ms; }
+  html[data-uiv2="true"] .radar-grid > * { animation: v2CardIn 0.5s cubic-bezier(0.16,1,0.3,1) 270ms backwards; }
+  html[data-uiv2="true"] .radar-grid > *:nth-child(2) { animation-delay: 330ms; }
+  /* table rows slide in staggered */
+  html[data-uiv2="true"] .trade-row, html[data-uiv2="true"] .radar-grid tbody tr { animation: v2RowIn 0.35s ease-out backwards; }
+  html[data-uiv2="true"] .trade-row:nth-child(1), html[data-uiv2="true"] .radar-grid tbody tr:nth-child(1) { animation-delay: 40ms; }
+  html[data-uiv2="true"] .trade-row:nth-child(2), html[data-uiv2="true"] .radar-grid tbody tr:nth-child(2) { animation-delay: 80ms; }
+  html[data-uiv2="true"] .trade-row:nth-child(3), html[data-uiv2="true"] .radar-grid tbody tr:nth-child(3) { animation-delay: 120ms; }
+  html[data-uiv2="true"] .trade-row:nth-child(4), html[data-uiv2="true"] .radar-grid tbody tr:nth-child(4) { animation-delay: 160ms; }
+  html[data-uiv2="true"] .trade-row:nth-child(5), html[data-uiv2="true"] .radar-grid tbody tr:nth-child(5) { animation-delay: 200ms; }
+  html[data-uiv2="true"] .trade-row:nth-child(6), html[data-uiv2="true"] .radar-grid tbody tr:nth-child(6) { animation-delay: 240ms; }
+  html[data-uiv2="true"] .trade-row:nth-child(7), html[data-uiv2="true"] .radar-grid tbody tr:nth-child(7) { animation-delay: 280ms; }
+  html[data-uiv2="true"] .trade-row:nth-child(8), html[data-uiv2="true"] .radar-grid tbody tr:nth-child(8) { animation-delay: 320ms; }
+}
+/* accessibility: motion off when the OS asks for it */
+@media (prefers-reduced-motion: reduce) {
+  html[data-uiv2="true"] *, html[data-uiv2="true"] *::before, html[data-uiv2="true"] *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
 `
 
@@ -406,7 +448,7 @@ const TH = {
 }
 
 const TD = {
-  padding: '12px 14px',
+  padding: 'var(--v2-td-py, 12px) 14px',
   fontSize: '13px',
   borderTop: '1px solid var(--divider)',
 }
@@ -1971,11 +2013,14 @@ function Dashboard({ trades, onAddTrade, loading, profile, flags = {} }) {
   }
 
   // ── Animation hooks (called unconditionally before any early return) ──
-  const animPnl    = useCountAnimation(loading ? 0 : totalPnl,  ANIM_MS)
-  const animWR     = useCountAnimation(loading ? 0 : winRate,   ANIM_MS)
-  const animAvgRR  = useCountAnimation(loading ? 0 : avgRRNum,  ANIM_MS)
-  const animPF     = useCountAnimation(loading ? 0 : pfNum,     ANIM_MS)
-  const animStreak = useCountAnimation(loading ? 0 : streak,    ANIM_MS)
+  // v2: 800ms count-up (near-instant under prefers-reduced-motion); v1 keeps ANIM_MS
+  const statMs = uiV2 ? (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : 800) : ANIM_MS
+  const lblV2  = uiV2 ? { fontSize: '11px', letterSpacing: '0.08em', color: '#666' } : {}
+  const animPnl    = useCountAnimation(loading ? 0 : totalPnl,  statMs)
+  const animWR     = useCountAnimation(loading ? 0 : winRate,   statMs)
+  const animAvgRR  = useCountAnimation(loading ? 0 : avgRRNum,  statMs)
+  const animPF     = useCountAnimation(loading ? 0 : pfNum,     statMs)
+  const animStreak = useCountAnimation(loading ? 0 : streak,    statMs)
 
   useEffect(() => {
     if (!loading) setChartVisible(true)
@@ -2043,9 +2088,9 @@ function Dashboard({ trades, onAddTrade, loading, profile, flags = {} }) {
   if (trades.length === 0) {
     return (
       <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: uiV2 ? '32px' : '24px' }}>
           <div>
-            <h1 style={{ fontSize: '32px', fontWeight: '800', letterSpacing: '-1px', color: '#fff' }}>Dashboard</h1>
+            <h1 style={{ fontSize: uiV2 ? '28px' : '32px', fontWeight: uiV2 ? '700' : '800', letterSpacing: uiV2 ? '-0.02em' : '-1px', color: '#fff' }}>Dashboard</h1>
           </div>
           <div style={{ fontSize: '11px', color: '#666', background: 'rgba(13,13,13,0.9)', border: '1px solid #1c1c1c', padding: '8px 16px', borderRadius: '8px', backdropFilter: 'blur(20px)', letterSpacing: '0.06em' }}>
             {monthLabel}
@@ -2067,9 +2112,9 @@ function Dashboard({ trades, onAddTrade, loading, profile, flags = {} }) {
 
   return (
     <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: uiV2 ? '32px' : '24px' }}>
         <div>
-          <h1 style={{ fontSize: '32px', fontWeight: '800', letterSpacing: '-1px', color: 'var(--text-hi)' }}>Dashboard</h1>
+          <h1 style={{ fontSize: uiV2 ? '28px' : '32px', fontWeight: uiV2 ? '700' : '800', letterSpacing: uiV2 ? '-0.02em' : '-1px', color: 'var(--text-hi)' }}>Dashboard</h1>
         </div>
         <div style={{ fontSize: '11px', color: '#666', background: 'rgba(13,13,13,0.9)', border: '1px solid #1c1c1c', padding: '8px 16px', borderRadius: '8px', backdropFilter: 'blur(20px)', letterSpacing: '0.06em' }}>
           {monthLabel}
@@ -2088,8 +2133,8 @@ function Dashboard({ trades, onAddTrade, loading, profile, flags = {} }) {
                 <Sparkline data={s.spark} color={s.sparkColor} />
               </div>
             )}
-            <div style={{ ...lbl, marginBottom: '10px', color: '#999', position: 'relative' }}>{s.label}</div>
-            <div style={{ fontSize: uiV2 ? '27px' : '24px', fontWeight: '800', letterSpacing: uiV2 ? '-1.4px' : '-1px', color: s.color, textShadow: s.shadow, lineHeight: 1, marginBottom: '8px', position: 'relative' }}>{s.val}</div>
+            <div style={{ ...lbl, marginBottom: '10px', color: '#999', ...lblV2, position: 'relative' }}>{s.label}</div>
+            <div style={{ fontSize: uiV2 ? '26px' : '24px', fontWeight: uiV2 ? '700' : '800', letterSpacing: uiV2 ? '-0.02em' : '-1px', color: s.color, textShadow: s.shadow, lineHeight: 1, marginBottom: '8px', position: 'relative' }}>{s.val}</div>
             <div style={{ fontSize: '11px', color: '#888', position: 'relative' }}>{s.sub}</div>
           </div>
         ))}
@@ -2104,12 +2149,12 @@ function Dashboard({ trades, onAddTrade, loading, profile, flags = {} }) {
       <div className="chart-grid">
         <div style={{ ...card, display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <div style={{ ...lbl, color: '#999' }}>Cumulative P&L</div>
+            <div style={{ ...lbl, color: '#999', ...lblV2 }}>Cumulative P&L</div>
             <div style={{ fontSize: '12px', color: totalPnl >= 0 ? '#aaffa0' : '#ff8080', fontWeight: '700', letterSpacing: '-0.3px' }}>
               {totalPnl >= 0 ? '+' : '−'}${Math.abs(Math.round(totalPnl)).toLocaleString()} MTD
             </div>
           </div>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, ...(chartVisible ? { animation: `chartReveal ${uiV2 ? 1100 : ANIM_MS}ms ${uiV2 ? 'cubic-bezier(0.22,1,0.36,1)' : 'ease-out'} both` } : { clipPath: 'inset(0 100% 0 0)' }) }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, ...(chartVisible ? { animation: `chartReveal ${uiV2 ? 1000 : ANIM_MS}ms ${uiV2 ? 'cubic-bezier(0.22,1,0.36,1)' : 'ease-out'} both` } : { clipPath: 'inset(0 100% 0 0)' }) }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={pnlCurve} margin={{ top: 4, right: 4, bottom: 0, left: 10 }}>
                 <defs>
@@ -2141,8 +2186,8 @@ function Dashboard({ trades, onAddTrade, loading, profile, flags = {} }) {
       {/* Radar + Recent trades */}
       <div className="radar-grid">
         <div style={{ ...card, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ ...lbl, color: '#999' }}>Performance Radar</div>
-          <div style={chartVisible ? { animation: `chartReveal ${uiV2 ? 1100 : ANIM_MS}ms ${uiV2 ? 'cubic-bezier(0.22,1,0.36,1)' : 'ease-out'} both` } : { clipPath: 'inset(0 100% 0 0)' }}>
+          <div style={{ ...lbl, color: '#999', ...lblV2 }}>Performance Radar</div>
+          <div style={chartVisible ? { animation: `chartReveal ${uiV2 ? 1000 : ANIM_MS}ms ${uiV2 ? 'cubic-bezier(0.22,1,0.36,1)' : 'ease-out'} both` } : { clipPath: 'inset(0 100% 0 0)' }}>
             <ResponsiveContainer width="100%" height={220}>
               <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="56%" margin={{ top: 18, right: 42, bottom: 18, left: 42 }}>
                 <PolarGrid stroke="#1e1e1e" strokeDasharray="3 3" />
@@ -2161,7 +2206,7 @@ function Dashboard({ trades, onAddTrade, loading, profile, flags = {} }) {
         {flags.feedSection !== false && (
         <div style={card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <div style={{ ...lbl, color: '#999' }}>Recent Trades</div>
+            <div style={{ ...lbl, color: '#999', ...lblV2 }}>Recent Trades</div>
             <div style={{ fontSize: '11px', color: '#666' }}>Last 7 entries</div>
           </div>
           {byDate.length === 0 ? (
@@ -2301,7 +2346,7 @@ function CustomSelect({ value, onChange, options, placeholder = 'Select…' }) {
         <span style={{ color: '#555', fontSize: '10px', flexShrink: 0 }}>▾</span>
       </div>
       {open && (
-        <div style={{
+        <div className="v2dd" style={{
           position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 100,
           background: '#0d0d0d', border: '1px solid #222', borderRadius: '8px',
           boxShadow: '0 12px 40px rgba(0,0,0,0.7)', overflow: 'hidden',
@@ -3057,6 +3102,7 @@ function AddTradeModal({ open, onClose, session, onTradeAdded }) {
 // ─── Trade Log ────────────────────────────────────────────────
 function Trades({ trades, session, onTradeAdded, onTradeDeleted, onTradeUpdated, onAddTrade, loading, demoMode = false, readOnly = false }) {
   if (loading) return <TradesSkeleton />
+  const uiV2 = useUIV2()
   const [selectedTrade, setSelectedTrade] = useState(null)
   const [csvPreview, setCsvPreview]     = useState(null)
   const [csvImporting, setCsvImporting] = useState(false)
@@ -3149,7 +3195,7 @@ function Trades({ trades, session, onTradeAdded, onTradeDeleted, onTradeUpdated,
     <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '24px' }}>
         <div>
-          <h1 style={{ fontSize: '28px', fontWeight: '800', letterSpacing: '-1px' }}>Trade Log</h1>
+          <h1 style={{ fontSize: '28px', fontWeight: uiV2 ? '700' : '800', letterSpacing: uiV2 ? '-0.02em' : '-1px' }}>Trade Log</h1>
         </div>
         {!readOnly && (
         <div style={{ display: 'flex', gap: '8px' }}>
@@ -3618,6 +3664,7 @@ const weekRangeLabel = (monday) => {
 }
 
 function NewsCalendar() {
+  const uiV2 = useUIV2()
   const thisMonday = getMonday()
   const [weekOffset,   setWeekOffset]   = useState(0)  // 0 = current week, 1 = next, etc.
   const [events,       setEvents]       = useState([])
@@ -3763,7 +3810,7 @@ function NewsCalendar() {
     <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
-        <h1 style={{ fontSize: '28px', fontWeight: '800', letterSpacing: '-1px' }}>News Calendar</h1>
+        <h1 style={{ fontSize: '28px', fontWeight: uiV2 ? '700' : '800', letterSpacing: uiV2 ? '-0.02em' : '-1px' }}>News Calendar</h1>
         {/* Week navigator */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button
@@ -3941,6 +3988,7 @@ function NewsCalendar() {
 
 // ─── Trading Plan ─────────────────────────────────────────────
 function TradingPlan({ flags = {} }) {
+  const uiV2 = useUIV2()
   const today    = new Date().toISOString().slice(0, 10)
   const CK       = `checklist_${today}`     // daily check state (by item id)
   const IK       = 'checklist_items'        // persistent item list
@@ -4087,7 +4135,7 @@ function TradingPlan({ flags = {} }) {
   return (
     <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both' }}>
       <div style={{ marginBottom: '28px' }}>
-        <h1 style={{ fontSize: '28px', fontWeight: '800', letterSpacing: '-1px', color: 'var(--text-hi)' }}>Trading Plan</h1>
+        <h1 style={{ fontSize: '28px', fontWeight: uiV2 ? '700' : '800', letterSpacing: uiV2 ? '-0.02em' : '-1px', color: 'var(--text-hi)' }}>Trading Plan</h1>
       </div>
 
       {/* Daily Checklist */}
@@ -4432,8 +4480,8 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
     })
   })()
 
-  const sectionCard = { background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: '14px', padding: '28px', marginBottom: '16px', backdropFilter: 'var(--card-blur, none)', WebkitBackdropFilter: 'var(--card-blur, none)' }
-  const sectionTitle = { fontSize: '11px', fontWeight: '600', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#555', marginBottom: '16px' }
+  const sectionCard = { background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: uiV2 ? '16px' : '14px', padding: uiV2 ? '24px' : '28px', marginBottom: '16px', boxShadow: 'var(--v2-card-shadow, none)', backdropFilter: 'var(--card-blur, none)', WebkitBackdropFilter: 'var(--card-blur, none)' }
+  const sectionTitle = { fontSize: '11px', fontWeight: '600', letterSpacing: uiV2 ? '0.08em' : '0.1em', textTransform: 'uppercase', color: uiV2 ? '#666' : '#555', marginBottom: '16px' }
   const divider = { height: '1px', background: '#1a1a1a', margin: '20px 0' }
 
   // ── Danger Zone ──
@@ -4485,7 +4533,7 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
   return (
     <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both' }}>
       <div style={{ marginBottom: '28px' }}>
-        <h1 style={{ fontSize: '28px', fontWeight: '800', letterSpacing: '-1px', color: 'var(--text-hi)' }}>Settings</h1>
+        <h1 style={{ fontSize: '28px', fontWeight: uiV2 ? '700' : '800', letterSpacing: uiV2 ? '-0.02em' : '-1px', color: 'var(--text-hi)' }}>Settings</h1>
       </div>
 
       {/* ── Journal Theme ── */}
@@ -4572,6 +4620,7 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <button
             onClick={saveProfile}
+            className={saved ? 'v2saved' : undefined}
             style={{ background: saved ? '#1a1a1a' : '#fff', color: saved ? '#aaffa0' : '#000', border: 'none', borderRadius: '99px', padding: '10px 24px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.2s', minWidth: '130px' }}
           >
             {saved ? '✓ Saved' : 'Save Changes'}
@@ -4620,6 +4669,7 @@ function Settings({ theme, setTheme, session, profile, setProfile, glassMode, se
               </div>
               <button
                 onClick={saveGoal}
+                className={goalSaved ? 'v2saved' : undefined}
                 style={{ background: goalSaved ? '#1a1a1a' : '#fff', color: goalSaved ? '#aaffa0' : '#000', border: 'none', borderRadius: '99px', padding: '0 22px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', minWidth: '120px', transition: 'all 0.2s' }}
               >
                 {goalSaved ? '✓ Saved' : 'Save Goal'}
@@ -6080,6 +6130,7 @@ function CountUp({ value, duration = 900, suffix = '' }) {
 }
 
 function AdminPanel({ session, setPage, onViewUser }) {
+  const uiV2 = useUIV2()
   const [tab,          setTab]          = useState('overview') // 'overview' | 'waitlist' | 'tickets' | 'health'
   const [users,        setUsers]        = useState([])
   const [trades,       setTrades]       = useState([])
@@ -6573,7 +6624,7 @@ function AdminPanel({ session, setPage, onViewUser }) {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
             <Shield size={20} color="#aaffa0" />
-            <h1 style={{ fontSize: '28px', fontWeight: '800', letterSpacing: '-1px', color: 'var(--text-hi)' }}>Admin Panel</h1>
+            <h1 style={{ fontSize: '28px', fontWeight: uiV2 ? '700' : '800', letterSpacing: uiV2 ? '-0.02em' : '-1px', color: 'var(--text-hi)' }}>Admin Panel</h1>
             {isSuper ? (
               <span style={{ fontSize: '9.5px', fontWeight: '800', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#0a0a0b', background: '#fff', padding: '4px 9px', borderRadius: '6px' }}>Super Admin</span>
             ) : (
