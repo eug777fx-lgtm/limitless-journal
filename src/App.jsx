@@ -7783,6 +7783,10 @@ export default function App() {
         supabase.from('trades').select('*').eq('user_id', u.id).order('trade_date', { ascending: false }),
         supabase.from('profiles').select('*').eq('id', u.id).maybeSingle(),
       ])
+      // TEMP DEBUG — view-as diagnostics. An RLS block does NOT throw: it returns
+      // an empty array with error=null, so both lines matter. Remove once confirmed.
+      console.log('VIEW-AS TRADES FETCHED:', tradesRes.data?.length, tradesRes.data?.[0])
+      console.log('VIEW-AS FETCH ERROR:', tradesRes.error)
       setViewTrades(tradesRes.data || [])
       if (profRes.data) setViewUser((prev) => ({ ...(prev || {}), ...profRes.data, email: prev?.email }))
     } catch (e) { console.error('view-as load failed:', e) }
@@ -8368,7 +8372,14 @@ export default function App() {
           <div style={{ flexShrink: 0, background: 'linear-gradient(90deg, rgba(255,193,7,0.16), rgba(255,193,7,0.05))', borderBottom: '1px solid rgba(255,193,7,0.35)', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
               <Eye size={16} color="#ffc107" />
-              <div style={{ fontSize: '13px', fontWeight: '700', color: '#ffc107', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Viewing {[viewUser.first_name, viewUser.last_name].filter(Boolean).join(' ') || viewUser.username || viewUser.email || 'user'}'s dashboard <span style={{ color: 'rgba(255,193,7,0.65)', fontWeight: 500 }}>— Read Only</span></div>
+              <div style={{ fontSize: '13px', fontWeight: '700', color: '#ffc107', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                Viewing {[viewUser.first_name, viewUser.last_name].filter(Boolean).join(' ') || viewUser.username || viewUser.email || 'user'}'s dashboard
+                {/* TEMP DEBUG — instant fetch diagnostics: 0 trades ⇒ RLS is blocking the admin read */}
+                <span style={{ color: 'rgba(255,193,7,0.85)', fontWeight: 600 }}>
+                  {' — '}{viewLoading ? 'loading…' : `${viewTrades.length} trades loaded — ${viewTrades.filter(t => parseChartUrls(t.chart_url).length > 0).length} with charts`}
+                </span>
+                <span style={{ color: 'rgba(255,193,7,0.65)', fontWeight: 500 }}> — Read Only</span>
+              </div>
             </div>
             <button onClick={exitViewAs} style={{ background: '#ffc107', color: '#000', border: 'none', borderRadius: '8px', padding: '7px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}><X size={13} /> Exit View</button>
           </div>
