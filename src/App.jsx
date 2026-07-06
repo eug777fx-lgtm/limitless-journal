@@ -2491,11 +2491,11 @@ function TradeDetailModal({ trade, onClose, onSave, demoMode = false, readOnly =
       </div>
     )}
     <div
-      style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', zIndex: 1000 }}
+      style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', zIndex: 1200 }}
       onClick={onClose}
     >
       <div
-        style={{ position: 'relative', width: '90%', maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto', background: '#0d0d0d', border: '1px solid #1f1f1f', borderRadius: '16px', padding: '32px', boxShadow: '0 32px 100px rgba(0,0,0,0.9)', zIndex: 1001, animation: 'modalIn 0.2s ease both' }}
+        style={{ position: 'relative', width: '90%', maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto', background: '#0d0d0d', border: '1px solid #1f1f1f', borderRadius: '16px', padding: '32px', boxShadow: '0 32px 100px rgba(0,0,0,0.9)', zIndex: 1201, animation: 'modalIn 0.2s ease both' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -7834,10 +7834,6 @@ export default function App() {
         supabase.from('trades').select('*').eq('user_id', u.id).order('trade_date', { ascending: false }),
         supabase.from('profiles').select('*').eq('id', u.id).maybeSingle(),
       ])
-      // TEMP DEBUG — view-as diagnostics. An RLS block does NOT throw: it returns
-      // an empty array with error=null, so both lines matter. Remove once confirmed.
-      console.log('VIEW-AS TRADES FETCHED:', tradesRes.data?.length, tradesRes.data?.[0])
-      console.log('VIEW-AS FETCH ERROR:', tradesRes.error)
       setViewTrades(tradesRes.data || [])
       if (profRes.data) setViewUser((prev) => ({ ...(prev || {}), ...profRes.data, email: prev?.email }))
     } catch (e) { console.error('view-as load failed:', e) }
@@ -8425,10 +8421,6 @@ export default function App() {
               <Eye size={16} color="#ffc107" />
               <div style={{ fontSize: '13px', fontWeight: '700', color: '#ffc107', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 Viewing {[viewUser.first_name, viewUser.last_name].filter(Boolean).join(' ') || viewUser.username || viewUser.email || 'user'}'s dashboard
-                {/* TEMP DEBUG — instant fetch diagnostics: 0 trades ⇒ RLS is blocking the admin read */}
-                <span style={{ color: 'rgba(255,193,7,0.85)', fontWeight: 600 }}>
-                  {' — '}{viewLoading ? 'loading…' : `${viewTrades.length} trades loaded — ${viewTrades.filter(t => parseChartUrls(t.chart_url).length > 0).length} with charts`}
-                </span>
                 <span style={{ color: 'rgba(255,193,7,0.65)', fontWeight: 500 }}> — Read Only</span>
               </div>
             </div>
