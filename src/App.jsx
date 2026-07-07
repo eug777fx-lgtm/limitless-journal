@@ -8400,7 +8400,7 @@ export default function App() {
         {page === 'news' && featureFlags.newsCalendar && <NewsCalendar />}
         {page === 'network'     && <NetworkPage session={session} setPage={setPage} profile={profile} />}
         {page === 'tos'         && isSuperAdmin(session?.user?.email) && <TOSPage session={session} />}
-        {page === 'copy'        && isSuperAdmin(session?.user?.email) && <CopyTraderPage />}
+        {page === 'copy'        && isSuperAdmin(session?.user?.email) && <CopyTraderPage session={session} journalTrades={effectiveTrades} />}
         {page === 'plan'        && <TradingPlan flags={featureFlags} />}
         {page === 'settings'    && <Settings theme={theme} setTheme={handleSetTheme} session={session} profile={profile} setProfile={setProfile} glassMode={glassMode} setGlassMode={v => { setGlassMode(v); localStorage.setItem('glass_mode', v) }} onLogout={logout} trades={effectiveTrades} demoMode={demoMode} setDemoMode={setDemoMode} setTrades={setTrades} setPage={setPage} uiV2={uiV2} setUiV2={setUiV2} />}
         {page === 'admin'       && <AdminPanel session={session} setPage={setPage} onViewUser={enterViewAs} />}

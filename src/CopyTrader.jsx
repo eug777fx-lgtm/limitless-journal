@@ -2,9 +2,11 @@
 //  TRADESYNC  —  Private prop-firm command center for eug777fx@gmail.com
 //  7 tabs: Accounts · Overview · Risk · Payouts · Scaling · Mission · Copier
 //  Self-contained module — mounted from App.jsx when page === 'copy'.
-//  All data stored in localStorage (no Supabase tables required).
+//  Persistence: Supabase (copier_accounts / copier_trades / copier_settings)
+//  with localStorage as instant-boot cache + offline fallback. A one-time
+//  localStorage → Supabase import runs on first load (see lib/copierStore).
 // ═══════════════════════════════════════════════════════════════════════════
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import toast from 'react-hot-toast'
 import {
@@ -18,8 +20,18 @@ import {
   Lock, Activity, Zap, Server, Link2, GitBranch, Layers, Award, Calendar,
   Clock, CheckCircle, ChevronDown, Save, Gauge, Building2, Wifi,
   RefreshCw, Crosshair, Flag, Trophy, Rocket, CircleDot, ArrowUpRight,
-  Percent, Coins, Signal, Radio, Network,
+  Percent, Coins, Signal, Radio, Network, Cloud, CloudOff, Play, Ban,
 } from 'lucide-react'
+import {
+  loadCopierData, saveAccounts, saveSettings, insertTrades, deleteTrades,
+  debounce, LS_KEYS,
+} from './lib/copierStore'
+import {
+  simulateCopy, computeFollowerSize, pointValue, normalizeSymbol,
+  RULE_PRESETS, resolveRules, evaluateRules, checkFillViolations,
+  riskOfRuin, payoutStatus, projectMonthlyIncome,
+} from './lib/copierEngine'
+import { createSimulationAdapter } from './lib/adapters/SimulationAdapter'
 
 // ─── Palette (fixed dark/cyan — independent of app theme) ───────────────────
 const BLUE       = '#06b6d4'
@@ -246,7 +258,11 @@ const blankAccount = () => ({
   instrument: 'NQ (E-mini NASDAQ)',
   startingBalance: '', currentBalance: '', currentEquity: '',
   dailyDDLimit: '5', maxDDLimit: '10', profitTarget: '8', status: 'Active', notes: '',
+  isMaster: false, ruleset: 'apex', customRules: null, payout: null,
 })
+
+const RULESET_OPTIONS = ['apex', 'topstep', 'ftmo', 'custom']
+const RULESET_LABELS = { apex: 'Apex', topstep: 'TopStep', ftmo: 'FTMO', custom: 'Custom' }
 
 function AccountForm({ initial, onSave, onClose }) {
   const [f, setF] = useState(() => ({ ...blankAccount(), ...initial }))
@@ -271,6 +287,17 @@ function AccountForm({ initial, onSave, onClose }) {
         <Field label="Max Drawdown Limit %"><TextInput type="number" value={f.maxDDLimit} onChange={set('maxDDLimit')} placeholder="10" /></Field>
         <Field label="Profit Target %"><TextInput type="number" value={f.profitTarget} onChange={set('profitTarget')} placeholder="8" /></Field>
         <Field label="Status"><Select value={f.status} onChange={set('status')} options={['Active', 'Inactive']} /></Field>
+        <Field label="Copier Role">
+          <Select value={f.isMaster ? 'Master' : 'Follower'} onChange={e => setF(p => ({ ...p, isMaster: e.target.value === 'Master' }))} options={['Follower', 'Master']} />
+        </Field>
+        <Field label="Rule Preset (Risk Guardian)">
+          <div style={{ position: 'relative' }}>
+            <select value={f.ruleset || 'apex'} onChange={set('ruleset')} style={{ ...inp, appearance: 'none', WebkitAppearance: 'none', paddingRight: '34px', cursor: 'pointer' }}>
+              {RULESET_OPTIONS.map(o => <option key={o} value={o} style={{ background: '#060f12' }}>{RULESET_LABELS[o]}</option>)}
+            </select>
+            <ChevronDown size={15} color={TEXT_LO} style={{ position: 'absolute', right: '11px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+          </div>
+        </Field>
       </div>
       <div style={{ marginTop: '14px' }}>
         <Field label="Notes"><textarea value={f.notes} onChange={set('notes')} style={ta} placeholder="Firm rules, trailing drawdown type, reset dates, contract limits, consistency rules…" /></Field>
@@ -533,7 +560,64 @@ function Warning({ level, text }) {
   )
 }
 
-function RiskTab({ accounts, risk, setRisk }) {
+// Aggregate stats from the user's REAL journal trades (trades table)
+function computeJournalStats(trades) {
+  const closed = (trades || []).filter(t => t.pnl != null && t.pnl !== '')
+  const wins = closed.filter(t => num(t.pnl) > 0)
+  const losses = closed.filter(t => num(t.pnl) < 0)
+  const winRate = closed.length ? wins.length / closed.length * 100 : 0
+  const rVals = closed.map(t => num(t.rr)).filter(v => Number.isFinite(v) && v !== 0)
+  const avgR = rVals.length ? rVals.reduce((s, v) => s + v, 0) / rVals.length : 0
+  const winR = wins.map(t => num(t.rr)).filter(v => v > 0)
+  const lossR = losses.map(t => Math.abs(num(t.rr))).filter(v => v > 0)
+  const avgWinR = winR.length ? winR.reduce((s, v) => s + v, 0) / winR.length : (avgR > 0 ? avgR : 1)
+  const avgLossR = lossR.length ? lossR.reduce((s, v) => s + v, 0) / lossR.length : 1
+  const mk = new Date().toISOString().slice(0, 7)
+  const monthlyPnl = closed.filter(t => (t.trade_date || '').slice(0, 7) === mk).reduce((s, t) => s + num(t.pnl), 0)
+  const months = new Set(closed.map(t => (t.trade_date || '').slice(0, 7)).filter(Boolean))
+  const tradesPerMonth = months.size > 0 ? closed.length / months.size : 0
+  return { total: closed.length, winRate, avgR, avgWinR, avgLossR, monthlyPnl, tradesPerMonth }
+}
+
+// Per-copier-account stats derived from simulated fills
+function accountSimStats(simTrades, accountId) {
+  const mine = (simTrades || []).filter(t => t.accountId === accountId && t.status !== 'blocked')
+  const today = new Date().toISOString().slice(0, 10)
+  const dayPnl = mine.filter(t => (t.openedAt || '').slice(0, 10) === today).reduce((s, t) => s + num(t.pnl), 0)
+  const byDay = {}
+  mine.forEach(t => { const d = (t.openedAt || '').slice(0, 10); byDay[d] = (byDay[d] || 0) + num(t.pnl) })
+  const bestDayProfit = Math.max(0, ...Object.values(byDay), 0)
+  const totalProfit = Math.max(0, mine.reduce((s, t) => s + num(t.pnl), 0))
+  const daysTraded = Object.keys(byDay).length
+  return { dayPnl, bestDayProfit, totalProfit, daysTraded, contractsOpen: 0 }
+}
+
+function RuleGauge({ r }) {
+  const pct = clamp(r.pct, 0, 100)
+  const color = !r.ok ? RED : r.pct >= 75 ? YELLOW : GREEN
+  const fmt = (v) => r.rule === 'consistency' || r.rule === 'max_contracts' ? Math.round(v * 10) / 10 : usd(v)
+  return (
+    <div style={{ background: '#0a1a1f', border: `1px solid ${!r.ok ? 'rgba(248,113,113,0.4)' : 'rgba(6,182,212,0.10)'}`, borderRadius: '11px', padding: '12px 14px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '7px' }}>
+        <span style={{ fontSize: '11px', fontWeight: 700, color: TEXT_MD, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{r.label}</span>
+        <span style={{ fontSize: '11.5px', fontWeight: 800, color }}>{r.ok ? `${Math.round(r.pct)}%` : 'BREACHED'}</span>
+      </div>
+      <ProgressBar pct={pct} color={color} height={7} />
+      <div style={{ fontSize: '10.5px', color: TEXT_LO, marginTop: '6px' }}>
+        {fmt(r.value)} of {fmt(r.limit)}{r.rule === 'consistency' ? '% best-day share' : ''}{!r.ok ? ` · over by ${fmt(r.excess)}` : ''}
+      </div>
+    </div>
+  )
+}
+
+function RiskTab({ accounts, risk, setRisk, journalTrades = [], simTrades = [] }) {
+  // Risk-of-Ruin inputs (persisted in the risk blob)
+  const js = useMemo(() => computeJournalStats(journalTrades), [journalTrades])
+  const rorRiskPct = num(risk.rorRiskPct) || 1
+  const rorRuinDD = num(risk.rorRuinDD) || 10
+  const ror = riskOfRuin({ winRate: js.winRate, avgWinR: js.avgWinR, avgLossR: js.avgLossR, riskPerTradePct: rorRiskPct, ruinDDPct: rorRuinDD })
+  const rorColor = ror >= 0.2 ? RED : ror >= 0.05 ? YELLOW : GREEN
+  const violations = (simTrades || []).filter(t => t.violation?.rules?.length || t.violation?.blocked)
   const set = (k) => (e) => {
     const v = e.target.type === 'checkbox' ? e.target.checked : e.target.value
     setRisk(p => ({ ...p, [k]: v }))
@@ -560,6 +644,99 @@ function RiskTab({ accounts, risk, setRisk }) {
           {warnings.map((w, i) => <Warning key={i} level={w.level} text={w.text} />)}
         </div>
       )}
+
+      {/* ── PER-ACCOUNT RULE SETS (prop-firm risk engine) ── */}
+      <div style={card}>
+        <SectionTitle Icon={Shield}>Prop-Firm Rule Status</SectionTitle>
+        {accounts.length === 0 ? (
+          <EmptyState Icon={Shield} title="No accounts" sub="Add accounts (with a rule preset) to see live rule status." />
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            {accounts.map(a => {
+              const rules = resolveRules(a.ruleset || 'apex', a.customRules || {})
+              const st = accountSimStats(simTrades, a.id)
+              const evals = evaluateRules(
+                { startingBalance: num(a.startingBalance), currentEquity: num(a.currentEquity) || num(a.currentBalance) },
+                rules, st,
+              )
+              const breached = evals.some(e => !e.ok)
+              return (
+                <div key={a.id} style={{ background: CARD_BG2, border: `1px solid ${breached ? 'rgba(248,113,113,0.35)' : CARD_BORD}`, borderRadius: '13px', padding: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 800, color: TEXT_HI }}>{a.name}</span>
+                      <Badge color={BLUE}>{RULESET_LABELS[a.ruleset] || RULE_PRESETS[a.ruleset]?.label || 'Apex'}</Badge>
+                      {breached && <Badge color={RED}>Rule breached</Badge>}
+                    </div>
+                    <span style={{ fontSize: '11px', color: TEXT_LO }}>
+                      DD distance: <span style={{ fontWeight: 800, color: TEXT_HI }}>{usd(Math.max(0, (num(a.startingBalance) * num(rules.trailingDD || 0) / 100) - Math.max(0, num(a.startingBalance) - (num(a.currentEquity) || num(a.currentBalance)))))}</span>
+                    </span>
+                  </div>
+                  {evals.length === 0 ? (
+                    <div style={{ fontSize: '12px', color: TEXT_LO }}>No rules configured for this preset.</div>
+                  ) : (
+                    <div className="ct-grid-4" style={{ gap: '10px' }}>
+                      {evals.map(r => <RuleGauge key={r.rule} r={r} />)}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── RISK OF RUIN (from real journal stats) ── */}
+      <div className="ct-grid-2">
+        <div style={card}>
+          <SectionTitle Icon={Gauge}>Risk of Ruin Calculator</SectionTitle>
+          <div style={{ fontSize: '12px', color: TEXT_LO, marginBottom: '14px' }}>
+            Fed by your actual journal: {js.total} closed trades · {pct1(js.winRate)} win rate · avg win {js.avgWinR.toFixed(2)}R / avg loss {js.avgLossR.toFixed(2)}R.
+          </div>
+          <div className="ct-form-grid">
+            <Field label="Risk Per Trade %"><TextInput type="number" value={risk.rorRiskPct ?? '1'} onChange={e => setRisk(p => ({ ...p, rorRiskPct: e.target.value }))} placeholder="1" /></Field>
+            <Field label="Ruin = Drawdown Of %"><TextInput type="number" value={risk.rorRuinDD ?? '10'} onChange={e => setRisk(p => ({ ...p, rorRuinDD: e.target.value }))} placeholder="10" /></Field>
+          </div>
+          <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '16px', background: '#0a1a1f', border: `1px solid ${rorColor}44`, borderRadius: '13px', padding: '16px 18px' }}>
+            <div style={{ fontSize: '34px', fontWeight: 900, letterSpacing: '-1px', color: rorColor }}>
+              {js.total < 10 ? '—' : `${(ror * 100).toFixed(ror < 0.01 ? 2 : 1)}%`}
+            </div>
+            <div style={{ fontSize: '12px', color: TEXT_MD, lineHeight: 1.5 }}>
+              {js.total < 10
+                ? 'Log at least 10 journal trades to compute a meaningful risk of ruin.'
+                : ror >= 0.2 ? 'High — this risk size can realistically blow the account. Cut risk per trade.'
+                : ror >= 0.05 ? 'Elevated — survivable but tighten sizing on losing streaks.'
+                : 'Low — current edge and sizing protect the account well.'}
+            </div>
+          </div>
+        </div>
+
+        {/* ── VIOLATION LOG ── */}
+        <div style={card}>
+          <SectionTitle Icon={AlertTriangle}>Violation Log</SectionTitle>
+          {violations.length === 0 ? (
+            <EmptyState Icon={CheckCircle} title="No violations" sub="Simulated fills that would breach a rule get flagged here with the rule and the excess." />
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '9px', maxHeight: '340px', overflowY: 'auto' }}>
+              {violations.slice(0, 30).map(t => (
+                <div key={t.id} style={{ background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.25)', borderRadius: '11px', padding: '11px 14px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '12.5px', fontWeight: 800, color: TEXT_HI }}>
+                      {accounts.find(a => a.id === t.accountId)?.name || '—'} · {normalizeSymbol(t.symbol)} {t.direction}
+                    </span>
+                    <span style={{ fontSize: '10.5px', color: TEXT_LO }}>{t.openedAt ? new Date(t.openedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}</span>
+                  </div>
+                  <div style={{ fontSize: '11.5px', color: RED, fontWeight: 600 }}>
+                    {t.violation?.blocked
+                      ? `Blocked: ${t.violation.blocked}`
+                      : (t.violation?.rules || []).map(v => `${v.label} — over by ${v.rule === 'consistency' ? `${v.excess}%` : usd(v.excess)}`).join(' · ')}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
 
       <div className="ct-grid-2">
         {/* Global settings */}
@@ -676,7 +853,44 @@ function PayoutForm({ accounts, onSave, onClose }) {
   )
 }
 
-function PayoutsTab({ accounts, payouts, setPayouts, overview, setOverview }) {
+// Per-account payout eligibility card (config stored on the account itself)
+function PayoutTracker({ a, simTrades, payouts, onConfig }) {
+  const c = computeAccount(a)
+  const cfg = { minDays: 8, split: 90, threshold: 0, ...(a.payout || {}) }
+  const st = accountSimStats(simTrades, a.id)
+  const rules = resolveRules(a.ruleset || 'apex', a.customRules || {})
+  const consistencyOk = rules.consistency == null || st.totalProfit <= 0 || (st.bestDayProfit / st.totalProfit * 100) <= rules.consistency
+  const ps = payoutStatus({ daysTraded: st.daysTraded, minDays: cfg.minDays, profit: c.pnl, threshold: cfg.threshold, split: cfg.split, consistencyOk })
+  const history = payouts.filter(p => p.account === a.name)
+  const set = (k) => (e) => onConfig({ ...cfg, [k]: e.target.value })
+  return (
+    <div style={{ background: CARD_BG2, border: `1px solid ${ps.safe ? 'rgba(52,211,153,0.35)' : CARD_BORD}`, borderRadius: '13px', padding: '16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: '13.5px', fontWeight: 800, color: TEXT_HI }}>{a.name}</span>
+        {ps.safe
+          ? <Badge color={GREEN}>Safe to request</Badge>
+          : <Badge color={YELLOW}>{ps.daysLeft > 0 ? `${ps.daysLeft} trading days to go` : !ps.overThreshold ? 'Below threshold' : !consistencyOk ? 'Consistency rule' : 'Not eligible'}</Badge>}
+      </div>
+      <div className="ct-grid-3" style={{ gap: '8px', marginBottom: '12px' }}>
+        <MiniStat label="Days Traded" value={`${st.daysTraded} / ${cfg.minDays}`} color={ps.daysLeft === 0 ? GREEN : TEXT_HI} />
+        <MiniStat label="Profit" value={usd(c.pnl)} color={c.pnl > 0 ? GREEN : RED} />
+        <MiniStat label={`Your Cut (${cfg.split}%)`} value={usd(ps.traderCut)} color={BLUE} />
+      </div>
+      <div className="ct-grid-3" style={{ gap: '8px' }}>
+        <Field label="Min Days"><TextInput type="number" value={cfg.minDays} onChange={set('minDays')} /></Field>
+        <Field label="Split % (yours)"><TextInput type="number" value={cfg.split} onChange={set('split')} /></Field>
+        <Field label="Threshold $"><TextInput type="number" value={cfg.threshold} onChange={set('threshold')} /></Field>
+      </div>
+      {history.length > 0 && (
+        <div style={{ fontSize: '11px', color: TEXT_LO, marginTop: '10px' }}>
+          {history.length} payout{history.length > 1 ? 's' : ''} logged · last {fmtDate(history[0]?.date)}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PayoutsTab({ accounts, setAccounts, payouts, setPayouts, overview, setOverview, simTrades = [] }) {
   const [modal, setModal] = useState(false)
   const save = (p) => { setPayouts(prev => [p, ...prev]); toast.success('Payout logged') }
   const del = (id) => { setPayouts(prev => prev.filter(p => p.id !== id)); toast.success('Removed') }
@@ -707,6 +921,21 @@ function PayoutsTab({ accounts, payouts, setPayouts, overview, setOverview }) {
           <TextInput type="number" value={overview.nextPayoutAmt || ''} onChange={e => setOverview(p => ({ ...p, nextPayoutAmt: e.target.value }))} placeholder="Amount $" style={{ fontSize: '16px', fontWeight: 800, padding: '6px 10px', marginBottom: '7px' }} />
           <TextInput type="date" value={overview.nextPayoutDate || ''} onChange={e => setOverview(p => ({ ...p, nextPayoutDate: e.target.value }))} className="ct-date" style={{ fontSize: '12px', padding: '6px 10px' }} />
         </div>
+      </div>
+
+      {/* per-account eligibility trackers */}
+      <div style={card}>
+        <SectionTitle Icon={Clock}>Payout Eligibility Per Account</SectionTitle>
+        {accounts.length === 0 ? (
+          <EmptyState Icon={Clock} title="No accounts" sub="Add accounts to track payout eligibility windows." />
+        ) : (
+          <div className="ct-grid-2" style={{ gap: '12px' }}>
+            {accounts.map(a => (
+              <PayoutTracker key={a.id} a={a} simTrades={simTrades} payouts={payouts}
+                onConfig={(payout) => setAccounts(prev => prev.map(x => x.id === a.id ? { ...x, payout } : x))} />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* history */}
@@ -782,7 +1011,13 @@ function PayoutsTab({ accounts, payouts, setPayouts, overview, setOverview }) {
 // ════════════════════════════════════════════════════════════════════════════
 const MILESTONES = [50000, 100000, 150000, 200000, 300000, 500000, 1000000]
 
-function ScalingTab({ accounts, scaling, setScaling }) {
+const ACCOUNT_MILESTONES = [1, 3, 5, 10, 20]
+
+function ScalingTab({ accounts, scaling, setScaling, journalTrades = [] }) {
+  const js = useMemo(() => computeJournalStats(journalTrades), [journalTrades])
+  const riskDollars = num(scaling.projRisk) || 500
+  const projSplit = num(scaling.projSplit) || 90
+  const perAccount = projectMonthlyIncome({ avgR: js.avgR, tradesPerMonth: js.tradesPerMonth, riskPerTradeDollars: riskDollars, split: projSplit })
   const fundedAccts = accounts.filter(a => acctCat(a.accountType) === 'Funded')
   const evalAccts   = accounts.filter(a => acctCat(a.accountType) === 'Evaluation')
   const activeEvals = evalAccts.filter(a => a.status === 'Active')
@@ -822,6 +1057,54 @@ function ScalingTab({ accounts, scaling, setScaling }) {
         <StatCard label="Funded Accounts" value={fundedAccts.length} Icon={CheckCircle} />
         <StatCard label="Active Evaluations" value={activeEvals.length} color={BLUE} Icon={Target} />
         <StatCard label="Pass Rate" value={pct1(passRate)} sub={`${fundedAccts.length}/${totalAttempted} attempted`} color={PURPLE} Icon={Award} />
+      </div>
+
+      {/* account-count roadmap + projected income */}
+      <div className="ct-grid-2">
+        <div style={card}>
+          <SectionTitle Icon={Layers}>Account Roadmap</SectionTitle>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
+            {ACCOUNT_MILESTONES.map((m, i) => {
+              const reached = fundedAccts.length >= m
+              const isNext = !reached && (i === 0 || fundedAccts.length >= ACCOUNT_MILESTONES[i - 1])
+              return (
+                <div key={m} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <div style={{
+                    width: '46px', height: '46px', borderRadius: '13px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    background: reached ? 'rgba(52,211,153,0.12)' : isNext ? BLUE_SOFT : '#0a1a1f',
+                    border: `1px solid ${reached ? 'rgba(52,211,153,0.45)' : isNext ? BLUE_LINE : 'rgba(6,182,212,0.10)'}`,
+                    boxShadow: isNext ? `0 0 14px ${BLUE}33` : 'none',
+                  }}>
+                    <span style={{ fontSize: '15px', fontWeight: 900, color: reached ? GREEN : isNext ? BLUE : TEXT_LO }}>{m}</span>
+                    <span style={{ fontSize: '7.5px', color: TEXT_LO, textTransform: 'uppercase', letterSpacing: '0.06em' }}>acct{m > 1 ? 's' : ''}</span>
+                  </div>
+                  {i < ACCOUNT_MILESTONES.length - 1 && <span style={{ color: reached ? GREEN : TEXT_LO, fontSize: '13px' }}>→</span>}
+                </div>
+              )
+            })}
+          </div>
+          <div style={{ fontSize: '12px', color: TEXT_MD }}>
+            <span style={{ fontWeight: 800, color: GREEN }}>{fundedAccts.length}</span> funded now · next milestone{' '}
+            <span style={{ fontWeight: 800, color: BLUE }}>{ACCOUNT_MILESTONES.find(m => m > fundedAccts.length) ?? '∞'} accounts</span>
+          </div>
+        </div>
+
+        <div style={card}>
+          <SectionTitle Icon={Coins}>Projected Monthly Income</SectionTitle>
+          <div style={{ fontSize: '12px', color: TEXT_LO, marginBottom: '12px' }}>
+            From your journal: {js.avgR >= 0 ? '+' : ''}{js.avgR.toFixed(2)}R avg × {Math.round(js.tradesPerMonth)} trades/mo.
+          </div>
+          <div className="ct-form-grid" style={{ marginBottom: '14px' }}>
+            <Field label="Risk $ / Trade / Account"><TextInput type="number" value={scaling.projRisk ?? '500'} onChange={e => setScaling(p => ({ ...p, projRisk: e.target.value }))} /></Field>
+            <Field label="Profit Split %"><TextInput type="number" value={scaling.projSplit ?? '90'} onChange={e => setScaling(p => ({ ...p, projSplit: e.target.value }))} /></Field>
+          </div>
+          <div className="ct-grid-3" style={{ gap: '8px' }}>
+            {[1, 3, 5].map(n => (
+              <MiniStat key={n} label={`${n} account${n > 1 ? 's' : ''}`} value={usdK(perAccount * n)} color={n === 1 ? TEXT_HI : n === 3 ? BLUE : GREEN} />
+            ))}
+          </div>
+          {js.total < 10 && <div style={{ fontSize: '11px', color: YELLOW, marginTop: '10px' }}>Projections firm up after 10+ journaled trades.</div>}
+        </div>
       </div>
 
       {/* roadmap */}
@@ -963,8 +1246,14 @@ const MISSION_OPTIONS = [
   'Scale to $500,000 Funding', 'Scale to $1,000,000 Funding', 'Custom',
 ]
 
-function MissionTab({ mission, setMission }) {
+function MissionTab({ mission, setMission, journalTrades = [] }) {
   const set = (k) => (e) => setMission(p => ({ ...p, [k]: e.target.value }))
+  const js = useMemo(() => computeJournalStats(journalTrades), [journalTrades])
+  const goals = [
+    { key: 'targetWinRate', label: 'Win Rate', actual: js.winRate, fmt: (v) => pct1(v), def: '60' },
+    { key: 'targetAvgR', label: 'Avg R', actual: js.avgR, fmt: (v) => `${v.toFixed(2)}R`, def: '1.5' },
+    { key: 'targetMonthlyPnl', label: 'Monthly PnL', actual: js.monthlyPnl, fmt: (v) => usd(v), def: '5000' },
+  ]
   const displayMission = mission.primary === 'Custom' ? (mission.custom || 'Custom mission') : mission.primary
   const daysLeft = mission.targetDate ? daysBetween(new Date(), mission.targetDate) : null
 
@@ -1011,6 +1300,36 @@ function MissionTab({ mission, setMission }) {
               <TextInput type="number" value={mission.progress} onChange={set('progress')} placeholder="0" />
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* real-data goal progress */}
+      <div style={card}>
+        <SectionTitle Icon={Crosshair}>Goals vs Reality — Live From Your Journal</SectionTitle>
+        <div style={{ fontSize: '12px', color: TEXT_LO, marginBottom: '14px' }}>
+          Pulled from {js.total} closed trades in your journal — no manual updates needed.
+        </div>
+        <div className="ct-grid-3" style={{ gap: '12px' }}>
+          {goals.map(g => {
+            const target = num(mission[g.key]) || num(g.def)
+            const progress = target > 0 ? clamp(g.actual / target * 100, 0, 100) : 0
+            const hit = target > 0 && g.actual >= target
+            return (
+              <div key={g.key} style={{ background: CARD_BG2, border: `1px solid ${hit ? 'rgba(52,211,153,0.35)' : CARD_BORD}`, borderRadius: '13px', padding: '15px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '9px' }}>
+                  <span style={{ ...lbl, marginBottom: 0 }}>{g.label}</span>
+                  {hit && <Badge color={GREEN}>Hit</Badge>}
+                </div>
+                <div style={{ fontSize: '21px', fontWeight: 900, letterSpacing: '-0.5px', color: hit ? GREEN : TEXT_HI, marginBottom: '8px' }}>
+                  {g.fmt(g.actual)} <span style={{ fontSize: '12px', fontWeight: 600, color: TEXT_LO }}>/ {g.fmt(target)}</span>
+                </div>
+                <ProgressBar pct={progress} color={hit ? GREEN : BLUE} height={7} />
+                <div style={{ marginTop: '10px' }}>
+                  <TextInput type="number" value={mission[g.key] ?? g.def} onChange={set(g.key)} placeholder={g.def} style={{ fontSize: '12px', padding: '7px 10px' }} />
+                </div>
+              </div>
+            )
+          })}
         </div>
       </div>
 
@@ -1080,127 +1399,389 @@ function ComingBadge() {
   return <span style={{ fontSize: '9.5px', fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: BLUE, background: BLUE_SOFT, border: `1px solid ${BLUE_LINE}`, padding: '3px 9px', borderRadius: '99px' }}>Coming Soon</span>
 }
 
-function CopierTab() {
-  const COPY_FEATURES = [
-    { Icon: ArrowUpRight, label: 'Trade Open Replication' },
-    { Icon: TrendingDown, label: 'Trade Close Replication' },
-    { Icon: GitBranch, label: 'Partial Close' },
-    { Icon: Shield, label: 'Break Even Management' },
-    { Icon: Activity, label: 'Trailing Stop Sync' },
-    { Icon: Gauge, label: 'Risk Scaling' },
-    { Icon: Percent, label: 'Contract Multipliers' },
-    { Icon: Layers, label: 'Account Grouping' },
-    { Icon: Network, label: 'One-to-Many Replication' },
+const blankLink = (followerId) => ({
+  followerId, mode: 'fixed', fixedContracts: 1, riskPct: 1, maxSize: '',
+  symbolsAllowed: [], hours: null, newsBlackout: false,
+})
+
+// Per-follower link configuration row (sizing + filters)
+function LinkConfig({ link, account, onChange, onUnlink }) {
+  const set = (k, v) => onChange({ ...link, [k]: v })
+  const modeOpts = [
+    { id: 'fixed', label: 'Fixed contracts' },
+    { id: 'proportional', label: 'Balance-proportional' },
+    { id: 'risk', label: 'Risk-% based' },
   ]
-  const SYNC = [
-    { Icon: RefreshCw, label: 'Synchronization Status', value: 'Waiting for connection' },
-    { Icon: Copy, label: 'Trade Replication Status', value: 'Waiting for connection' },
-    { Icon: Signal, label: 'Latency', value: '— ms' },
-    { Icon: Wifi, label: 'Connection Health', value: '—' },
-    { Icon: Zap, label: 'Execution Health', value: '—' },
-    { Icon: Shield, label: 'Risk Sync', value: '—' },
-  ]
-  const disabledBtn = { ...ghostBtn, opacity: 0.45, cursor: 'not-allowed', borderStyle: 'dashed' }
-  const disabledInp = { ...inp, opacity: 0.5, cursor: 'not-allowed', background: '#06090f' }
+  return (
+    <div style={{ background: '#0a1a1f', border: `1px solid ${BLUE_DIM}`, borderRadius: '13px', padding: '16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', marginBottom: '13px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
+          <GitBranch size={15} color={BLUE} />
+          <span style={{ fontSize: '13.5px', fontWeight: 800, color: TEXT_HI }}>{account?.name || 'Follower'}</span>
+          <Badge color={GREEN}>Linked</Badge>
+        </div>
+        <button onClick={onUnlink} style={{ ...ghostBtn, padding: '5px 10px', fontSize: '11px', borderColor: 'rgba(248,113,113,0.3)', color: RED }}><X size={12} /> Unlink</button>
+      </div>
+      <div className="ct-grid-3" style={{ gap: '10px' }}>
+        <Field label="Size Mapping">
+          <div style={{ position: 'relative' }}>
+            <select value={link.mode} onChange={e => set('mode', e.target.value)} style={{ ...inp, appearance: 'none', WebkitAppearance: 'none', paddingRight: '34px', cursor: 'pointer' }}>
+              {modeOpts.map(o => <option key={o.id} value={o.id} style={{ background: '#060f12' }}>{o.label}</option>)}
+            </select>
+            <ChevronDown size={15} color={TEXT_LO} style={{ position: 'absolute', right: '11px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+          </div>
+        </Field>
+        {link.mode === 'fixed' && (
+          <Field label="Contracts"><TextInput type="number" value={link.fixedContracts} onChange={e => set('fixedContracts', e.target.value)} placeholder="1" /></Field>
+        )}
+        {link.mode === 'risk' && (
+          <Field label="Risk % / Trade"><TextInput type="number" value={link.riskPct} onChange={e => set('riskPct', e.target.value)} placeholder="1" /></Field>
+        )}
+        <Field label="Max Contracts"><TextInput type="number" value={link.maxSize} onChange={e => set('maxSize', e.target.value)} placeholder="∞" /></Field>
+      </div>
+      <div className="ct-grid-3" style={{ gap: '10px', marginTop: '10px' }}>
+        <Field label="Symbols Allowlist (comma, empty = all)">
+          <TextInput value={(link.symbolsAllowed || []).join(', ')} onChange={e => set('symbolsAllowed', e.target.value.split(',').map(s => s.trim().toUpperCase()).filter(Boolean))} placeholder="NQ, MNQ" />
+        </Field>
+        <Field label="Trading Hours (blank = 24h)">
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <TextInput type="time" value={link.hours?.start || ''} onChange={e => set('hours', e.target.value ? { start: e.target.value, end: link.hours?.end || '16:00' } : null)} className="ct-date" />
+            <span style={{ color: TEXT_LO, fontSize: '12px' }}>→</span>
+            <TextInput type="time" value={link.hours?.end || ''} onChange={e => set('hours', (link.hours?.start || e.target.value) ? { start: link.hours?.start || '09:30', end: e.target.value } : null)} className="ct-date" />
+          </div>
+        </Field>
+        <Field label="News Blackout">
+          <label style={{ ...inp, display: 'flex', alignItems: 'center', gap: '9px', cursor: 'pointer' }}>
+            <input type="checkbox" checked={!!link.newsBlackout} onChange={e => set('newsBlackout', e.target.checked)} style={{ width: '15px', height: '15px', accentColor: BLUE, cursor: 'pointer' }} />
+            <span style={{ fontSize: '12px', color: TEXT_MD }}>Block fills around high-impact news</span>
+          </label>
+        </Field>
+      </div>
+    </div>
+  )
+}
+
+function CopierTab({ accounts, setAccounts, links, setLinks, simTrades, onRecord, onRemove }) {
+  const master = accounts.find(a => a.isMaster) || null
+  const followers = accounts.filter(a => !a.isMaster)
+  const linkedIds = new Set(links.map(l => l.followerId))
+
+  // ── simulate form state ──
+  const [form, setForm] = useState({ symbol: 'NQ', direction: 'Long', entry: '', exit: '', size: '1', stopPoints: '10', rMultiple: '' })
+  const [preview, setPreview] = useState(null)
+  const [recording, setRecording] = useState(false)
+  const setF = (k) => (e) => setForm(p => ({ ...p, [k]: e.target.value }))
+
+  const setMaster = (id) => {
+    setAccounts(prev => prev.map(a => ({ ...a, isMaster: a.id === id })))
+    setLinks(prev => prev.filter(l => l.followerId !== id))
+  }
+  const toggleLink = (followerId) => {
+    setLinks(prev => linkedIds.has(followerId)
+      ? prev.filter(l => l.followerId !== followerId)
+      : [...prev, blankLink(followerId)])
+  }
+  const updateLink = (followerId, next) => setLinks(prev => prev.map(l => l.followerId === followerId ? next : l))
+
+  const runSimulation = () => {
+    if (!master) { toast.error('Pick a master account first'); return }
+    if (links.length === 0) { toast.error('Link at least one follower'); return }
+    if (form.entry === '' || form.exit === '') { toast.error('Entry and exit required to project PnL'); return }
+    const masterTrade = {
+      id: makeId(), symbol: form.symbol, direction: form.direction,
+      entry: num(form.entry), exit: num(form.exit), size: num(form.size) || 1,
+      stopPoints: num(form.stopPoints), rMultiple: form.rMultiple === '' ? null : num(form.rMultiple),
+    }
+    const followerObjs = followers.map(f => ({ id: f.id, balance: num(f.currentBalance) || num(f.startingBalance) }))
+    const results = simulateCopy(masterTrade, { id: master.id, balance: num(master.currentBalance) || num(master.startingBalance) },
+      followerObjs, links, { now: new Date() })
+    // Risk Guardian: flag fills that WOULD breach the follower's rule set
+    const withViolations = results.map(r => {
+      if (r.status !== 'simulated') return r
+      const acct = accounts.find(a => a.id === r.accountId)
+      const rules = resolveRules(acct?.ruleset || 'apex', acct?.customRules || {})
+      const acctTrades = simTrades.filter(t => t.accountId === r.accountId)
+      const today = new Date().toISOString().slice(0, 10)
+      const dayPnl = acctTrades.filter(t => (t.openedAt || '').slice(0, 10) === today).reduce((s, t) => s + num(t.pnl), 0)
+      const byDay = {}
+      acctTrades.forEach(t => { const d = (t.openedAt || '').slice(0, 10); byDay[d] = (byDay[d] || 0) + num(t.pnl) })
+      const bestDayProfit = Math.max(0, ...Object.values(byDay))
+      const totalProfit = Math.max(0, acctTrades.reduce((s, t) => s + num(t.pnl), 0))
+      const violations = checkFillViolations(
+        { startingBalance: num(acct?.startingBalance), currentEquity: num(acct?.currentEquity) || num(acct?.currentBalance) },
+        rules, { dayPnl, bestDayProfit, totalProfit }, { size: r.size, projectedPnl: r.projectedPnl },
+      )
+      return violations.length > 0 ? { ...r, violation: { rules: violations.map(v => ({ rule: v.rule, label: v.label, excess: Math.round(v.excess * 100) / 100, limit: v.limit })) } } : r
+    })
+    setPreview({ masterTrade, results: withViolations })
+  }
+
+  const recordSimulation = async () => {
+    if (!preview) return
+    setRecording(true)
+    try {
+      const adapter = createSimulationAdapter()
+      const { masterTrade, results } = preview
+      const fills = []
+      // master leg
+      fills.push({
+        id: makeId(), accountId: master.id, symbol: masterTrade.symbol, direction: masterTrade.direction,
+        entry: masterTrade.entry, exit: masterTrade.exit, size: masterTrade.size,
+        pnl: (await adapter.executeOrder(master, masterTrade)).fill.pnl,
+        rMultiple: masterTrade.rMultiple, copiedFrom: null, status: 'simulated',
+        violation: null, openedAt: new Date().toISOString(), closedAt: new Date().toISOString(),
+      })
+      for (const r of results) {
+        fills.push({
+          id: makeId(), accountId: r.accountId, symbol: masterTrade.symbol, direction: masterTrade.direction,
+          entry: r.entry, exit: r.exit, size: r.size, pnl: r.projectedPnl,
+          rMultiple: r.rMultiple, copiedFrom: fills[0].id,
+          status: r.status === 'blocked' ? 'blocked' : 'simulated',
+          violation: r.violation || (r.reason ? { blocked: r.reason } : null),
+          openedAt: new Date().toISOString(), closedAt: new Date().toISOString(),
+        })
+      }
+      await onRecord(fills)
+      setPreview(null)
+      toast.success(`Recorded ${fills.length} simulated fills`)
+    } catch (e) { toast.error(e.message) }
+    finally { setRecording(false) }
+  }
+
+  const acctName = (id) => accounts.find(a => a.id === id)?.name || '—'
+  const recent = simTrades.slice(0, 25)
+
+  // node positions for the connection-lines SVG
+  const NODE_H = 64, GAP = 10
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* hero */}
-      <div style={{ ...card, textAlign: 'center', padding: '34px 24px', background: `radial-gradient(circle at 50% 0%, ${BLUE_SOFT}, ${CARD_BG} 70%)`, border: `1px solid ${BLUE_LINE}`, position: 'relative', overflow: 'hidden' }}>
-        <div className="ct-glow" style={{ position: 'absolute', inset: 0, background: `radial-gradient(circle at 50% 40%, ${BLUE}22 0%, transparent 60%)`, pointerEvents: 'none' }} />
-        <div style={{ position: 'relative' }}>
-          <div style={{ display: 'inline-flex', padding: '16px', borderRadius: '18px', background: BLUE_SOFT, border: `1px solid ${BLUE_LINE}`, marginBottom: '14px', boxShadow: `0 0 30px ${BLUE}44` }}>
-            <Copy size={28} color={BLUE} />
+      <div style={{ ...card, padding: '22px 24px', background: `radial-gradient(circle at 20% 0%, ${BLUE_SOFT}, ${CARD_BG} 70%)`, border: `1px solid ${BLUE_LINE}` }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ display: 'inline-flex', padding: '11px', borderRadius: '13px', background: BLUE_SOFT, border: `1px solid ${BLUE_LINE}` }}>
+              <Copy size={20} color={BLUE} />
+            </div>
+            <div>
+              <div style={{ fontSize: '19px', fontWeight: 900, letterSpacing: '-0.5px', ...gradText }}>Copier Engine — Simulation Mode</div>
+              <div style={{ fontSize: '12px', color: TEXT_MD }}>Full copy architecture running against a simulation adapter. Real execution unlocks when broker APIs are connected.</div>
+            </div>
           </div>
-          <h1 style={{ fontSize: '28px', fontWeight: 900, letterSpacing: '-0.8px', marginBottom: '8px', ...gradText }}>Trade Sync Engine — Coming Soon</h1>
-          <p style={{ fontSize: '13.5px', color: TEXT_MD, maxWidth: '560px', margin: '0 auto', lineHeight: 1.6 }}>
-            Future integration with Tradovate API and Rithmic for automated trade replication across multiple funded accounts.
-          </p>
-          <div style={{ marginTop: '14px' }}><ComingBadge /></div>
+          <Badge color={GREEN}>Sim adapter active</Badge>
         </div>
       </div>
 
-      {/* master + slaves */}
-      <div className="ct-grid-2">
-        <div style={card}>
-          <SectionTitle Icon={Server} right={<ComingBadge />}>Master Account</SectionTitle>
-          <div style={{ background: '#0a1a1f', border: '1px dashed rgba(6,182,212,0.25)', borderRadius: '13px', padding: '20px', textAlign: 'center' }}>
-            <Radio size={26} color={TEXT_LO} style={{ marginBottom: '10px' }} />
-            <div style={{ fontSize: '13px', color: TEXT_MD, marginBottom: '14px' }}>No master account connected</div>
-            <button disabled style={disabledBtn}><Link2 size={14} /> Connect Master Account</button>
-            <div style={{ display: 'flex', justifyContent: 'space-around', marginTop: '18px', paddingTop: '16px', borderTop: '1px solid rgba(6,182,212,0.10)' }}>
-              {['Account', 'Balance', 'Status', 'Health'].map(x => (
-                <div key={x} style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '9.5px', color: TEXT_LO, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>{x}</div>
-                  <div style={{ fontSize: '13px', fontWeight: 700, color: TEXT_LO }}>—</div>
-                </div>
-              ))}
+      {/* master → follower mapping with connection lines */}
+      <div style={card}>
+        <SectionTitle Icon={Network}>Master → Follower Mapping</SectionTitle>
+        {accounts.length === 0 ? (
+          <EmptyState Icon={Server} title="No accounts" sub="Add accounts in the Accounts tab, then map them here." />
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px 1fr', gap: 0, alignItems: 'start' }}>
+            {/* master column */}
+            <div>
+              <div style={{ ...lbl, marginBottom: '10px' }}>Master (signal source)</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: `${GAP}px` }}>
+                {accounts.map(a => (
+                  <button key={a.id} onClick={() => setMaster(a.id)} style={{
+                    height: `${NODE_H}px`, textAlign: 'left', padding: '0 16px', borderRadius: '13px', cursor: 'pointer', fontFamily: 'inherit',
+                    background: a.isMaster ? BLUE_SOFT : '#0a1a1f',
+                    border: `1px solid ${a.isMaster ? BLUE : 'rgba(6,182,212,0.12)'}`,
+                    display: 'flex', alignItems: 'center', gap: '10px',
+                    boxShadow: a.isMaster ? `0 0 18px ${BLUE}33` : 'none', transition: 'all .15s',
+                  }}>
+                    <Radio size={15} color={a.isMaster ? BLUE : TEXT_LO} />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '13px', fontWeight: 800, color: a.isMaster ? BLUE : TEXT_MD, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.name}</div>
+                      <div style={{ fontSize: '10.5px', color: TEXT_LO }}>{usdK(num(a.currentBalance) || num(a.startingBalance))} · {a.platform}</div>
+                    </div>
+                    {a.isMaster && <span style={{ marginLeft: 'auto' }}><Badge color={BLUE}>Master</Badge></span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* connection lines */}
+            <svg width="60" height={accounts.length * (NODE_H + GAP)} style={{ overflow: 'visible' }}>
+              {master && followers.map((f) => {
+                if (!linkedIds.has(f.id)) return null
+                const mi = accounts.findIndex(a => a.id === master.id)
+                const fi = accounts.findIndex(a => a.id === f.id)
+                const y1 = mi * (NODE_H + GAP) + NODE_H / 2
+                const y2 = fi * (NODE_H + GAP) + NODE_H / 2
+                return (
+                  <path key={f.id} d={`M 0 ${y1} C 30 ${y1}, 30 ${y2}, 60 ${y2}`}
+                    fill="none" stroke={BLUE} strokeWidth="1.5" strokeDasharray="4 3" opacity="0.7">
+                    <animate attributeName="stroke-dashoffset" from="14" to="0" dur="1.2s" repeatCount="indefinite" />
+                  </path>
+                )
+              })}
+            </svg>
+
+            {/* follower column */}
+            <div>
+              <div style={{ ...lbl, marginBottom: '10px' }}>Followers (click to link)</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: `${GAP}px` }}>
+                {accounts.map(a => {
+                  if (a.isMaster) return <div key={a.id} style={{ height: `${NODE_H}px`, borderRadius: '13px', border: '1px dashed rgba(6,182,212,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', color: TEXT_LO }}>master</div>
+                  const linked = linkedIds.has(a.id)
+                  return (
+                    <button key={a.id} onClick={() => toggleLink(a.id)} style={{
+                      height: `${NODE_H}px`, textAlign: 'left', padding: '0 16px', borderRadius: '13px', cursor: 'pointer', fontFamily: 'inherit',
+                      background: linked ? 'rgba(52,211,153,0.10)' : '#0a1a1f',
+                      border: `1px solid ${linked ? 'rgba(52,211,153,0.45)' : 'rgba(6,182,212,0.12)'}`,
+                      display: 'flex', alignItems: 'center', gap: '10px', transition: 'all .15s',
+                    }}>
+                      <Link2 size={15} color={linked ? GREEN : TEXT_LO} />
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: '13px', fontWeight: 800, color: linked ? GREEN : TEXT_MD, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.name}</div>
+                        <div style={{ fontSize: '10.5px', color: TEXT_LO }}>{usdK(num(a.currentBalance) || num(a.startingBalance))} · {a.platform}</div>
+                      </div>
+                      {linked && <span style={{ marginLeft: 'auto' }}><Badge color={GREEN}>Linked</Badge></span>}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
           </div>
-        </div>
+        )}
+      </div>
 
+      {/* per-link configuration */}
+      {links.length > 0 && (
         <div style={card}>
-          <SectionTitle Icon={Network} right={<button disabled style={{ ...disabledBtn, padding: '7px 12px' }}><Plus size={13} /> Add Slave</button>}>Slave Accounts</SectionTitle>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {[1, 2, 3, 4, 5].map(i => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#0a1a1f', border: '1px dashed rgba(6,182,212,0.16)', borderRadius: '11px', padding: '12px 14px', opacity: 0.7 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ width: '24px', height: '24px', borderRadius: '7px', background: BLUE_SOFT, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 800, color: BLUE }}>{i}</span>
-                  <span style={{ fontSize: '12.5px', color: TEXT_LO }}>Slave account slot {i}</span>
-                </div>
-                <Lock size={14} color={TEXT_LO} />
-              </div>
+          <SectionTitle Icon={Gauge}>Follower Sizing & Filters</SectionTitle>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {links.map(l => (
+              <LinkConfig key={l.followerId} link={l} account={accounts.find(a => a.id === l.followerId)}
+                onChange={(next) => updateLink(l.followerId, next)}
+                onUnlink={() => toggleLink(l.followerId)} />
             ))}
           </div>
         </div>
+      )}
+
+      {/* simulate copy */}
+      <div style={card}>
+        <SectionTitle Icon={Play}>Simulate Copy</SectionTitle>
+        <div style={{ fontSize: '12px', color: TEXT_LO, marginBottom: '14px' }}>
+          Log a hypothetical master trade — the engine computes exactly what each linked follower would have executed (size, entry, projected PnL) and flags any rule breaches.
+        </div>
+        <div className="ct-grid-3" style={{ gap: '10px' }}>
+          <Field label="Symbol"><TextInput value={form.symbol} onChange={setF('symbol')} placeholder="NQ" /></Field>
+          <Field label="Direction"><Select value={form.direction} onChange={setF('direction')} options={['Long', 'Short']} /></Field>
+          <Field label="Master Contracts"><TextInput type="number" value={form.size} onChange={setF('size')} placeholder="1" /></Field>
+          <Field label="Entry Price"><TextInput type="number" value={form.entry} onChange={setF('entry')} placeholder="20000" /></Field>
+          <Field label="Exit Price"><TextInput type="number" value={form.exit} onChange={setF('exit')} placeholder="20040" /></Field>
+          <Field label="Stop Distance (pts, for risk-% sizing)"><TextInput type="number" value={form.stopPoints} onChange={setF('stopPoints')} placeholder="10" /></Field>
+        </div>
+        <div style={{ display: 'flex', gap: '10px', marginTop: '14px', flexWrap: 'wrap' }}>
+          <button onClick={runSimulation} style={blueBtn}><Play size={15} /> Run Simulation</button>
+          {preview && <button onClick={recordSimulation} disabled={recording} style={{ ...blueBtn, background: GREEN, opacity: recording ? 0.6 : 1 }}><Save size={15} /> {recording ? 'Recording…' : 'Record to Copier Log'}</button>}
+        </div>
+
+        {preview && (
+          <div style={{ marginTop: '18px', overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px' }}>
+              <thead>
+                <tr style={{ textAlign: 'left', color: TEXT_LO }}>
+                  {['Account', 'Status', 'Size', 'Projected PnL', 'Notes'].map((h, i) => (
+                    <th key={i} style={{ padding: '8px 10px', fontWeight: 600, fontSize: '10.5px', textTransform: 'uppercase', letterSpacing: '0.08em', borderBottom: `1px solid ${CARD_BORD}` }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr style={{ borderBottom: '1px solid rgba(6,182,212,0.08)', background: BLUE_SOFT }}>
+                  <td style={{ padding: '10px', color: BLUE, fontWeight: 800 }}>{master?.name} <Badge color={BLUE}>Master</Badge></td>
+                  <td style={{ padding: '10px' }}><Badge color={BLUE}>source</Badge></td>
+                  <td style={{ padding: '10px', color: TEXT_HI, fontWeight: 700 }}>{preview.masterTrade.size}</td>
+                  <td style={{ padding: '10px', fontWeight: 800, color: (preview.masterTrade.exit - preview.masterTrade.entry) * (preview.masterTrade.direction === 'Short' ? -1 : 1) >= 0 ? GREEN : RED }}>
+                    {usd((preview.masterTrade.exit - preview.masterTrade.entry) * (preview.masterTrade.direction === 'Short' ? -1 : 1) * preview.masterTrade.size * pointValue(preview.masterTrade.symbol))}
+                  </td>
+                  <td style={{ padding: '10px', color: TEXT_LO }}>{normalizeSymbol(preview.masterTrade.symbol)} · ${pointValue(preview.masterTrade.symbol)}/pt</td>
+                </tr>
+                {preview.results.map(r => (
+                  <tr key={r.accountId} style={{ borderBottom: '1px solid rgba(6,182,212,0.08)' }}>
+                    <td style={{ padding: '10px', color: TEXT_HI, fontWeight: 700 }}>{acctName(r.accountId)}</td>
+                    <td style={{ padding: '10px' }}>
+                      {r.status === 'blocked'
+                        ? <Badge color={RED}>Blocked</Badge>
+                        : r.violation
+                          ? <Badge color={YELLOW}>Rule breach</Badge>
+                          : <Badge color={GREEN}>Simulated</Badge>}
+                    </td>
+                    <td style={{ padding: '10px', color: TEXT_HI, fontWeight: 700 }}>{r.size}</td>
+                    <td style={{ padding: '10px', fontWeight: 800, color: (r.projectedPnl || 0) >= 0 ? GREEN : RED }}>{r.projectedPnl == null ? '—' : usd(r.projectedPnl)}</td>
+                    <td style={{ padding: '10px', color: r.status === 'blocked' ? RED : r.violation ? YELLOW : TEXT_LO, maxWidth: '260px' }}>
+                      {r.reason || (r.violation ? r.violation.rules.map(v => `${v.label} +${v.excess}`).join(' · ') : 'clean fill')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      {/* sync status */}
+      {/* copier log */}
       <div style={card}>
-        <SectionTitle Icon={Activity}>Sync Status</SectionTitle>
+        <SectionTitle Icon={Layers}>Copier Log — Simulated Fills</SectionTitle>
+        {recent.length === 0 ? (
+          <EmptyState Icon={Copy} title="No simulated fills yet" sub="Run and record a simulation above — every follower fill lands here and in Supabase." />
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px' }}>
+              <thead>
+                <tr style={{ textAlign: 'left', color: TEXT_LO }}>
+                  {['When', 'Account', 'Symbol', 'Dir', 'Size', 'PnL', 'Status', ''].map((h, i) => (
+                    <th key={i} style={{ padding: '8px 10px', fontWeight: 600, fontSize: '10.5px', textTransform: 'uppercase', letterSpacing: '0.08em', borderBottom: `1px solid ${CARD_BORD}` }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {recent.map(t => (
+                  <tr key={t.id} style={{ borderBottom: '1px solid rgba(6,182,212,0.08)' }}>
+                    <td style={{ padding: '9px 10px', color: TEXT_LO, whiteSpace: 'nowrap' }}>{t.openedAt ? new Date(t.openedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—'}</td>
+                    <td style={{ padding: '9px 10px', color: TEXT_HI, fontWeight: 700 }}>{acctName(t.accountId)}{!t.copiedFrom && <span style={{ marginLeft: '6px' }}><Badge color={BLUE}>M</Badge></span>}</td>
+                    <td style={{ padding: '9px 10px', color: TEXT_MD }}>{normalizeSymbol(t.symbol)}</td>
+                    <td style={{ padding: '9px 10px', color: t.direction === 'Short' ? RED : GREEN, fontWeight: 700 }}>{t.direction}</td>
+                    <td style={{ padding: '9px 10px', color: TEXT_MD }}>{t.size ?? '—'}</td>
+                    <td style={{ padding: '9px 10px', fontWeight: 800, color: (t.pnl || 0) >= 0 ? GREEN : RED }}>{t.pnl == null ? '—' : usd(t.pnl)}</td>
+                    <td style={{ padding: '9px 10px' }}>
+                      {t.status === 'blocked' ? <Badge color={RED}>Blocked</Badge> : t.violation?.rules ? <Badge color={YELLOW}>Breach</Badge> : <Badge color={GREEN}>{t.status}</Badge>}
+                    </td>
+                    <td style={{ padding: '9px 10px', textAlign: 'right' }}>
+                      <button onClick={() => onRemove([t.id])} style={{ background: 'transparent', border: 'none', color: TEXT_LO, cursor: 'pointer', padding: '4px' }}><Trash2 size={13} /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* execution adapters */}
+      <div style={card}>
+        <SectionTitle Icon={Server}>Execution Adapters</SectionTitle>
         <div className="ct-grid-3">
-          {SYNC.map(s => (
-            <div key={s.label} style={{ background: '#0a1a1f', border: '1px solid rgba(6,182,212,0.12)', borderRadius: '13px', padding: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-                <s.Icon size={15} color={TEXT_LO} />
-                <span style={{ fontSize: '11px', color: TEXT_LO, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>{s.label}</span>
+          {[
+            { name: 'Simulation', Icon: Play, ready: true, note: 'Active — fills are computed locally and recorded with status simulated.' },
+            { name: 'Tradovate', Icon: Wifi, ready: false, note: 'Stubbed. Needs API credentials — see TODO in lib/adapters/TradovateAdapter.js.' },
+            { name: 'Rithmic', Icon: Signal, ready: false, note: 'Stubbed. Needs R|API+ credentials — see TODO in lib/adapters/RithmicAdapter.js.' },
+          ].map(a => (
+            <div key={a.name} style={{ background: '#0a1a1f', border: `1px solid ${a.ready ? 'rgba(52,211,153,0.3)' : 'rgba(6,182,212,0.12)'}`, borderRadius: '13px', padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '9px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <a.Icon size={15} color={a.ready ? GREEN : TEXT_LO} />
+                  <span style={{ fontSize: '13px', fontWeight: 800, color: TEXT_HI }}>{a.name}</span>
+                </div>
+                {a.ready ? <Badge color={GREEN}>Ready</Badge> : <ComingBadge />}
               </div>
-              <div style={{ fontSize: '14px', fontWeight: 700, color: TEXT_MD }}>{s.value}</div>
+              <div style={{ fontSize: '11.5px', color: TEXT_LO, lineHeight: 1.5 }}>{a.note}</div>
             </div>
           ))}
-        </div>
-      </div>
-
-      {/* copy engine features */}
-      <div style={card}>
-        <SectionTitle Icon={Zap}>Copy Engine Features</SectionTitle>
-        <div className="ct-feat-grid">
-          {COPY_FEATURES.map(f => (
-            <div key={f.label} style={{ display: 'flex', alignItems: 'center', gap: '11px', background: '#0a1a1f', border: '1px solid rgba(6,182,212,0.12)', borderRadius: '12px', padding: '14px 16px' }}>
-              <div style={{ flexShrink: 0, width: '34px', height: '34px', borderRadius: '9px', background: BLUE_SOFT, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <f.Icon size={16} color={BLUE} />
-              </div>
-              <span style={{ flex: 1, fontSize: '13px', fontWeight: 600, color: TEXT_MD }}>{f.label}</span>
-              <Lock size={14} color={TEXT_LO} />
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Tradovate / Rithmic integration */}
-      <div style={card}>
-        <SectionTitle Icon={Server} right={<ComingBadge />}>Tradovate / Rithmic Integration</SectionTitle>
-        <div className="ct-grid-3">
-          <Field label="API Provider"><input disabled placeholder="Tradovate / Rithmic" style={disabledInp} /></Field>
-          <Field label="Account ID"><input disabled placeholder="funded account id" style={disabledInp} /></Field>
-          <Field label="API Key"><input disabled type="password" placeholder="••••••••" style={disabledInp} /></Field>
-        </div>
-        <div style={{ marginTop: '14px' }}>
-          <button disabled style={disabledBtn}><Wifi size={14} /> Connect</button>
-        </div>
-        <div style={{ marginTop: '18px', padding: '13px 16px', background: BLUE_SOFT, border: `1px solid ${BLUE_DIM}`, borderRadius: '12px', fontSize: '12.5px', color: TEXT_MD, lineHeight: 1.6, display: 'flex', gap: '10px' }}>
-          <Activity size={16} color={BLUE} style={{ flexShrink: 0, marginTop: '1px' }} />
-          This module will connect to Tradovate &amp; Rithmic via API for real-time contract replication across your funded futures accounts.
         </div>
       </div>
     </div>
@@ -1225,21 +1806,73 @@ const defaultRisk = { maxRiskPerTrade: '1', maxDailyRisk: '3', maxConcurrent: '3
 const defaultScaling = { entries: [] }
 const defaultMission = { primary: 'Pass Evaluation', custom: '', progress: '0', startDate: '', targetDate: '', affirmations: '', history: [] }
 
-export function CopyTraderPage() {
+export function CopyTraderPage({ session, journalTrades = [] }) {
+  const userId = session?.user?.id || null
   const [tab, setTab] = useState('accounts')
+  // Instant boot from localStorage cache, then hydrate from Supabase below.
   const [accounts, setAccounts] = useState(() => lsGet(ACCOUNTS_KEY, []))
   const [payouts, setPayouts]   = useState(() => lsGet(PAYOUTS_KEY, []))
   const [overview, setOverview] = useState(() => ({ ...defaultOverview, ...lsGet(OVERVIEW_KEY, {}) }))
   const [risk, setRisk]         = useState(() => ({ ...defaultRisk, ...lsGet(RISK_KEY, {}) }))
   const [scaling, setScaling]   = useState(() => ({ ...defaultScaling, ...lsGet(SCALING_KEY, {}) }))
   const [mission, setMission]   = useState(() => ({ ...defaultMission, ...lsGet(MISSION_KEY, {}) }))
+  const [links, setLinks]       = useState(() => lsGet(LS_KEYS.links, []))
+  const [simTrades, setSimTrades] = useState(() => lsGet(LS_KEYS.trades, []))
+  const [source, setSource]     = useState('local')   // 'supabase' | 'local'
+  const [hydrated, setHydrated] = useState(false)
 
-  useEffect(() => { lsSet(ACCOUNTS_KEY, accounts) }, [accounts])
-  useEffect(() => { lsSet(PAYOUTS_KEY, payouts) }, [payouts])
-  useEffect(() => { lsSet(OVERVIEW_KEY, overview) }, [overview])
-  useEffect(() => { lsSet(RISK_KEY, risk) }, [risk])
-  useEffect(() => { lsSet(SCALING_KEY, scaling) }, [scaling])
-  useEffect(() => { lsSet(MISSION_KEY, mission) }, [mission])
+  // ── hydrate from Supabase (runs the one-time localStorage import if needed)
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      const data = await loadCopierData(userId)
+      if (!alive) return
+      setAccounts(data.accounts)
+      setLinks(data.links || [])
+      setSimTrades(data.trades || [])
+      setOverview(p => ({ ...defaultOverview, ...p, ...(data.moduleState.overview || {}) }))
+      setRisk(p => ({ ...defaultRisk, ...p, ...(data.moduleState.risk || {}) }))
+      setScaling(p => ({ ...defaultScaling, ...p, ...(data.moduleState.scaling || {}) }))
+      setMission(p => ({ ...defaultMission, ...p, ...(data.moduleState.mission || {}) }))
+      setPayouts(data.moduleState.payouts || [])
+      setSource(data.source)
+      setHydrated(true)
+    })()
+    return () => { alive = false }
+  }, [userId])
+
+  // ── persist: accounts (immediate on delete, debounced otherwise) ──
+  const lastIdsRef = useRef(null)
+  const persistAccountsDebounced = useMemo(() => debounce((accts) => saveAccounts(userId, accts, []), 700), [userId])
+  useEffect(() => {
+    lsSet(ACCOUNTS_KEY, accounts)
+    if (!hydrated) return
+    const currentIds = new Set(accounts.map(a => a.id))
+    const removed = (lastIdsRef.current || []).filter(id => !currentIds.has(id))
+    lastIdsRef.current = accounts.map(a => a.id)
+    if (removed.length > 0) saveAccounts(userId, accounts, removed)
+    else persistAccountsDebounced(accounts)
+  }, [accounts, hydrated, userId, persistAccountsDebounced])
+
+  // ── persist: settings blob (links + all module state) ──
+  const persistSettings = useMemo(() => debounce((payload) => saveSettings(userId, payload), 900), [userId])
+  useEffect(() => {
+    lsSet(PAYOUTS_KEY, payouts); lsSet(OVERVIEW_KEY, overview); lsSet(RISK_KEY, risk)
+    lsSet(SCALING_KEY, scaling); lsSet(MISSION_KEY, mission); lsSet(LS_KEYS.links, links)
+    if (!hydrated) return
+    persistSettings({ links, moduleState: { overview, risk, scaling, mission, payouts } })
+  }, [links, overview, risk, scaling, mission, payouts, hydrated, persistSettings])
+
+  // ── copier trade recording (used by the Copier tab) ──
+  const recordSimTrades = async (fills) => {
+    const saved = await insertTrades(userId, fills)
+    setSimTrades(prev => [...saved, ...prev])
+    return saved
+  }
+  const removeSimTrades = async (ids) => {
+    await deleteTrades(userId, ids)
+    setSimTrades(prev => prev.filter(t => !ids.includes(t.id)))
+  }
 
   return (
     <div className="page-wrap" style={{ animation: 'ctEnter 0.25s ease-out both', paddingBottom: '60px' }}>
@@ -1259,7 +1892,13 @@ export function CopyTraderPage() {
             <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.2em', color: BLUE, textTransform: 'uppercase' }}>Private Module</div>
           </div>
           <h1 style={{ fontSize: '38px', fontWeight: 900, letterSpacing: '-1.5px', lineHeight: 1, marginBottom: '8px', ...gradText }}>TradeSync</h1>
-          <div style={{ fontSize: '13.5px', color: TEXT_MD }}>Multi-account prop-firm command center · accounts, risk, payouts &amp; scaling in one cockpit.</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <div style={{ fontSize: '13.5px', color: TEXT_MD }}>Multi-account prop-firm command center · accounts, risk, payouts &amp; scaling in one cockpit.</div>
+            <span title={source === 'supabase' ? 'Synced to Supabase' : 'Offline — using local cache'} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '10px', fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 9px', borderRadius: '99px', background: source === 'supabase' ? 'rgba(52,211,153,0.12)' : 'rgba(251,191,36,0.12)', border: `1px solid ${source === 'supabase' ? 'rgba(52,211,153,0.35)' : 'rgba(251,191,36,0.35)'}`, color: source === 'supabase' ? GREEN : YELLOW }}>
+              {source === 'supabase' ? <Cloud size={11} /> : <CloudOff size={11} />}
+              {source === 'supabase' ? 'Cloud sync' : 'Local only'}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -1289,11 +1928,11 @@ export function CopyTraderPage() {
       <div key={tab} style={{ animation: 'ctEnter 0.22s ease-out both' }}>
         {tab === 'accounts' && <AccountsTab accounts={accounts} setAccounts={setAccounts} />}
         {tab === 'overview' && <OverviewTab accounts={accounts} overview={overview} setOverview={setOverview} />}
-        {tab === 'risk'     && <RiskTab accounts={accounts} risk={risk} setRisk={setRisk} />}
-        {tab === 'payouts'  && <PayoutsTab accounts={accounts} payouts={payouts} setPayouts={setPayouts} overview={overview} setOverview={setOverview} />}
-        {tab === 'scaling'  && <ScalingTab accounts={accounts} scaling={scaling} setScaling={setScaling} />}
-        {tab === 'mission'  && <MissionTab mission={mission} setMission={setMission} />}
-        {tab === 'copier'   && <CopierTab />}
+        {tab === 'risk'     && <RiskTab accounts={accounts} risk={risk} setRisk={setRisk} journalTrades={journalTrades} simTrades={simTrades} />}
+        {tab === 'payouts'  && <PayoutsTab accounts={accounts} setAccounts={setAccounts} payouts={payouts} setPayouts={setPayouts} overview={overview} setOverview={setOverview} simTrades={simTrades} />}
+        {tab === 'scaling'  && <ScalingTab accounts={accounts} scaling={scaling} setScaling={setScaling} journalTrades={journalTrades} />}
+        {tab === 'mission'  && <MissionTab mission={mission} setMission={setMission} journalTrades={journalTrades} />}
+        {tab === 'copier'   && <CopierTab accounts={accounts} setAccounts={setAccounts} links={links} setLinks={setLinks} simTrades={simTrades} onRecord={recordSimTrades} onRemove={removeSimTrades} />}
       </div>
     </div>
   )
