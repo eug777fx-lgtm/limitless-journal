@@ -289,14 +289,115 @@ export function NetworkPartners({ session }) {
   )
 }
 
-// ─── Hall of Fame ──────────────────────────────────────────
-export function NetworkHallOfFame({ isAdmin }) {
+// ─── Hall of Fame (with nomination flow) ────────────────────
+function NominateModal({ session, onClose, onSubmitted }) {
+  const [myTrades, setMyTrades] = useState(null)
+  const [picked, setPicked] = useState(null)
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    supabase.from('trades').select('id, symbol, direction, pnl, rr, trade_date')
+      .eq('user_id', session.user.id).order('pnl', { ascending: false }).limit(30)
+      .then(({ data }) => setMyTrades(data || []))
+  }, [session.user.id])
+
+  const submit = async () => {
+    if (!picked) return
+    setBusy(true)
+    try {
+      const { error } = await supabase.from('hof_nominations').insert({ trade_id: picked, user_id: session.user.id, note: note.trim() || null })
+      if (error) throw error
+      toast.success('Nomination submitted — an admin will review it')
+      onSubmitted?.(); onClose()
+    } catch (e) { toast.error(e.message) }
+    finally { setBusy(false) }
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1400, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '18px' }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: '480px', maxHeight: '85vh', overflowY: 'auto', background: '#0d0d0d', border: '1px solid #FFD70040', borderRadius: '16px', padding: '24px' }}>
+        <div style={{ fontSize: '16px', fontWeight: '800', color: '#fff', marginBottom: '6px' }}>🏆 Nominate a Trade</div>
+        <div style={{ fontSize: '12px', color: 'var(--text-lo)', marginBottom: '16px' }}>Pick one of your best trades — admins review every nomination.</div>
+        {myTrades == null ? (
+          <div style={{ fontSize: '12px', color: 'var(--text-lo)', padding: '20px', textAlign: 'center' }}>Loading your trades…</div>
+        ) : myTrades.length === 0 ? (
+          <div style={{ fontSize: '12px', color: 'var(--text-lo)', padding: '20px', textAlign: 'center' }}>No trades in your journal yet.</div>
+        ) : (
+          <div style={{ display: 'grid', gap: '6px', marginBottom: '14px' }}>
+            {myTrades.map(t => {
+              const win = (Number(t.pnl) || 0) > 0
+              const sel = picked === t.id
+              return (
+                <button key={t.id} onClick={() => setPicked(sel ? null : t.id)} style={{
+                  display: 'flex', alignItems: 'center', gap: '10px', width: '100%', textAlign: 'left',
+                  background: sel ? 'rgba(255,215,0,0.08)' : '#111', border: `1px solid ${sel ? '#FFD70055' : '#1c1c1c'}`,
+                  borderRadius: '10px', padding: '10px 13px', cursor: 'pointer', fontFamily: 'inherit',
+                }}>
+                  <span style={{ fontSize: '12px', fontWeight: '800', color: 'var(--text-hi)', minWidth: '42px' }}>{t.symbol || '—'}</span>
+                  <span style={{ fontSize: '11px', color: t.direction === 'Short' ? '#ff8080' : '#aaffa0' }}>{t.direction || ''}</span>
+                  <span style={{ flex: 1, fontSize: '10.5px', color: '#666' }}>{t.trade_date ? new Date(t.trade_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}</span>
+                  {t.rr != null && <span style={{ fontSize: '11px', fontWeight: '700', color: '#c4b5fd' }}>{t.rr}R</span>}
+                  <span style={{ fontSize: '12.5px', fontWeight: '800', color: win ? '#aaffa0' : '#ff8080' }}>{win ? '+' : '−'}${Math.abs(Math.round(Number(t.pnl) || 0)).toLocaleString()}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+        <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Why does this trade deserve the Hall of Fame? (optional)" style={{ ...inp, minHeight: '60px', resize: 'vertical', marginBottom: '14px' }} />
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+          <button onClick={onClose} style={{ background: 'transparent', border: '1px solid #2a2a2a', color: 'var(--text-md)', borderRadius: '99px', padding: '8px 16px', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+          <button onClick={submit} disabled={!picked || busy} style={{ background: '#FFD700', color: '#000', border: 'none', borderRadius: '99px', padding: '8px 20px', fontSize: '12px', fontWeight: '800', cursor: 'pointer', fontFamily: 'inherit', opacity: (!picked || busy) ? 0.5 : 1 }}>
+            {busy ? 'Submitting…' : 'Submit Nomination'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function NetworkHallOfFame({ isAdmin, session }) {
   const [entries, setEntries] = useState([])
   const [filter,  setFilter]  = useState('all')
   const [loading, setLoading] = useState(true)
   const [busyId,  setBusyId]  = useState(null)
+  const [nominate, setNominate] = useState(false)
+  const [pending, setPending] = useState([])
 
   useEffect(() => { load() }, [])
+
+  // admin: load pending nominations (with trade + nominator context)
+  useEffect(() => {
+    if (!isAdmin) return
+    ;(async () => {
+      try {
+        const { data: noms } = await supabase.from('hof_nominations').select('*').eq('status', 'pending').order('created_at', { ascending: true })
+        if (!noms?.length) { setPending([]); return }
+        const [tRes, pRes] = await Promise.all([
+          supabase.from('trades').select('*').in('id', noms.map(n => n.trade_id)),
+          supabase.from('profiles').select('id, username, first_name, last_name').in('id', noms.map(n => n.user_id)),
+        ])
+        const tMap = new Map((tRes.data || []).map(t => [t.id, t]))
+        const pMap = new Map((pRes.data || []).map(p => [p.id, p]))
+        setPending(noms.map(n => ({ ...n, trade: tMap.get(n.trade_id), nominator: pMap.get(n.user_id) })))
+      } catch (e) { console.warn('[hof] nominations', e?.message) }
+    })()
+  }, [isAdmin])
+
+  const decide = async (nom, approve) => {
+    setBusyId(nom.id)
+    try {
+      if (approve) {
+        const { error } = await supabase.from('hall_of_fame').insert({ trade_id: nom.trade_id, user_id: nom.user_id, featured_at: new Date().toISOString() })
+        if (error) throw error
+      }
+      await supabase.from('hof_nominations').update({ status: approve ? 'approved' : 'rejected' }).eq('id', nom.id)
+      setPending(prev => prev.filter(p => p.id !== nom.id))
+      if (approve) { toast.success('Added to the Hall of Fame'); load() }
+      else toast('Nomination rejected', { icon: '🚫' })
+    } catch (e) { toast.error(e.message) }
+    finally { setBusyId(null) }
+  }
 
   const load = async () => {
     setLoading(true)
@@ -345,11 +446,43 @@ export function NetworkHallOfFame({ isAdmin }) {
 
   return (
     <>
-      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '20px', alignItems: 'center' }}>
         <button onClick={() => setFilter('all')}   style={pillStyle(filter === 'all')}>All Time</button>
         <button onClick={() => setFilter('month')} style={pillStyle(filter === 'month')}>This Month</button>
         {symbols.map(s => <button key={s} onClick={() => setFilter(s)} style={pillStyle(filter === s)}>{s}</button>)}
+        {session?.user?.id && (
+          <button onClick={() => setNominate(true)} style={{ marginLeft: 'auto', background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.3)', color: '#FFD700', borderRadius: '99px', padding: '6px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', fontFamily: 'inherit' }}>
+            🏆 Nominate a Trade
+          </button>
+        )}
       </div>
+
+      {/* admin: pending nominations */}
+      {isAdmin && pending.length > 0 && (
+        <div style={{ marginBottom: '20px' }}>
+          <div style={{ fontSize: '11px', fontWeight: '600', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#ffd966', marginBottom: '10px' }}>Pending Nominations — {pending.length}</div>
+          <div style={{ display: 'grid', gap: '8px' }}>
+            {pending.map(n => (
+              <div key={n.id} style={{ ...cardS, padding: '13px 16px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', border: '1px solid rgba(255,217,102,0.25)' }}>
+                <div style={{ flex: 1, minWidth: '200px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-hi)' }}>
+                    {n.trade ? `${n.trade.symbol || '—'} ${n.trade.direction || ''} · ${(Number(n.trade.pnl) || 0) >= 0 ? '+' : '−'}$${Math.abs(Math.round(Number(n.trade.pnl) || 0)).toLocaleString()}${n.trade.rr ? ` · ${n.trade.rr}R` : ''}` : 'Trade unavailable'}
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-lo)', marginTop: '2px' }}>
+                    by {nameOf(n.nominator)} · {relTime(n.created_at)}{n.note ? ` — “${n.note}”` : ''}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button onClick={() => decide(n, true)} disabled={busyId === n.id} style={{ background: 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', color: '#aaffa0', borderRadius: '8px', padding: '6px 14px', fontSize: '11px', fontWeight: '700', cursor: 'pointer', fontFamily: 'inherit', minHeight: 'auto' }}>Approve</button>
+                  <button onClick={() => decide(n, false)} disabled={busyId === n.id} style={{ background: 'transparent', border: '1px solid #2a2a2a', color: 'var(--text-md)', borderRadius: '8px', padding: '6px 14px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', minHeight: 'auto' }}>Reject</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {nominate && session && <NominateModal session={session} onClose={() => setNominate(false)} />}
 
       {loading ? (
         <div style={{ ...cardS, textAlign: 'center', padding: '40px', fontSize: '13px', color: 'var(--text-lo)' }}>Loading…</div>
@@ -442,17 +575,31 @@ export function NetworkHallOfFame({ isAdmin }) {
 // ─── Chat (general-chat + announcements share this) ─────────
 const EMOJIS = ['😀', '😂', '🔥', '💪', '🎉', '📈', '📉', '🏆', '🤝', '👍', '❤️', '🙏', '💯', '⚡', '🎯', '✨']
 
+const REACTION_SET = ['🔥', '💪', '😂', '📈', '💯', '❤️']
+
 export function NetworkChat({ session, profile, channel = 'general-chat', readOnly = false, isAdmin = false }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [emojiOpen, setEmojiOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [replyTo, setReplyTo] = useState(null)          // message being replied to
+  const [reactFor, setReactFor] = useState(null)        // message id with reaction picker open
   const scrollRef = useRef(null)
   const fileRef = useRef(null)
 
   const myId = session?.user?.id
   const myUsername = profile?.username || session?.user?.email?.split('@')[0] || 'user'
+
+  // unread divider: remember where the user last left this channel
+  const lastReadKey = `chat_lastread_${channel}`
+  const [lastRead] = useState(() => { try { return localStorage.getItem(lastReadKey) } catch { return null } })
+  useEffect(() => {
+    // mark channel as read now and again when new messages stream in
+    const mark = () => { try { localStorage.setItem(lastReadKey, new Date().toISOString()) } catch {} }
+    mark()
+    return mark
+  }, [lastReadKey, messages.length])
 
   useEffect(() => {
     let cancelled = false
@@ -481,6 +628,9 @@ export function NetworkChat({ session, profile, channel = 'general-chat', readOn
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'network_messages', filter: `channel=eq.${channel}` }, payload => {
         setMessages(prev => prev.filter(m => m.id !== payload.old.id))
       })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'network_messages', filter: `channel=eq.${channel}` }, payload => {
+        setMessages(prev => prev.map(m => m.id === payload.new.id ? payload.new : m))
+      })
       .subscribe()
     return () => { supabase.removeChannel(sub) }
   }, [channel])
@@ -500,13 +650,30 @@ export function NetworkChat({ session, profile, channel = 'general-chat', readOn
     try {
       const { error } = await supabase.from('network_messages').insert({
         user_id: myId, username: myUsername, channel, message: body || null, image_url: imageUrl || null,
+        reply_to: replyTo?.id || null,
       })
       if (error) throw error
       setInput('')
+      setReplyTo(null)
     } catch (e) {
       console.error('[chat] send', e)
       toast.error(`Failed to send — ${e.message}`)
     } finally { setSending(false) }
+  }
+
+  // toggle an emoji reaction: reactions = { "🔥": [userId, …], … }
+  const react = async (m, emoji) => {
+    if (!myId) return
+    setReactFor(null)
+    const cur = (m.reactions && typeof m.reactions === 'object') ? m.reactions : {}
+    const users = Array.isArray(cur[emoji]) ? cur[emoji] : []
+    const next = { ...cur, [emoji]: users.includes(myId) ? users.filter(u => u !== myId) : [...users, myId] }
+    if (next[emoji].length === 0) delete next[emoji]
+    setMessages(prev => prev.map(x => x.id === m.id ? { ...x, reactions: next } : x)) // optimistic
+    try {
+      const { error } = await supabase.from('network_messages').update({ reactions: next }).eq('id', m.id)
+      if (error) throw error
+    } catch (e) { toast.error(e.message) }
   }
 
   const deleteMessage = async (id) => {
@@ -540,14 +707,22 @@ export function NetworkChat({ session, profile, channel = 'general-chat', readOn
 
   const items = []
   let lastDate = null
+  let unreadShown = false
   for (const m of messages) {
     const dateStr = new Date(m.created_at).toDateString()
     if (dateStr !== lastDate) {
       items.push({ type: 'date', key: `d-${dateStr}`, date: dateStr })
       lastDate = dateStr
     }
+    // unread divider: first message from someone else that arrived after the
+    // last time this channel was open
+    if (!unreadShown && lastRead && m.user_id !== myId && new Date(m.created_at) > new Date(lastRead)) {
+      items.push({ type: 'unread', key: `u-${m.id}` })
+      unreadShown = true
+    }
     items.push({ type: 'msg', key: m.id, msg: m })
   }
+  const msgById = new Map(messages.map(m => [m.id, m]))
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
@@ -569,9 +744,20 @@ export function NetworkChat({ session, profile, channel = 'general-chat', readOn
               </div>
             )
           }
+          if (it.type === 'unread') {
+            return (
+              <div key={it.key} style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '16px 0 10px' }}>
+                <div style={{ flex: 1, height: '1px', background: 'rgba(255,128,128,0.4)' }} />
+                <div style={{ fontSize: '10px', fontWeight: '800', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#ff8080' }}>New</div>
+                <div style={{ flex: 1, height: '1px', background: 'rgba(255,128,128,0.4)' }} />
+              </div>
+            )
+          }
           const m = it.msg
           const mine = m.user_id === myId
           const time = new Date(m.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+          const repliedTo = m.reply_to ? msgById.get(m.reply_to) : null
+          const reactions = (m.reactions && typeof m.reactions === 'object') ? Object.entries(m.reactions).filter(([, u]) => Array.isArray(u) && u.length > 0) : []
           return (
             <div key={it.key} className="chat-row" style={{ display: 'flex', gap: '12px', padding: '6px 8px', borderRadius: '8px', alignItems: 'flex-start', position: 'relative' }}>
               <Avatar name={m.username} size={36} />
@@ -580,15 +766,50 @@ export function NetworkChat({ session, profile, channel = 'general-chat', readOn
                   <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-hi)' }}>{m.username || 'user'}</span>
                   <span style={{ fontSize: '10px', color: '#555' }}>{time}</span>
                 </div>
+                {repliedTo && (
+                  <div style={{ borderLeft: '2px solid #333', paddingLeft: '8px', marginBottom: '4px', fontSize: '11.5px', color: '#777', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '420px' }}>
+                    ↩ <b style={{ color: '#999' }}>{repliedTo.username}</b> {repliedTo.message || '📷 image'}
+                  </div>
+                )}
+                {m.reply_to && !repliedTo && (
+                  <div style={{ borderLeft: '2px solid #333', paddingLeft: '8px', marginBottom: '4px', fontSize: '11px', color: '#555', fontStyle: 'italic' }}>↩ original message unavailable</div>
+                )}
                 {m.message && <div style={{ fontSize: '14px', color: 'var(--text-md)', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.message}</div>}
                 {m.image_url && (
                   <a href={m.image_url} target="_blank" rel="noopener noreferrer">
                     <img src={m.image_url} alt="" style={{ maxWidth: '320px', maxHeight: '240px', marginTop: '6px', borderRadius: '8px', border: '1px solid #1a1a1a', display: 'block' }} />
                   </a>
                 )}
+                {reactions.length > 0 && (
+                  <div style={{ display: 'flex', gap: '4px', marginTop: '5px', flexWrap: 'wrap' }}>
+                    {reactions.map(([emoji, users]) => (
+                      <button key={emoji} onClick={() => react(m, emoji)} style={{
+                        background: users.includes(myId) ? 'rgba(124,58,237,0.15)' : '#141414',
+                        border: `1px solid ${users.includes(myId) ? 'rgba(124,58,237,0.45)' : '#222'}`,
+                        borderRadius: '99px', padding: '2px 8px', fontSize: '12px', cursor: 'pointer',
+                        fontFamily: 'inherit', minHeight: 'auto', color: '#ccc', display: 'inline-flex', alignItems: 'center', gap: '4px',
+                      }}>
+                        {emoji} <span style={{ fontSize: '10px', fontWeight: '700' }}>{users.length}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-              {(mine || isAdmin) && (
-                <button onClick={() => deleteMessage(m.id)} className="chat-delete" style={{ background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', padding: '2px 4px', minHeight: 'auto', fontFamily: 'inherit', fontSize: '11px', opacity: 0 }} title="Delete">✕</button>
+              {!readOnly && (
+                <div className="chat-actions" style={{ display: 'flex', gap: '2px', opacity: 0, position: 'relative' }}>
+                  <button onClick={() => setReactFor(reactFor === m.id ? null : m.id)} style={{ background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', padding: '2px 4px', minHeight: 'auto', fontFamily: 'inherit', fontSize: '12px' }} title="React">☺</button>
+                  <button onClick={() => setReplyTo(m)} style={{ background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', padding: '2px 4px', minHeight: 'auto', fontFamily: 'inherit', fontSize: '11px' }} title="Reply">↩</button>
+                  {(mine || isAdmin) && (
+                    <button onClick={() => deleteMessage(m.id)} style={{ background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', padding: '2px 4px', minHeight: 'auto', fontFamily: 'inherit', fontSize: '11px' }} title="Delete">✕</button>
+                  )}
+                  {reactFor === m.id && (
+                    <div style={{ position: 'absolute', top: '22px', right: 0, background: '#0d0d0d', border: '1px solid #222', borderRadius: '99px', padding: '4px 8px', display: 'flex', gap: '2px', zIndex: 20, boxShadow: '0 8px 24px rgba(0,0,0,0.6)' }}>
+                      {REACTION_SET.map(e => (
+                        <button key={e} onClick={() => react(m, e)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '15px', padding: '2px 3px', minHeight: 'auto' }}>{e}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           )
@@ -597,6 +818,14 @@ export function NetworkChat({ session, profile, channel = 'general-chat', readOn
 
       {!readOnly && (
         <div style={{ padding: '14px 18px 18px', borderTop: '1px solid #1a1a1a', flexShrink: 0, position: 'relative' }}>
+          {replyTo && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#101010', border: '1px solid #1f1f1f', borderRadius: '8px', padding: '6px 10px', marginBottom: '6px' }}>
+              <span style={{ fontSize: '11px', color: '#888', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                Replying to <b style={{ color: '#c4b5fd' }}>{replyTo.username}</b> — {replyTo.message || '📷 image'}
+              </span>
+              <button onClick={() => setReplyTo(null)} style={{ background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', padding: '2px', minHeight: 'auto', fontSize: '12px' }}>✕</button>
+            </div>
+          )}
           <div style={{ background: '#141414', border: '1px solid #1f1f1f', borderRadius: '10px', padding: '6px 10px', display: 'flex', alignItems: 'flex-end', gap: '4px' }}>
             <button onClick={() => fileRef.current?.click()} disabled={uploading || sending} style={{ background: 'transparent', border: 'none', color: '#666', cursor: 'pointer', padding: '6px', minHeight: 'auto', display: 'flex', alignItems: 'center' }} title="Attach image">
               <ImageIcon size={16} />
@@ -633,7 +862,7 @@ export function NetworkChat({ session, profile, channel = 'general-chat', readOn
         </div>
       )}
 
-      <style>{`.chat-row:hover { background: rgba(255,255,255,0.02); } .chat-row:hover .chat-delete { opacity: 1 !important; }`}</style>
+      <style>{`.chat-row:hover { background: rgba(255,255,255,0.02); } .chat-row:hover .chat-actions { opacity: 1 !important; }`}</style>
     </div>
   )
 }
