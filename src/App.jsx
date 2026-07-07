@@ -21,6 +21,10 @@ import {
 import { supabase } from './lib/supabase'
 import { TOSPage } from './TOS.jsx'
 import { CopyTraderPage } from './CopyTrader.jsx'
+import {
+  NetworkFeed, Leaderboard2, Challenges2, TraderProfileModal, ProfileEditModal,
+  ShareTradeButton, useMyNetworkProfile, SocialAvatar,
+} from './NetworkSocial.jsx'
 
 // ─── Beta Closed mode ─────────────────────────────────────────
 // When true, new signups are placed on a waitlist (status='waitlist') instead
@@ -2650,6 +2654,13 @@ function TradeDetailModal({ trade, onClose, onSave, demoMode = false, readOnly =
 
         </fieldset>
 
+        {/* Share to Network — creates a privacy-safe trade card in the feed */}
+        {!demoMode && trade?.id && !readOnly && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '14px' }}>
+            <ShareTradeButton trade={trade} />
+          </div>
+        )}
+
         {readOnly ? (
           <button style={{ ...btn, width: '100%', background: 'transparent', color: '#aaa', border: '1px solid #1c1c1c' }} onClick={onClose}>Close</button>
         ) : (
@@ -4927,11 +4938,64 @@ function NetworkModal({ children, onClose, maxWidth = '560px' }) {
 }
 
 // ─── Network · Sessions ─────────────────
-function NetworkSessions({ isAdmin, creators }) {
+function NetworkSessions({ isAdmin, creators, session }) {
   const [sessions, setSessions] = useState(() => loadNetwork('network_sessions', NETWORK_SEED_SESSIONS))
   const [replays,  setReplays]  = useState(() => loadNetwork('network_replays',  NETWORK_SEED_REPLAYS))
   const [modal,    setModal]    = useState(null) // 'session' | 'replay' | null
   const [draft,    setDraft]    = useState({})
+  const myId = session?.user?.id
+  // RSVP state: sessionKey -> { count, mine: row|null }
+  const [rsvps, setRsvps] = useState({})
+
+  useEffect(() => {
+    if (!myId || sessions.length === 0) return
+    let alive = true
+    ;(async () => {
+      try {
+        const keys = sessions.map(s => String(s.id))
+        const { data } = await supabase.from('session_rsvps').select('*').in('session_key', keys)
+        if (!alive) return
+        const map = {}
+        keys.forEach(k => { map[k] = { count: 0, mine: null } })
+        ;(data || []).forEach(r => {
+          map[r.session_key] = map[r.session_key] || { count: 0, mine: null }
+          map[r.session_key].count += 1
+          if (r.user_id === myId) map[r.session_key].mine = r
+        })
+        setRsvps(map)
+      } catch (e) { console.warn('[rsvp] load', e?.message) }
+    })()
+    return () => { alive = false }
+  }, [myId, sessions])
+
+  const toggleRsvp = async (s) => {
+    if (!myId) return
+    const key = String(s.id)
+    const cur = rsvps[key] || { count: 0, mine: null }
+    try {
+      if (cur.mine) {
+        await supabase.from('session_rsvps').delete().eq('id', cur.mine.id)
+        setRsvps(p => ({ ...p, [key]: { count: Math.max(0, cur.count - 1), mine: null } }))
+      } else {
+        const { data, error } = await supabase.from('session_rsvps').insert({ session_key: key, user_id: myId, notify: false }).select().single()
+        if (error) throw error
+        setRsvps(p => ({ ...p, [key]: { count: cur.count + 1, mine: data } }))
+        toast.success("You're in — see you there")
+      }
+    } catch (e) { toast.error(e.message) }
+  }
+
+  const toggleNotify = async (s) => {
+    const key = String(s.id)
+    const cur = rsvps[key]
+    if (!cur?.mine) return
+    try {
+      const next = !cur.mine.notify
+      await supabase.from('session_rsvps').update({ notify: next }).eq('id', cur.mine.id)
+      setRsvps(p => ({ ...p, [key]: { ...cur, mine: { ...cur.mine, notify: next } } }))
+      toast.success(next ? "We'll notify you before it starts" : 'Notification off')
+    } catch (e) { toast.error(e.message) }
+  }
 
   const persist = (next, key, setter) => { setter(next); saveNetwork(key, next) }
   const upcoming = [...sessions].sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at))
@@ -4994,10 +5058,37 @@ function NetworkSessions({ isAdmin, creators }) {
                     <div style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-hi)', marginBottom: '4px' }}>{s.title}</div>
                     <div style={{ fontSize: '12px', color: 'var(--text-md)', marginBottom: '6px' }}>{c.name} · {fmtDateTime(s.scheduled_at)}{s.duration_min ? ` · ${s.duration_min}min` : ''}</div>
                     {s.description && <div style={{ fontSize: '12px', color: 'var(--text-lo)', lineHeight: 1.5, marginBottom: '12px' }}>{s.description}</div>}
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
                       {s.zoom_link && (
                         <a href={s.zoom_link} target="_blank" rel="noopener noreferrer" style={{ background: '#fff', color: '#000', border: 'none', borderRadius: '99px', padding: '8px 18px', fontSize: '12px', fontWeight: '700', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Video size={12} /> Join Session</a>
                       )}
+                      {(() => {
+                        const r = rsvps[String(s.id)] || { count: 0, mine: null }
+                        return (
+                          <>
+                            <button onClick={() => toggleRsvp(s)} style={{
+                              background: r.mine ? 'rgba(170,255,160,0.10)' : 'transparent',
+                              border: `1px solid ${r.mine ? 'rgba(170,255,160,0.35)' : 'var(--card-border)'}`,
+                              color: r.mine ? '#aaffa0' : 'var(--text-md)',
+                              borderRadius: '99px', padding: '7px 14px', fontSize: '11px', fontWeight: '700',
+                              cursor: 'pointer', fontFamily: 'inherit', minHeight: 'auto', display: 'inline-flex', alignItems: 'center', gap: '6px',
+                            }}>
+                              <Check size={12} /> {r.mine ? 'Going' : 'RSVP'}{r.count > 0 ? ` · ${r.count}` : ''}
+                            </button>
+                            {r.mine && (
+                              <button onClick={() => toggleNotify(s)} title="Notify me before it starts" style={{
+                                background: r.mine.notify ? 'rgba(255,217,102,0.10)' : 'transparent',
+                                border: `1px solid ${r.mine.notify ? 'rgba(255,217,102,0.35)' : 'var(--card-border)'}`,
+                                color: r.mine.notify ? '#ffd966' : '#666',
+                                borderRadius: '99px', padding: '7px 12px', fontSize: '11px', fontWeight: '700',
+                                cursor: 'pointer', fontFamily: 'inherit', minHeight: 'auto', display: 'inline-flex', alignItems: 'center', gap: '6px',
+                              }}>
+                                <Bell size={12} /> {r.mine.notify ? 'Notifying' : 'Notify me'}
+                              </button>
+                            )}
+                          </>
+                        )
+                      })()}
                       {isAdmin && (
                         <button onClick={() => deleteSession(s.id)} style={{ background: 'transparent', border: '1px solid #2a2a2a', color: '#666', borderRadius: '99px', padding: '7px 14px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', minHeight: 'auto' }}>Delete</button>
                       )}
@@ -5842,6 +5933,9 @@ const NETWORK_ACCENT = '#7c3aed'
 
 function NetworkPage({ session, setPage, profile }) {
   const isAdmin = isSuperAdmin(session?.user?.email)
+  // Network social features are open to every APPROVED user; admin-only
+  // controls (announcements, creators, challenge creation…) stay gated inline.
+  const allowed = isAdmin || isAnyAdmin(session?.user?.email) || profile?.status === 'approved'
   const [creators] = useState(() => loadNetwork('network_creators', NETWORK_SEED_CREATORS))
   const [memberCount,   setMemberCount]   = useState(null)
   const [msgsTodayCount, setMsgsTodayCount] = useState(null)
@@ -5849,11 +5943,14 @@ function NetworkPage({ session, setPage, profile }) {
   const [annDraft,      setAnnDraft]      = useState('')
   const [annPosting,    setAnnPosting]    = useState(false)
   const [annModal,      setAnnModal]      = useState(false)
+  const [viewTrader,    setViewTrader]    = useState(null)   // user_id for profile modal
+  const [editProfile,   setEditProfile]   = useState(false)
+  const [myNetProfile,  setMyNetProfile]  = useMyNetworkProfile(session, profile)
 
-  useEffect(() => { if (!isAdmin) setPage('dashboard') }, [isAdmin, setPage])
+  useEffect(() => { if (!allowed) setPage('dashboard') }, [allowed, setPage])
 
   useEffect(() => {
-    if (!isAdmin) return
+    if (!allowed) return
     ;(async () => {
       try {
         // Active members count
@@ -5874,9 +5971,9 @@ function NetworkPage({ session, setPage, profile }) {
         setAnnouncements(data || [])
       } catch { setAnnouncements([]) }
     })()
-  }, [isAdmin])
+  }, [allowed])
 
-  if (!isAdmin) return null
+  if (!allowed) return null
 
   const postAnnouncement = async () => {
     if (!annDraft.trim() || !session?.user?.id) return
@@ -5945,7 +6042,13 @@ function NetworkPage({ session, setPage, profile }) {
             <div style={{ fontSize: '11px', fontWeight: '700', letterSpacing: '0.2em', color: accent, textTransform: 'uppercase' }}>The Network</div>
           </div>
           <h1 style={{ fontSize: '44px', fontWeight: '900', letterSpacing: '-2px', color: '#fff', lineHeight: 1, marginBottom: '10px' }}>NETWORK</h1>
-          <div style={{ fontSize: '14px', color: '#aaa', letterSpacing: '0.01em' }}>Your trading community — grow together</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{ fontSize: '14px', color: '#aaa', letterSpacing: '0.01em' }}>Your trading community — grow together</div>
+            <button onClick={() => setEditProfile(true)} style={{ background: `${accent}15`, border: `1px solid ${accent}40`, color: '#c4b5fd', borderRadius: '99px', padding: '8px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <SocialAvatar name={myNetProfile?.display_name || profile?.username || 'me'} url={myNetProfile?.avatar_url} size={20} />
+              My Trader Profile
+            </button>
+          </div>
         </div>
       </div>
 
@@ -5999,10 +6102,22 @@ function NetworkPage({ session, setPage, profile }) {
         )}
       </div>
 
+      {/* ── 2.5 TRADE FEED ── */}
+      <div className="net-section">
+        {sectionTitle('⚡', 'Trade Feed')}
+        <NetworkFeed session={session} profile={profile} isAdmin={isAdmin} onOpenProfile={setViewTrader} />
+      </div>
+
+      {/* ── 2.6 LEADERBOARD 2.0 ── */}
+      <div className="net-section">
+        {sectionTitle('🏆', 'Leaderboard')}
+        <Leaderboard2 session={session} onOpenProfile={setViewTrader} />
+      </div>
+
       {/* ── 3. SESSIONS ── */}
       <div className="net-section">
         {sectionTitle('🎙️', 'Live & Upcoming Sessions')}
-        <NetworkSessions isAdmin={isAdmin} creators={creators} />
+        <NetworkSessions isAdmin={isAdmin} creators={creators} session={session} />
       </div>
 
       {/* ── 4. GENERAL CHAT (contained, 400px) ── */}
@@ -6013,10 +6128,10 @@ function NetworkPage({ session, setPage, profile }) {
         </div>
       </div>
 
-      {/* ── 5. CHALLENGES ── */}
+      {/* ── 5. CHALLENGES 2.0 — auto-tracked from real trades ── */}
       <div className="net-section">
-        {sectionTitle('🎯', 'Active Challenges')}
-        <NetworkChallenges isAdmin={isAdmin} session={session} />
+        {sectionTitle('🎯', 'Challenges')}
+        <Challenges2 session={session} isAdmin={isAdmin} />
       </div>
 
       {/* ── 6. CREATORS ── */}
@@ -6040,8 +6155,15 @@ function NetworkPage({ session, setPage, profile }) {
       {/* ── 9. HALL OF FAME ── */}
       <div className="net-section">
         {sectionTitle('🏆', 'Hall of Fame')}
-        <NetworkHallOfFame isAdmin={isAdmin} />
+        <NetworkHallOfFame isAdmin={isAdmin} session={session} />
       </div>
+
+      {/* ── social modals ── */}
+      {viewTrader && <TraderProfileModal userId={viewTrader} session={session} onClose={() => setViewTrader(null)} />}
+      {editProfile && (
+        <ProfileEditModal session={session} profile={profile} myNetProfile={myNetProfile}
+          onSaved={(np) => setMyNetProfile(np)} onClose={() => setEditProfile(false)} />
+      )}
 
       {/* ── 10. ACCOUNTABILITY ── */}
       <div className="net-section">
