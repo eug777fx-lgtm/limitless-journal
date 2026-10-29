@@ -2134,13 +2134,39 @@ function Dashboard({ trades, onAddTrade, loading, profile, flags = {} }) {
   const now = new Date()
 
   // ── Radar data ──
+  // Every score is computed from the trader's own trades (0 to 100).
+  //   Consistency: share of trading days that closed green.
+  //   Drawdown:    100 minus 10 points per average win lost in the worst
+  //                peak to trough drop of the cumulative P&L (higher = shallower).
+  //   Recovery:    net P&L divided by that worst drop, x25 (4x or better = 100).
+  const clampScore = (n) => Math.max(0, Math.min(100, Math.round(n || 0)))
+  const dayTotals = new Map()
+  for (const t of sortedAsc) {
+    const k = formatDate(t.trade_date)
+    dayTotals.set(k, (dayTotals.get(k) || 0) + (t.pnl || 0))
+  }
+  const greenDays = [...dayTotals.values()].filter(v => v > 0).length
+  const consistencyScore = dayTotals.size ? clampScore((greenDays / dayTotals.size) * 100) : 0
+  let peakEq = 0, runEq = 0, maxDD = 0
+  for (const t of sortedAsc) {
+    runEq += (t.pnl || 0)
+    peakEq = Math.max(peakEq, runEq)
+    maxDD = Math.max(maxDD, peakEq - runEq)
+  }
+  const drawdownScore = !trades.length ? 0
+    : maxDD === 0 ? 100
+    : avgWin > 0 ? clampScore(100 - (maxDD / avgWin) * 10) : 0
+  const recoveryScore = !trades.length || totalPnl <= 0 ? 0
+    : maxDD === 0 ? 100
+    : clampScore((totalPnl / maxDD) * 25)
+
   const radarData = [
     { metric: 'Win Rate',    score: winRate },
-    { metric: 'Consistency', score: 72 },
+    { metric: 'Consistency', score: consistencyScore },
     { metric: 'P. Factor',   score: Math.min(100, Math.round(parseFloat(profitFactor) * 20 || 0)) },
-    { metric: 'Drawdown',    score: 60 },
+    { metric: 'Drawdown',    score: drawdownScore },
     { metric: 'Avg R:R',     score: Math.min(100, Math.round(parseFloat(avgRR) * 25 || 0)) },
-    { metric: 'Recovery',    score: 65 },
+    { metric: 'Recovery',    score: recoveryScore },
   ]
   const overallScore = Math.round(radarData.reduce((s, d) => s + d.score, 0) / radarData.length)
 
