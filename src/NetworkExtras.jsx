@@ -671,9 +671,18 @@ export function NetworkChat({ session, profile, channel = 'general-chat', readOn
     if (next[emoji].length === 0) delete next[emoji]
     setMessages(prev => prev.map(x => x.id === m.id ? { ...x, reactions: next } : x)) // optimistic
     try {
-      const { error } = await supabase.from('network_messages').update({ reactions: next }).eq('id', m.id)
+      // Server-side atomic toggle. Only ever writes the reactions column, and
+      // merges concurrent reactions instead of clobbering them last-write-wins.
+      const { data, error } = await supabase.rpc('network_toggle_reaction', {
+        p_message_id: m.id,
+        p_emoji: emoji,
+      })
       if (error) throw error
-    } catch (e) { toast.error(e.message) }
+      setMessages(prev => prev.map(x => x.id === m.id ? { ...x, reactions: data || {} } : x))
+    } catch (e) {
+      setMessages(prev => prev.map(x => x.id === m.id ? { ...x, reactions: cur } : x)) // rollback
+      toast.error(e.message)
+    }
   }
 
   const deleteMessage = async (id) => {

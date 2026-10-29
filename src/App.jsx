@@ -1,9 +1,6 @@
-import { useState, useEffect, useRef, Fragment, createContext, useContext } from 'react'
+import { useState, useEffect, useRef, Fragment, createContext, useContext, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import toast, { Toaster } from 'react-hot-toast'
-import {
-  NetworkPartners, NetworkHallOfFame, NetworkChat, NetworkAnnouncements,
-} from './NetworkExtras.jsx'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   BarChart, Bar, Cell, LineChart, Line, CartesianGrid,
@@ -16,15 +13,69 @@ import {
   Bell, Megaphone, Link2, Download, ChevronDown, RefreshCw, LogOut,
   Mail, Ban, Flag, Activity, MessageSquare, Save, Send, Eye, MousePointerClick, ImageOff,
   Globe, Video, Flame, Play, Clock, Award, Heart,
-  Trophy, FileText, ExternalLink, Calendar, Brain, Crown,
+  Trophy, FileText, ExternalLink, Calendar, Brain, Crown, CreditCard,
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
-import { TOSPage } from './TOS.jsx'
-import { CopyTraderPage } from './CopyTrader.jsx'
-import {
-  NetworkFeed, Leaderboard2, Challenges2, TraderProfileModal, ProfileEditModal,
-  ShareTradeButton, useMyNetworkProfile, SocialAvatar,
-} from './NetworkSocial.jsx'
+// Always-loaded Network primitives (a hook can never be lazy'd).
+import { useMyNetworkProfile } from './lib/networkShared.js'
+import { SocialAvatar } from './lib/SocialAvatar.jsx'
+// Billing: paywall gate + Subscription page (Stripe via api/billing.js)
+import { PaywallScreen, SubscriptionPage } from './Billing.jsx'
+import { fetchSubscription, hasPaidAccess, syncSubscription, startCheckout } from './lib/billing'
+
+// ─── Code-split boundaries ────────────────────────────────────
+// TOS and TradeSync are super-admin-only, and the Network layer is a secondary
+// tab. None of them belong in the bundle every visitor downloads on first
+// paint, so each is pulled in on demand as its own chunk.
+//
+// lazyChunk() wraps React.lazy with a one-shot reload. Every deploy renames the
+// hashed chunk files, so a user sitting on an already-open tab from the previous
+// deploy gets a 404 the first time they open a lazily-loaded page. Without this
+// that is a white screen; with it the tab silently reloads onto the new build.
+const lazyChunk = (loader) => lazy(() => loader().catch((err) => {
+  const KEY = 'ltj_chunk_reloaded'
+  if (!sessionStorage.getItem(KEY)) {
+    sessionStorage.setItem(KEY, '1')
+    window.location.reload()
+    return new Promise(() => {})   // hold until the reload takes over
+  }
+  throw err
+}))
+
+const TOSPage            = lazyChunk(() => import('./TOS.jsx').then(m => ({ default: m.TOSPage })))
+const CopyTraderPage     = lazyChunk(() => import('./CopyTrader.jsx').then(m => ({ default: m.CopyTraderPage })))
+const NetworkFeed        = lazyChunk(() => import('./NetworkSocial.jsx').then(m => ({ default: m.NetworkFeed })))
+const Leaderboard2       = lazyChunk(() => import('./NetworkSocial.jsx').then(m => ({ default: m.Leaderboard2 })))
+const Challenges2        = lazyChunk(() => import('./NetworkSocial.jsx').then(m => ({ default: m.Challenges2 })))
+const TraderProfileModal = lazyChunk(() => import('./NetworkSocial.jsx').then(m => ({ default: m.TraderProfileModal })))
+const ProfileEditModal   = lazyChunk(() => import('./NetworkSocial.jsx').then(m => ({ default: m.ProfileEditModal })))
+const ShareTradeButton   = lazyChunk(() => import('./NetworkSocial.jsx').then(m => ({ default: m.ShareTradeButton })))
+const NetworkPartners    = lazyChunk(() => import('./NetworkExtras.jsx').then(m => ({ default: m.NetworkPartners })))
+const NetworkHallOfFame  = lazyChunk(() => import('./NetworkExtras.jsx').then(m => ({ default: m.NetworkHallOfFame })))
+const NetworkChat        = lazyChunk(() => import('./NetworkExtras.jsx').then(m => ({ default: m.NetworkChat })))
+
+// A clean boot means any earlier chunk-miss reload worked; reset the guard so
+// the next deploy gets its own retry instead of failing hard.
+if (typeof window !== 'undefined') {
+  window.addEventListener('load', () => {
+    try { sessionStorage.removeItem('ltj_chunk_reloaded') } catch { /* private mode */ }
+    // Warm the Network chunks once the main thread is idle, so opening the tab
+    // is instant even though it is no longer in the first-load bundle.
+    const warm = () => { import('./NetworkSocial.jsx'); import('./NetworkExtras.jsx') }
+    if ('requestIdleCallback' in window) requestIdleCallback(warm, { timeout: 6000 })
+    else setTimeout(warm, 4000)
+  })
+}
+
+// Shown while a lazy chunk is in flight.
+function ChunkFallback({ label = 'Loading', pad = '60px 20px' }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: pad, color: '#666', fontSize: '13px', letterSpacing: '0.02em' }}>
+      <Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} />
+      {label}
+    </div>
+  )
+}
 
 // ─── Beta Closed mode ─────────────────────────────────────────
 // When true, new signups are placed on a waitlist (status='waitlist') instead
@@ -32,6 +83,29 @@ import {
 // no app access. Existing approved users keep full access, and valid invite
 // links still auto-approve. Flip to false to reopen the beta.
 const BETA_CLOSED = false
+
+// Hand-off from the marketing site checkout (limitless-journal.com/checkout ->
+// app/?signup=1&plan=lite). Remember the plan across the sign up and email
+// confirm round trip, then open Stripe Checkout once the trader is signed in.
+const PENDING_PLAN_KEY = 'pending_plan'
+;(() => {
+  try {
+    const p = new URLSearchParams(window.location.search).get('plan')
+    if (p === 'lite') localStorage.setItem(PENDING_PLAN_KEY, JSON.stringify({ plan: p, at: Date.now() }))
+  } catch { /* no storage */ }
+})()
+const hasPendingPlan = () => {
+  try { return !!localStorage.getItem(PENDING_PLAN_KEY) } catch { return false }
+}
+const takePendingPlan = () => {
+  try {
+    const raw = localStorage.getItem(PENDING_PLAN_KEY)
+    if (!raw) return null
+    localStorage.removeItem(PENDING_PLAN_KEY)
+    const { plan, at } = JSON.parse(raw)
+    return plan === 'lite' && Date.now() - at < 3 * 24 * 3600 * 1000 ? plan : null
+  } catch { return null }
+}
 
 // ─── Global CSS ───────────────────────────────────────────────
 const ANIM_CSS = `
@@ -135,7 +209,11 @@ select option { background: #0d0d0d; color: #fff; }
   }
   /* Grids */
   .stat-grid   { grid-template-columns: repeat(2,1fr) !important; gap: 10px !important; }
-  .stat-grid > *:last-child { grid-column: span 2; }
+  /* A lone tile on the final row should fill it — but only when the tile
+     count is odd. .stat-grid is used with 3, 4 and 5 tiles; without the
+     :nth-child(odd) guard the 4-tile grids (Network quick stats, admin
+     stats, Hall of Fame) left an empty cell beside the last tile. */
+  .stat-grid > *:last-child:nth-child(odd) { grid-column: span 2; }
   .chart-grid  { grid-template-columns: 1fr !important; gap: 10px !important; }
   .radar-grid  { grid-template-columns: 1fr !important; gap: 10px !important; }
   .ana-grid    { grid-template-columns: 1fr !important; gap: 10px !important; }
@@ -776,7 +854,7 @@ function notifyWaitlist({ firstName, email }) {
 }
 
 function AuthPage({ onAuth }) {
-  const [tab, setTab]           = useState('signup')
+  const [tab, setTab]           = useState(() => { try { return new URLSearchParams(window.location.search).get('login') ? 'login' : 'signup' } catch { return 'signup' } })
   const [view, setView]         = useState('auth') // 'auth' | 'forgot'
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
@@ -1017,6 +1095,16 @@ function AuthPage({ onAuth }) {
             {error && (
               <div style={{ background: 'rgba(255,128,128,0.05)', border: '1px solid rgba(255,128,128,0.15)', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: '#ff8080', marginBottom: '18px', lineHeight: 1.5 }}>
                 {error}
+              </div>
+            )}
+
+            {/* Came from the site's checkout: say what happens next */}
+            {hasPendingPlan() && (
+              <div style={{ border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '12px 14px', marginBottom: '16px', fontSize: '12px', color: '#bbb', lineHeight: 1.55 }}>
+                <div style={{ color: '#fff', fontWeight: 600, fontSize: '13px', marginBottom: '4px' }}>LIMITLESS Lite · $15 a month</div>
+                {tab === 'signup'
+                  ? 'Step 1 of 2: create your account. Next you go to secure checkout by Stripe.'
+                  : 'Log in and you go straight to secure checkout by Stripe.'}
               </div>
             )}
 
@@ -2657,7 +2745,9 @@ function TradeDetailModal({ trade, onClose, onSave, demoMode = false, readOnly =
         {/* Share to Network — creates a privacy-safe trade card in the feed */}
         {!demoMode && trade?.id && !readOnly && (
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '14px' }}>
-            <ShareTradeButton trade={trade} />
+            <Suspense fallback={null}>
+              <ShareTradeButton trade={trade} />
+            </Suspense>
           </div>
         )}
 
@@ -6262,7 +6352,7 @@ function AdminPanel({ session, setPage, onViewUser }) {
   const [annDraft,     setAnnDraft]     = useState('')
   const [annSaving,    setAnnSaving]    = useState(false)
   const [annSaved,     setAnnSaved]     = useState(false)
-  const [flags,        setFlags]        = useState({ monthlyGoalTracker: true, aiChecklist: true, newsCalendar: true, feedSection: true })
+  const [flags,        setFlags]        = useState({ monthlyGoalTracker: true, aiChecklist: true, newsCalendar: true, feedSection: true, paywall: false })
   const [flagsSaving,  setFlagsSaving]  = useState(false)
   const [flagsSaved,   setFlagsSaved]   = useState(false)
   const [loading,      setLoading]      = useState(true)
@@ -6514,7 +6604,11 @@ function AdminPanel({ session, setPage, onViewUser }) {
     } catch (e) { setError(e.message) }
     finally { setFlagsSaving(false) }
   }
-  const toggleFlag = (key) => saveFlags({ ...flags, [key]: !flags[key] })
+  const toggleFlag = (key) => {
+    // The paywall locks every non-admin out until they pay, so make it deliberate.
+    if (key === 'paywall' && !flags.paywall && !window.confirm('Turn the paywall on? Every non-admin user will need an active $15/month subscription to get into LIMITLESS.')) return
+    saveFlags({ ...flags, [key]: !flags[key] })
+  }
 
   // ── User notes ──
   const startEditNote = (u) => { setNoteEditId(u.id); setNoteDraft(u.notes || '') }
@@ -7026,6 +7120,7 @@ function AdminPanel({ session, setPage, onViewUser }) {
             { key: 'aiChecklist',        label: 'AI Checklist Generation', desc: 'Generate checklist from rules',        Icon: Sparkles     },
             { key: 'newsCalendar',       label: 'News Calendar',           desc: 'Economic events page + nav entry',     Icon: CalendarDays },
             { key: 'feedSection',        label: 'Recent Trades Feed',      desc: 'Recent trades on the dashboard',       Icon: BookOpen     },
+            { key: 'paywall',            label: 'Paywall',                 desc: 'Everyone must subscribe ($15/mo Lite). Admins exempt.', Icon: CreditCard },
           ].map(f => {
             const on = !!flags[f.key]
             const Icon = f.Icon
@@ -7887,13 +7982,17 @@ export default function App() {
   const [authLoading,    setAuthLoading]    = useState(true)
   const [passwordRecovery, setPasswordRecovery] = useState(false)
   const [announcement, setAnnouncement] = useState(null) // { text, active }
-  const [featureFlags, setFeatureFlags] = useState({ monthlyGoalTracker: true, aiChecklist: true, newsCalendar: true, feedSection: true })
+  const [featureFlags, setFeatureFlags] = useState({ monthlyGoalTracker: true, aiChecklist: true, newsCalendar: true, feedSection: true, paywall: false })
   const [demoMode, setDemoModeRaw] = useState(() => localStorage.getItem('limitless_demo_mode') === 'true')
   const setDemoMode = (v) => {
     setDemoModeRaw(v)
     try { localStorage.setItem('limitless_demo_mode', v ? 'true' : 'false') } catch {}
   }
   const [profileLoading, setProfileLoading] = useState(false)
+  // Billing: the user's subscription row + whether app_settings (paywall flag) has loaded
+  const [subscription,   setSubscription]   = useState(null)
+  const [subLoaded,      setSubLoaded]      = useState(false)
+  const [flagsLoaded,    setFlagsLoaded]    = useState(false)
   const [tradesLoading,  setTradesLoading]  = useState(true)
   const [profile,        setProfile]        = useState(null)
   const [trades,         setTrades]         = useState([])
@@ -7981,6 +8080,7 @@ export default function App() {
       if (session) {
         loadProfile(session)
         loadTrades(session)
+        loadSubscription(session)
       }
     })
 
@@ -7995,6 +8095,8 @@ export default function App() {
       if (!session) {
         setProfile(null)
         setTrades([])
+        setSubscription(null)
+        setSubLoaded(false)
         setPage('dashboard')
       }
     })
@@ -8029,6 +8131,7 @@ export default function App() {
           setFeatureFlags(prev => ({ ...prev, ...data.feature_flags }))
         }
       } catch {}
+      finally { if (!cancelled) setFlagsLoaded(true) }
     }
     load()
     const t = setInterval(load, 60_000)
@@ -8080,6 +8183,54 @@ export default function App() {
     setProfileLoading(false)
   }
 
+  const loadSubscription = async (sess) => {
+    const sub = await fetchSubscription(sess.user.id)
+    setSubscription(sub)
+    setSubLoaded(true)
+  }
+
+  // Back from Stripe Checkout / the billing portal: pull the latest state now
+  // instead of waiting for the webhook, then clean the URL.
+  useEffect(() => {
+    if (!session) return
+    let flag = null
+    try { flag = new URLSearchParams(window.location.search).get('billing') } catch { /* no URL */ }
+    if (!flag) return
+    try {
+      const url = new URL(window.location.href)
+      url.searchParams.delete('billing')
+      url.searchParams.delete('session_id')
+      window.history.replaceState(null, '', url.pathname + url.search + url.hash)
+    } catch { /* URL cleanup is cosmetic */ }
+    if (flag === 'cancel') { toast('Checkout canceled. You were not charged.'); return }
+    let tries = 0
+    const pull = async () => {
+      tries += 1
+      try {
+        const sub = await syncSubscription()
+        if (sub) { setSubscription(sub); setSubLoaded(true) }
+        if (flag === 'success') {
+          if (hasPaidAccess(sub)) toast.success('Welcome to LIMITLESS Lite. You are all set.')
+          else if (tries < 4) setTimeout(pull, 2500)
+        }
+      } catch { if (tries < 4) setTimeout(pull, 2500) }
+    }
+    pull()
+  }, [session])
+
+  // Came from the site's "Start for $15": go straight to Stripe Checkout once
+  // signed in, unless they already pay (or are back from Stripe right now).
+  useEffect(() => {
+    if (!session || !subLoaded) return
+    let back = null
+    try { back = new URLSearchParams(window.location.search).get('billing') } catch { /* no URL */ }
+    if (back) return
+    const plan = takePendingPlan()
+    if (!plan || hasPaidAccess(subscription)) return
+    toast('Opening secure checkout…')
+    startCheckout(plan).catch((e) => toast.error(e.message || 'Could not open checkout.'))
+  }, [session, subLoaded]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const loadTrades = async (sess) => {
     setTradesLoading(true)
     const { data } = await supabase
@@ -8103,6 +8254,7 @@ export default function App() {
     setSession(sess)
     loadProfile(sess)
     loadTrades(sess)
+    loadSubscription(sess)
   }
 
   const logout = async () => {
@@ -8119,6 +8271,7 @@ export default function App() {
     { id: 'trades',    Icon: BookOpen,        label: 'Trade Log'    },
     { id: 'plan',      Icon: ClipboardList,   label: 'Trading Plan' },
     ...(featureFlags.newsCalendar ? [{ id: 'news', Icon: CalendarDays, label: 'News' }] : []),
+    { id: 'billing',   Icon: CreditCard,      label: 'Subscription' },
     { id: 'settings',  Icon: Settings2,       label: 'Settings'     },
   ]
 
@@ -8154,8 +8307,9 @@ export default function App() {
     return <AuthPage onAuth={handleAuth} />
   }
 
-  // ── Profile loading ──
-  if (profileLoading || !profile) {
+  // ── Profile loading (also waits for the subscription row and the paywall
+  // flag, so a locked-out user never sees the app flash before the paywall) ──
+  if (profileLoading || !profile || !subLoaded || !flagsLoaded) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100vw', height: '100vh', background: '#080808', color: '#333', fontFamily: 'Inter, sans-serif', fontSize: '12px', letterSpacing: '0.1em' }}>
         <style dangerouslySetInnerHTML={{ __html: ANIM_CSS }} />
@@ -8168,14 +8322,35 @@ export default function App() {
     return <BannedScreen onLogout={logout} />
   }
 
-  // ── Waitlist gate (beta closed — admins still get access) ──
-  if (profile.status === 'waitlist' && !isAnyAdmin(session?.user?.email)) {
-    return <WaitlistScreen onLogout={logout} />
+  // ── Paywall gate ──
+  // When the paywall flag is on (Admin -> Feature Flags) everyone needs an
+  // active subscription; admins are exempt. Paying replaces manual approval,
+  // so pending / waitlist users go straight to the paywall instead.
+  const paywallOn = !!featureFlags.paywall
+  const isAdminUser = isAnyAdmin(session?.user?.email)
+  if (paywallOn && !isAdminUser && !hasPaidAccess(subscription)) {
+    return (
+      <PaywallScreen
+        subscription={subscription}
+        tradeCount={trades.length}
+        onLogout={logout}
+        onSynced={(s) => setSubscription(s)}
+        background={<AuroraBackground theme="white" />}
+        css={ANIM_CSS}
+      />
+    )
   }
 
-  // ── Approval gate ──
-  if (profile.status !== 'approved') {
-    return <PendingScreen onLogout={logout} />
+  if (!paywallOn || isAdminUser) {
+    // ── Waitlist gate (beta closed — admins still get access) ──
+    if (profile.status === 'waitlist' && !isAdminUser) {
+      return <WaitlistScreen onLogout={logout} />
+    }
+
+    // ── Approval gate ──
+    if (profile.status !== 'approved') {
+      return <PendingScreen onLogout={logout} />
+    }
   }
 
   // ── Main app ──
@@ -8520,11 +8695,24 @@ export default function App() {
           />
         )}
         {page === 'news' && featureFlags.newsCalendar && <NewsCalendar />}
-        {page === 'network'     && <NetworkPage session={session} setPage={setPage} profile={profile} />}
-        {page === 'tos'         && isSuperAdmin(session?.user?.email) && <TOSPage session={session} />}
-        {page === 'copy'        && isSuperAdmin(session?.user?.email) && <CopyTraderPage session={session} journalTrades={effectiveTrades} />}
+        {page === 'network'     && (
+          <Suspense fallback={<ChunkFallback label="Loading the Network…" />}>
+            <NetworkPage session={session} setPage={setPage} profile={profile} />
+          </Suspense>
+        )}
+        {page === 'tos'         && isSuperAdmin(session?.user?.email) && (
+          <Suspense fallback={<ChunkFallback label="Loading TOS…" />}>
+            <TOSPage session={session} />
+          </Suspense>
+        )}
+        {page === 'copy'        && isSuperAdmin(session?.user?.email) && (
+          <Suspense fallback={<ChunkFallback label="Loading TradeSync…" />}>
+            <CopyTraderPage session={session} journalTrades={effectiveTrades} />
+          </Suspense>
+        )}
         {page === 'plan'        && <TradingPlan flags={featureFlags} />}
         {page === 'settings'    && <Settings theme={theme} setTheme={handleSetTheme} session={session} profile={profile} setProfile={setProfile} glassMode={glassMode} setGlassMode={v => { setGlassMode(v); localStorage.setItem('glass_mode', v) }} onLogout={logout} trades={effectiveTrades} demoMode={demoMode} setDemoMode={setDemoMode} setTrades={setTrades} setPage={setPage} uiV2={uiV2} setUiV2={setUiV2} />}
+        {page === 'billing'     && <SubscriptionPage subscription={subscription} onSynced={setSubscription} isAdmin={isAdminUser} paywallOn={paywallOn} />}
         {page === 'admin'       && <AdminPanel session={session} setPage={setPage} onViewUser={enterViewAs} />}
       </main>
 
