@@ -13,8 +13,13 @@ import {
   ArrowUp, Sparkles, BadgeCheck, Camera, Eye, EyeOff, ChevronDown, Medal,
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
+import { ACCENT, fetchNetworkProfiles, useMyNetworkProfile } from './lib/networkShared.js'
+import { SocialAvatar } from './lib/SocialAvatar.jsx'
 
-export const ACCENT = '#7c3aed'
+// Re-exported so existing import sites keep working; the definitions now live
+// in lib/networkShared.jsx so App.jsx can use them without pulling this whole
+// module into the first-load bundle.
+export { ACCENT, SocialAvatar, fetchNetworkProfiles, useMyNetworkProfile }
 const GREEN = '#aaffa0'
 const RED = '#ff8080'
 const GOLD = '#FFD700'
@@ -37,14 +42,6 @@ const relTime = (date) => {
   return `${Math.floor(diff / 86400)}d`
 }
 
-export function SocialAvatar({ name, url, size = 36 }) {
-  const initials = (name || 'U').split(/\s+/).map(s => s[0]).slice(0, 2).join('').toUpperCase()
-  if (url) return <img src={url} alt="" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', border: `1px solid ${ACCENT}44`, flexShrink: 0 }} />
-  return (
-    <div style={{ width: size, height: size, borderRadius: '50%', background: `${ACCENT}18`, border: `1px solid ${ACCENT}35`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.34, fontWeight: 700, color: '#c4b5fd', flexShrink: 0 }}>{initials}</div>
-  )
-}
-
 function SocialModal({ children, onClose, maxWidth = '540px' }) {
   return createPortal(
     <div onMouseDown={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', zIndex: 1300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '18px', overflowY: 'auto' }}>
@@ -57,25 +54,6 @@ function SocialModal({ children, onClose, maxWidth = '540px' }) {
 }
 
 // ─── profile data helpers ────────────────────────────────────────────────────
-export async function fetchNetworkProfiles(userIds) {
-  if (!userIds?.length) return new Map()
-  const { data } = await supabase.from('network_profiles').select('*').in('user_id', userIds)
-  return new Map((data || []).map(p => [p.user_id, p]))
-}
-
-async function ensureMyProfile(session, profile) {
-  const uid = session?.user?.id
-  if (!uid) return null
-  const { data } = await supabase.from('network_profiles').select('*').eq('user_id', uid).maybeSingle()
-  if (data) return data
-  const seed = {
-    user_id: uid,
-    display_name: [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || profile?.username || session.user.email.split('@')[0],
-  }
-  const { data: created } = await supabase.from('network_profiles').insert(seed).select().maybeSingle()
-  return created || seed
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
 //  2.1 — PROFILE EDIT (privacy toggles) + PUBLIC PROFILE + FOLLOWS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1065,13 +1043,3 @@ export function ShareTradeButton({ trade, compact = false, style = {} }) {
   )
 }
 
-// convenience hook for NetworkPage
-export function useMyNetworkProfile(session, profile) {
-  const [np, setNp] = useState(null)
-  useEffect(() => {
-    let alive = true
-    if (session?.user?.id) ensureMyProfile(session, profile).then(p => { if (alive) setNp(p) })
-    return () => { alive = false }
-  }, [session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
-  return [np, setNp]
-}
