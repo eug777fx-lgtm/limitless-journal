@@ -20,9 +20,18 @@ function TopNav({ route }) {
   const ref = React.useRef(null)
   const [pill, setPill] = React.useState(null)
   const [menu, setMenu] = React.useState(false)
+  // Measure the active link; again once web fonts land and whenever the capsule resizes
   React.useLayoutEffect(() => {
-    const el = ref.current && ref.current.querySelector('[aria-current="page"]')
-    setPill(el ? { left: el.offsetLeft, width: el.offsetWidth } : null)
+    const measure = () => {
+      const el = ref.current && ref.current.querySelector('[aria-current="page"]')
+      setPill(el ? { left: el.offsetLeft, width: el.offsetWidth } : null)
+    }
+    measure()
+    let dead = false
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (!dead) measure() })
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null
+    if (ro && ref.current) ro.observe(ref.current)
+    return () => { dead = true; ro && ro.disconnect() }
   }, [route])
   React.useEffect(() => {
     if (!menu) return

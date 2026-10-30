@@ -191,7 +191,7 @@ export function insights(s) {
   if (s.plan.answered >= 3 && s.plan.offPlanNet < 0) out.push({ kind: 'Plan check', title: `Trading off plan cost ${money(-s.plan.offPlanNet, false)}.`, body: `You followed your plan on ${s.plan.yes} of ${s.plan.answered} trades you rated. The rest are where the money leaked.` })
   const bestSession = [...s.sessions].filter((x) => x.n >= 2).sort((a, b) => b.net - a.net)[0]
   if (out.length < 3 && bestSession && bestSession.net > 0) out.push({ kind: 'Best window', title: `${bestSession.key} is your best session.`, body: `${bestSession.n} trades, ${Math.round(bestSession.win * 100)}% win, ${money(bestSession.net)} net.` })
-  if (out.length < 3 && s.review.reason < 0.6 && s.n >= 5) out.push({ kind: 'Habit', title: 'Write the reason on every trade.', body: `Only ${Math.round(s.review.reason * 100)}% of your trades have an entry reason. Without it, the review is guesswork.` })
+  if (out.length < 3 && s.review.reason < 0.6 && s.n >= 5) out.push({ kind: 'Habit', title: 'Write the reason on every trade.', body: s.review.reason === 0 ? 'None of your trades have an entry reason yet. Without it, the review is guesswork.' : `Only ${Math.round(s.review.reason * 100)}% of your trades have an entry reason. Without it, the review is guesswork.` })
   return out.slice(0, 3)
 }
 
