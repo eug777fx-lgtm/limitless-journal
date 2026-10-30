@@ -356,11 +356,26 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .card-lift:hover { transform: translateY(-2px) !important; }
 input:focus, textarea:focus, select:focus { border-color: #444 !important; outline: none; box-shadow: 0 0 0 2px rgba(255,255,255,0.1) !important; }
 [data-mode="light"] input:focus, [data-mode="light"] textarea:focus, [data-mode="light"] select:focus { border-color: #aaa !important; box-shadow: 0 0 0 2px rgba(0,0,0,0.07) !important; }
-.news-filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
-.news-pills { display: flex; gap: 6px; flex-shrink: 0; }
-@media (max-width: 768px) {
-  .news-filters { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
-  .news-filters::-webkit-scrollbar { display: none; }
+.news-filters { display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap; margin-bottom: 22px; }
+.news-seg { display: flex; flex: 1 1 280px; gap: 2px; padding: 3px; border-radius: 12px; background: var(--inp-bg); border: 1px solid var(--card-border); }
+.news-seg button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 6px; border: 0; border-radius: 9px; background: transparent; color: var(--text-md); font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; transition: background .15s, color .15s; }
+.news-seg button.on { background: var(--text-hi); color: var(--bg); font-weight: 700; }
+.news-cur { flex: 0 1 150px; min-width: 120px; }
+@media (max-width: 480px) { .news-cur { flex: 1 1 100%; } }
+.news-row { display: grid; grid-template-columns: 56px 1fr; gap: 12px; align-items: center; padding: 12px 14px; text-align: left; }
+.news-meta { display: flex; align-items: center; justify-content: flex-start; gap: 10px; flex-wrap: wrap; margin-top: 5px; font-size: 11px; color: var(--text-lo); }
+.news-meta b { color: var(--text-md); font-weight: 600; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cal-cell { position: relative; min-height: 54px; border-radius: 9px; display: flex; align-items: flex-end; justify-content: center; padding: 18px 2px 7px; }
+.cal-cell .cal-d { position: absolute; top: 5px; left: 7px; font-size: 10px; color: var(--text-dim); font-weight: 500; line-height: 1; }
+.cal-cell .cal-v { font-size: 12px; font-weight: 700; letter-spacing: -0.01em; line-height: 1; font-variant-numeric: tabular-nums; }
+.cal-cell.today { box-shadow: inset 0 0 0 1px rgba(255,255,255,0.45); }
+.cal-cell.today .cal-d { color: var(--text-hi); font-weight: 700; }
+@media (max-width: 480px) {
+  .cal-grid { gap: 3px; }
+  .cal-cell { min-height: 46px; border-radius: 8px; padding: 16px 1px 6px; }
+  .cal-cell .cal-d { top: 4px; left: 5px; font-size: 9px; }
+  .cal-cell .cal-v { font-size: 10.5px; }
 }
 .add-modal-overlay {
   position: fixed; inset: 0; z-index: 1000;
@@ -1318,48 +1333,54 @@ function CalendarHeatmap({ trades, viewDate, onPrev, onNext }) {
         {navBtn(onNext, '›')}
       </div>
 
-      {/* Day-of-week headers + cells — wrapped together so they scroll in sync */}
-      <div className="cal-scroll">
-      <div style={{ minWidth: '280px' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '3px', marginBottom: '4px' }}>
+      {/* Month summary */}
+      {(() => {
+        const vals = Object.values(calRaw)
+        if (!vals.length) return null
+        const total = vals.reduce((a, d) => a + d.pnl, 0)
+        const green = vals.filter(d => d.pnl > 0).length, red = vals.filter(d => d.pnl < 0).length
+        return (
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '14px', fontSize: '11px', color: 'var(--text-lo)', marginTop: '-6px', marginBottom: '14px', flexWrap: 'wrap' }}>
+            <span style={{ color: total >= 0 ? '#aaffa0' : '#ff8080', fontWeight: 700 }}>{total >= 0 ? '+' : '−'}${Math.abs(Math.round(total)).toLocaleString()}</span>
+            <span>{green} green</span>
+            <span>{red} red</span>
+          </div>
+        )
+      })()}
+
+      <div className="cal-grid" style={{ marginBottom: '6px' }}>
         {DOW.map((d, i) => (
-          <div key={i} style={{ textAlign: 'center', fontSize: '9px', color: '#555', fontWeight: '600', letterSpacing: '0.05em', paddingBottom: '2px' }}>{d}</div>
+          <div key={i} style={{ textAlign: 'center', fontSize: '10px', color: 'var(--text-dim)', fontWeight: '600', letterSpacing: '0.06em' }}>{d}</div>
         ))}
       </div>
 
-      {/* Day cells */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '3px' }}>
+      <div className="cal-grid">
         {cells.map((day, i) => {
-          if (!day) return <div key={i} style={{ borderRadius: '5px', minHeight: '42px' }} />
+          if (!day) return <div key={i} />
           const d     = calRaw[day]
           const hasT  = d?.list.length > 0
           const isPos = hasT && d.pnl > 0
           const isNeg = hasT && d.pnl < 0
-          const bg    = isPos ? 'rgba(170,255,160,0.07)' : isNeg ? 'rgba(255,128,128,0.07)' : 'rgba(255,255,255,0.015)'
-          const brd   = isPos ? 'rgba(170,255,160,0.16)' : isNeg ? 'rgba(255,128,128,0.16)' : '#161616'
-          const tc    = isPos ? '#aaffa0' : isNeg ? '#ff8080' : '#555'
+          const bg    = isPos ? 'rgba(170,255,160,0.10)' : isNeg ? 'rgba(255,128,128,0.10)' : hasT ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.02)'
+          const tc    = isPos ? '#aaffa0' : isNeg ? '#ff8080' : 'var(--text-md)'
+          const now   = new Date()
+          const isToday = now.getFullYear() === year && now.getMonth() === month && now.getDate() === day
+          const abs   = Math.abs(d?.pnl || 0)
+          const amt   = abs >= 1000 ? `${(abs / 1000).toFixed(abs >= 10000 ? 0 : 1).replace(/\.0$/, '')}k` : `${Math.round(abs)}`
           return (
             <div
               key={i}
               onClick={() => hasT && setPopupDay(day)}
-              className={hasT ? 'cal-day-active' : ''}
-              style={{ background: bg, border: `1px solid ${brd}`, borderRadius: '5px', minHeight: '42px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', padding: '4px 2px', cursor: hasT ? 'pointer' : 'default' }}
+              className={'cal-cell' + (hasT ? ' cal-day-active' : '') + (isToday ? ' today' : '')}
+              title={hasT ? `${d.list.length} trade${d.list.length !== 1 ? 's' : ''}` : undefined}
+              style={{ background: bg, cursor: hasT ? 'pointer' : 'default' }}
             >
-              <div style={{ fontSize: '9px', color: '#555', lineHeight: 1, marginBottom: '3px', fontWeight: '500' }}>{day}</div>
-              {hasT && (
-                <>
-                  <div style={{ fontSize: '9px', color: tc, fontWeight: '700', lineHeight: 1.2, textAlign: 'center' }}>
-                    {d.pnl > 0 ? '+' : '−'}${Math.abs(Math.round(d.pnl))}
-                  </div>
-                  <div style={{ fontSize: '8px', color: '#555', marginTop: '2px' }}>{d.list.length}t</div>
-                </>
-              )}
+              <span className="cal-d">{day}</span>
+              {hasT && <span className="cal-v" style={{ color: tc }}>{d.pnl > 0 ? '+' : d.pnl < 0 ? '−' : ''}${amt}</span>}
             </div>
           )
         })}
       </div>
-      </div>{/* /minWidth */}
-      </div>{/* /cal-scroll */}
 
       {/* Day popup */}
       {popupDay && (
@@ -1370,7 +1391,7 @@ function CalendarHeatmap({ trades, viewDate, onPrev, onNext }) {
         >
           <div
             className="modal-inner"
-            style={{ background: '#0d0d0d', border: '1px solid #222', borderRadius: '16px', padding: '24px', width: '460px', maxHeight: '70vh', overflowY: 'auto', boxShadow: '0 24px 80px rgba(0,0,0,0.85)', animation: 'modalIn 0.2s ease both' }}
+            style={{ background: '#0d0d0d', border: '1px solid #222', borderRadius: '16px', padding: '24px', width: 'min(460px, 100%)', maxHeight: '70vh', overflowY: 'auto', boxShadow: '0 24px 80px rgba(0,0,0,0.85)', animation: 'modalIn 0.2s ease both' }}
             onClick={e => e.stopPropagation()}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
@@ -3322,7 +3343,7 @@ function Trades({ trades, session, onTradeAdded, onTradeDeleted, onTradeUpdated,
     <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '24px' }}>
         <div>
-          <h1 style={{ fontSize: '28px', fontWeight: uiV2 ? '700' : '800', letterSpacing: uiV2 ? '-0.02em' : '-1px' }}>Trade Log</h1>
+          <h1 style={{ fontSize: '28px', fontWeight: uiV2 ? '700' : '800', letterSpacing: uiV2 ? '-0.02em' : '-1px', color: 'var(--text-hi)', margin: 0 }}>Trade Log</h1>
         </div>
         {!readOnly && (
         <div style={{ display: 'flex', gap: '8px' }}>
@@ -3878,13 +3899,15 @@ function NewsCalendar() {
   }
 
   // Extract "YYYY-MM-DD" from ISO datetime for grouping
+  // Group by the trader's own calendar day (local time), not UTC
   const getDateKey = (dateStr) => {
     if (!dateStr) return 'unknown'
     try {
       const d = new Date(dateStr)
-      return isNaN(d.getTime()) ? dateStr : d.toISOString().split('T')[0]
+      return isNaN(d.getTime()) ? dateStr : toDateKey(d)
     } catch { return dateStr }
   }
+  const todayKey = toDateKey(new Date())
 
   const formatDayHeader = (dateStr) => {
     if (!dateStr) return ''
@@ -3903,7 +3926,7 @@ function NewsCalendar() {
     if (impactFilter !== 'All' && (e.impact || '').toLowerCase() !== impactFilter.toLowerCase()) return false
     if (currFilter !== 'All' && e.country !== currFilter) return false
     return true
-  })
+  }).sort((a, b) => new Date(a.date) - new Date(b.date))
 
   // Group by calendar day
   const groupMap = {}
@@ -3937,7 +3960,7 @@ function NewsCalendar() {
     <div className="page-wrap" style={{ animation: 'pageEnter 0.2s ease-out both' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
-        <h1 style={{ fontSize: '28px', fontWeight: uiV2 ? '700' : '800', letterSpacing: uiV2 ? '-0.02em' : '-1px' }}>News Calendar</h1>
+        <h1 style={{ fontSize: '28px', fontWeight: uiV2 ? '700' : '800', letterSpacing: uiV2 ? '-0.02em' : '-1px', color: 'var(--text-hi)', margin: 0 }}>News Calendar</h1>
         {/* Week navigator */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button
@@ -3962,44 +3985,28 @@ function NewsCalendar() {
         </div>
       </div>
       {/* Week range label */}
-      <div style={{ fontSize: '12px', color: 'var(--text-lo)', marginBottom: '20px', marginTop: '-16px' }}>
-        {weekRangeLabel(currentMonday)}
+      <div style={{ fontSize: '12px', color: 'var(--text-lo)', marginBottom: '18px', marginTop: '-12px' }}>
+        {weekRangeLabel(currentMonday)} · times in your local time
       </div>
 
       {/* Filters */}
       <div className="news-filters">
-        <div className="news-pills">
-          {['All', 'High', 'Medium', 'Low'].map(f => {
-            const active = impactFilter === f
-            const dotColor = f !== 'All' ? impactColor(f) : null
-            return (
-              <button
-                key={f}
-                onClick={() => setImpactFilter(f)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '6px',
-                  padding: '6px 14px', borderRadius: '99px',
-                  border: active ? '1px solid var(--text-hi)' : '1px solid var(--card-border)',
-                  background: active ? 'var(--text-hi)' : 'transparent',
-                  color: active ? 'var(--bg)' : 'var(--text-md)',
-                  fontSize: '12px', fontWeight: active ? '700' : '400',
-                  cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {dotColor && <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: dotColor, display: 'inline-block', flexShrink: 0 }} />}
-                {f}
-              </button>
-            )
-          })}
+        <div className="news-seg" role="tablist" aria-label="Impact">
+          {['All', 'High', 'Medium', 'Low'].map(f => (
+            <button key={f} role="tab" aria-selected={impactFilter === f} className={impactFilter === f ? 'on' : ''} onClick={() => setImpactFilter(f)}>
+              {f !== 'All' && <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: impactColor(f), flexShrink: 0 }} />}
+              {f}
+            </button>
+          ))}
         </div>
-
         <select
+          className="news-cur"
+          aria-label="Currency"
           value={currFilter}
           onChange={e => setCurrFilter(e.target.value)}
-          style={{ ...inp, width: 'auto', padding: '6px 12px', fontSize: '12px', cursor: 'pointer', flexShrink: 0 }}
+          style={{ ...inp, width: 'auto', padding: '8px 12px', fontSize: '12px', cursor: 'pointer', borderRadius: '12px' }}
         >
-          {currencies.map(c => <option key={c} value={c}>{c === 'All' ? 'All Currencies' : c}</option>)}
+          {currencies.map(c => <option key={c} value={c}>{c === 'All' ? 'All currencies' : c}</option>)}
         </select>
       </div>
 
@@ -4023,69 +4030,45 @@ function NewsCalendar() {
       {/* Day groups */}
       {groupOrder.map(key => {
         const g = groupMap[key]
+        const isToday = key === todayKey
         return (
-          <div key={key} style={{ marginBottom: '28px' }}>
-            {/* Day label */}
+          <div key={key} style={{ marginBottom: '26px' }}>
             <div style={{
-              fontSize: '11px', fontWeight: '700', color: 'var(--text-lo)',
-              letterSpacing: '0.1em', textTransform: 'uppercase', textAlign: 'left',
-              marginBottom: '10px', paddingBottom: '8px',
-              borderBottom: '1px solid var(--divider)',
+              display: 'flex', alignItems: 'center', gap: '8px',
+              fontSize: '11px', fontWeight: '700', color: isToday ? 'var(--text-hi)' : 'var(--text-lo)',
+              letterSpacing: '0.1em', textTransform: 'uppercase',
+              marginBottom: '10px', paddingBottom: '8px', borderBottom: '1px solid var(--divider)',
             }}>
               {g.label}
+              {isToday && <span style={{ fontSize: '9px', letterSpacing: '0.08em', padding: '3px 7px', borderRadius: '99px', background: 'var(--text-hi)', color: 'var(--bg)' }}>Today</span>}
             </div>
 
-            {/* Events */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-              {g.events.map((ev, i) => (
-                <div
-                  key={i}
-                  className="trade-row"
-                  style={{
-                    ...cardS, padding: '10px 16px',
-                    display: 'flex', alignItems: 'center', gap: '12px',
-                    transition: 'background 0.15s',
-                  }}
-                >
-                  {/* Impact dot */}
-                  <div style={{
-                    width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0,
-                    background: impactColor(ev.impact),
-                    boxShadow: `0 0 5px ${impactColor(ev.impact)}55`,
-                  }} />
-
-                  {/* Time */}
-                  <div style={{ fontSize: '12px', color: 'var(--text-lo)', whiteSpace: 'nowrap', minWidth: '58px', flexShrink: 0 }}>
-                    {formatTime(ev.date)}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {g.events.map((ev, i) => {
+                const t = formatTime(ev.date)
+                const [clock, ampm] = t.includes(' ') && t !== 'All Day' ? t.split(' ') : [t, '']
+                const has = (v) => v != null && v !== ''
+                return (
+                  <div key={i} className="trade-row news-row" style={{ ...cardS }}>
+                    <div style={{ textAlign: 'left' }}>
+                      <div style={{ fontSize: clock === 'All Day' ? '11px' : '15px', fontWeight: '600', color: 'var(--text-hi)', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>{clock}</div>
+                      {ampm && <div style={{ fontSize: '10px', color: 'var(--text-lo)', marginTop: '2px', letterSpacing: '0.06em' }}>{ampm}</div>}
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '13.5px', fontWeight: '600', color: 'var(--text-hi)', lineHeight: 1.35 }}>{ev.title}</div>
+                      <div className="news-meta">
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                          <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: impactColor(ev.impact) }} />
+                          {ev.impact || 'None'}
+                        </span>
+                        <span style={{ padding: '1px 6px', borderRadius: '5px', fontWeight: '700', letterSpacing: '0.05em', border: '1px solid var(--card-border)', color: 'var(--text-md)' }}>{ev.country || '—'}</span>
+                        {has(ev.forecast) && <span>Fcst <b>{ev.forecast}</b></span>}
+                        {has(ev.previous) && <span>Prev <b>{ev.previous}</b></span>}
+                      </div>
+                    </div>
                   </div>
-
-                  {/* Currency badge */}
-                  <span style={{
-                    padding: '2px 7px', borderRadius: '6px', fontSize: '11px', fontWeight: '700',
-                    background: 'var(--inp-bg)', border: '1px solid var(--card-border)',
-                    color: 'var(--text-md)', letterSpacing: '0.06em', whiteSpace: 'nowrap', flexShrink: 0,
-                  }}>
-                    {ev.country || '—'}
-                  </span>
-
-                  {/* Event title */}
-                  <div style={{ flex: 1, fontSize: '13px', fontWeight: '600', color: 'var(--text-hi)', minWidth: 0, lineHeight: 1.35, textAlign: 'left' }}>
-                    {ev.title}
-                  </div>
-
-                  {/* Prev / Fcst */}
-                  <div className="news-row-meta" style={{ display: 'flex', gap: '14px', flexShrink: 0 }}>
-                    {[['Prev', ev.previous], ['Fcst', ev.forecast]].map(([lbl2, val]) =>
-                      val != null && val !== '' ? (
-                        <div key={lbl2} style={{ textAlign: 'right', minWidth: '36px' }}>
-                          <div style={{ fontSize: '9px', color: 'var(--text-dim)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '2px' }}>{lbl2}</div>
-                          <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-md)' }}>{val}</div>
-                        </div>
-                      ) : null
-                    )}
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         )
