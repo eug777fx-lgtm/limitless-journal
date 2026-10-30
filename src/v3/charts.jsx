@@ -52,7 +52,8 @@ export function EquityChart({ series, target, height = 250, ticks = 5, labelFor 
     setHover(best)
   }
   const hp = hover !== null ? pts[hover] : null
-  const tickIdx = Array.from({ length: ticks }, (_, k) => Math.round((k / (ticks - 1)) * (series.length - 1)))
+  const tickIdx = [...new Set(Array.from({ length: ticks }, (_, k) => Math.round((k / (ticks - 1)) * (series.length - 1))))]
+  const labels = tickIdx.map((ti) => labelFor(series[ti])).filter((l, k, arr) => l && arr.indexOf(l) === k)
 
   return (
     <div ref={box} style={{ position: 'relative' }}>
@@ -89,9 +90,9 @@ export function EquityChart({ series, target, height = 250, ticks = 5, labelFor 
         </div>
       )}
       <div className="num display" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, color: 'var(--fg3)', marginTop: 6 }}>
-        {tickIdx.map((ti, k) => k === ticks - 1
-          ? <span key={k} style={{ background: '#FFFFFF', color: '#000', fontWeight: 600, borderRadius: 99, padding: '6px 12px' }}>{labelFor(series[ti])}</span>
-          : <span key={k}>{labelFor(series[ti])}</span>)}
+        {labels.map((l, k) => k === labels.length - 1
+          ? <span key={l} style={{ background: '#FFFFFF', color: '#000', fontWeight: 600, borderRadius: 99, padding: '6px 12px' }}>{l}</span>
+          : <span key={l}>{l}</span>)}
       </div>
     </div>
   )
