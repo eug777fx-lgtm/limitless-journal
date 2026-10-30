@@ -11,6 +11,7 @@ import Journal from './Journal.jsx'
 import Analytics from './Analytics.jsx'
 import { Calendar, News } from './Pages.jsx'
 import { Billing, Account } from './Account.jsx'
+import Backtest from './Backtest.jsx'
 import LogTrade from './LogTrade.jsx'
 import ShareCard from './ShareCard.jsx'
 
@@ -66,10 +67,16 @@ function Legacy({ route }) {
   )
 }
 
+// Admin only: the Asia Model backtest lab. Everyone else lands on the dashboard.
+function AdminBacktest() {
+  const { isAdmin } = useStore()
+  return isAdmin ? <Backtest /> : <Dashboard />
+}
+
 function Router() {
   const route = useRoute()
   useGlassLight()
-  const C = { dashboard: Dashboard, journal: Journal, analytics: Analytics, calendar: Calendar, news: News, billing: Billing, account: Account }[route]
+  const C = { dashboard: Dashboard, journal: Journal, analytics: Analytics, calendar: Calendar, news: News, billing: Billing, account: Account, backtest: AdminBacktest }[route]
   return (
     <>
       <React.Fragment key={route}>{C ? <C /> : LEGACY[route] ? <Legacy route={route} /> : <Dashboard />}</React.Fragment>

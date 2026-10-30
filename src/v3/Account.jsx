@@ -1,5 +1,5 @@
 import React from 'react'
-import { CreditCard, RefreshCw, Download, Upload, LogOut, ClipboardList, Users, Newspaper, CalendarDays, Check, Lock, Send, Trash2, RotateCcw, AlertTriangle } from 'lucide-react'
+import { CreditCard, RefreshCw, Download, Upload, LogOut, ClipboardList, Users, Newspaper, CalendarDays, Check, Lock, Send, Trash2, RotateCcw, AlertTriangle, FlaskConical } from 'lucide-react'
 import { useStore } from './store.jsx'
 import { Seg, Modal, PnL } from './ui.jsx'
 import { supabase } from '../lib/supabase'
@@ -98,7 +98,7 @@ function DangerModal({ cfg, busy, onClose }) {
 }
 
 export function Account() {
-  const { user, profile, settings, setSetting, notify, saveProfile, trades, setTrades, setProfile, logout } = useStore()
+  const { user, profile, settings, setSetting, notify, saveProfile, trades, setTrades, setProfile, logout, isAdmin } = useStore()
   const init = () => ({ first_name: profile?.first_name || '', last_name: profile?.last_name || '', username: profile?.username || '', phone: profile?.phone || '', market_focus: profile?.market_focus || '' })
   const [p, setP] = React.useState(init)
   const [goal, setGoal] = React.useState(profile?.monthly_goal ? String(profile.monthly_goal) : '')
@@ -175,6 +175,7 @@ export function Account() {
     [Newspaper, 'News calendar', 'This week and next, in your time zone', '#news'],
     [Users, 'Network', 'Feed, leaderboard, challenges and chat', '#network'],
     [CreditCard, 'Subscription', 'Your plan and billing', '#billing'],
+    ...(isAdmin ? [[FlaskConical, 'Asia backtest', 'Admin only: levels, session log and stats', '#backtest']] : []),
   ]
   return (
     <AppShell route="account" word="ACCOUNT" title="Account">

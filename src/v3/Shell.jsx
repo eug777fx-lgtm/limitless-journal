@@ -1,5 +1,5 @@
 import React from 'react'
-import { Plus, Search, Home, BookOpen, BarChart3, User, CreditCard, Newspaper, LogOut, Globe, Users, ShieldCheck, ScrollText, Repeat } from 'lucide-react'
+import { Plus, Search, Home, BookOpen, BarChart3, User, CreditCard, Newspaper, LogOut, Globe, Users, ShieldCheck, ScrollText, Repeat, FlaskConical } from 'lucide-react'
 import { useStore, go } from './store.jsx'
 import { Backdrop, Logo, wordSize } from './ui.jsx'
 
@@ -11,7 +11,7 @@ const NAV = [
   { id: 'calendar', label: 'Calendar' },
   { id: 'plan', label: 'Plan' },
 ]
-const MORE_ROUTES = ['account', 'billing', 'news', 'network', 'calendar', 'plan', 'risk', 'admin', 'tos', 'copy']
+const MORE_ROUTES = ['account', 'billing', 'news', 'network', 'calendar', 'plan', 'risk', 'admin', 'tos', 'copy', 'backtest']
 
 export const initials = (name) => (name || 'T').trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase()
 
@@ -40,7 +40,7 @@ function TopNav({ route }) {
     return () => document.removeEventListener('pointerdown', close)
   }, [menu])
   const items = [[User, 'Account and settings', 'account'], [CreditCard, 'Subscription', 'billing'], [Newspaper, 'News calendar', 'news'], [Users, 'Network', 'network']]
-  if (isAdmin) items.push([ShieldCheck, 'Admin panel', 'admin'])
+  if (isAdmin) items.push([FlaskConical, 'Asia backtest', 'backtest'], [ShieldCheck, 'Admin panel', 'admin'])
   if (isSuperAdmin) items.push([ScrollText, 'TOS', 'tos'], [Repeat, 'TradeSync', 'copy'])
   return (
     <div className="topnav wrap">
