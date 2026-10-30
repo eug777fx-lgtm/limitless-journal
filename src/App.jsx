@@ -43,6 +43,8 @@ const lazyChunk = (loader) => lazy(() => loader().catch((err) => {
 }))
 
 const TOSPage            = lazyChunk(() => import('./TOS.jsx').then(m => ({ default: m.TOSPage })))
+// The new glass journal (v3). Admins first, then everyone via the newJournal flag.
+const V3App              = lazyChunk(() => import('./v3/index.jsx'))
 const CopyTraderPage     = lazyChunk(() => import('./CopyTrader.jsx').then(m => ({ default: m.CopyTraderPage })))
 const NetworkFeed        = lazyChunk(() => import('./NetworkSocial.jsx').then(m => ({ default: m.NetworkFeed })))
 const Leaderboard2       = lazyChunk(() => import('./NetworkSocial.jsx').then(m => ({ default: m.Leaderboard2 })))
@@ -7992,6 +7994,16 @@ export default function App() {
   const [passwordRecovery, setPasswordRecovery] = useState(false)
   const [announcement, setAnnouncement] = useState(null) // { text, active }
   const [featureFlags, setFeatureFlags] = useState({ monthlyGoalTracker: true, aiChecklist: true, newsCalendar: true, feedSection: true, paywall: false })
+  // New journal preference: 'off' = classic view. ?v3=1 / ?v3=0 switch it from a link.
+  const [v3Pref, setV3PrefRaw] = useState(() => {
+    try {
+      const q = new URLSearchParams(window.location.search).get('v3')
+      if (q === '1') localStorage.setItem('ltj_v3', 'on')
+      if (q === '0') localStorage.setItem('ltj_v3', 'off')
+      return localStorage.getItem('ltj_v3') || 'auto'
+    } catch { return 'auto' }
+  })
+  const setV3Pref = (v) => { try { localStorage.setItem('ltj_v3', v) } catch { /* private mode */ } setV3PrefRaw(v) }
   const [demoMode, setDemoModeRaw] = useState(() => localStorage.getItem('limitless_demo_mode') === 'true')
   const setDemoMode = (v) => {
     setDemoModeRaw(v)
@@ -8366,6 +8378,43 @@ export default function App() {
     }
   }
 
+  // ── New journal (v3) ──
+  const v3On = (isAdminUser || !!featureFlags.newJournal) && v3Pref !== 'off' && !viewUser
+  if (v3On) {
+    const renderLegacy = (r) => (
+      <div data-mode={colorMode} data-glass={glassMode ? 'true' : 'false'} style={{ color: 'var(--text-hi)', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif", textAlign: 'left', minWidth: 0 }}>
+        <style dangerouslySetInnerHTML={{ __html: ANIM_CSS }} />
+        {r === 'plan' && <TradingPlan flags={featureFlags} />}
+        {r === 'network' && (
+          <Suspense fallback={<ChunkFallback label="Loading the Network…" />}>
+            <NetworkPage session={session} setPage={(pg) => { window.location.hash = pg }} profile={profile} />
+          </Suspense>
+        )}
+        {r === 'settings' && <Settings theme={theme} setTheme={handleSetTheme} session={session} profile={profile} setProfile={setProfile} glassMode={glassMode} setGlassMode={v => { setGlassMode(v); localStorage.setItem('glass_mode', v) }} onLogout={logout} trades={effectiveTrades} demoMode={demoMode} setDemoMode={setDemoMode} setTrades={setTrades} setPage={(pg) => { window.location.hash = pg }} uiV2={uiV2} setUiV2={setUiV2} />}
+      </div>
+    )
+    return (
+      <Suspense fallback={<div style={{ minHeight: '100vh', background: '#000' }}><ChunkFallback label="Loading your journal…" pad="40vh 20px" /></div>}>
+        <V3App
+          session={session}
+          profile={profile}
+          setProfile={setProfile}
+          trades={trades}
+          setTrades={setTrades}
+          subscription={subscription}
+          setSubscription={setSubscription}
+          featureFlags={featureFlags}
+          isAdmin={isAdminUser}
+          paywallOn={paywallOn}
+          logout={logout}
+          uploadImages={uploadImages}
+          renderLegacy={renderLegacy}
+          onClassic={(pg) => { setV3Pref('off'); try { window.history.replaceState(null, '', window.location.pathname + window.location.search) } catch { /* cosmetic */ } if (pg) setPage(pg) }}
+        />
+      </Suspense>
+    )
+  }
+
   // ── Main app ──
   return (
     <UIV2Context.Provider value={uiV2}>
@@ -8441,6 +8490,11 @@ export default function App() {
           <Plus size={16} />
           Add Trade
         </button>
+        {(isAdminUser || featureFlags.newJournal) && (
+          <button onClick={() => setV3Pref('on')} style={{ background: 'rgba(255,255,255,0.06)', color: '#fff', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '10px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, fontSize: '12.5px', width: '100%', marginTop: '-6px', marginBottom: '14px', padding: '9px' }}>
+            Try the new journal
+          </button>
+        )}
 
         {/* v2: sliding pill behind the active nav item */}
         {uiV2 && navPill && (
@@ -8803,6 +8857,12 @@ export default function App() {
             </div>
 
             <div style={{ height: '1px', background: '#1a1a1a', marginBottom: '12px' }} />
+
+            {(isAdminUser || featureFlags.newJournal) && (
+              <button onClick={() => { setMobileSidebarOpen(false); setV3Pref('on') }} style={{ background: '#fff', color: '#000', border: 'none', borderRadius: '10px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700, fontSize: '13px', width: '100%', marginBottom: '12px', padding: '11px', minHeight: '44px' }}>
+                Try the new journal
+              </button>
+            )}
 
             {/* Nav items */}
             {nav.map(n => (
