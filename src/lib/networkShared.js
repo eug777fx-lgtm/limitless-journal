@@ -10,7 +10,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabase'
 
-export const ACCENT = '#7c3aed'
+export const ACCENT = '#e4e4e7'
 
 export async function fetchNetworkProfiles(userIds) {
   if (!userIds?.length) return new Map()

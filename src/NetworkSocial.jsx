@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════════════
 //  NETWORK 2.0 — social layer: trader profiles + follows, trade feed,
-//  leaderboard 2.0, challenges 2.0. Purple accent (#7c3aed) — Network only.
+//  leaderboard 2.0, challenges 2.0. Monochrome accent, same as the journal.
 //  Everything here is available to all APPROVED users; admin-only controls
 //  are gated inline. Backed by supabase/migrations/20260707110000_network_social.sql
 // ═══════════════════════════════════════════════════════════════════════════
@@ -29,8 +29,8 @@ const BRONZE = '#CD7F32'
 const glass = { background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: '14px', backdropFilter: 'var(--card-blur, none)', WebkitBackdropFilter: 'var(--card-blur, none)' }
 const inp = { width: '100%', background: 'var(--inp-bg, #141414)', border: '1px solid var(--inp-border, #1f1f1f)', borderRadius: '9px', color: 'var(--text-hi)', fontSize: '13px', padding: '10px 12px', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
 const lbl = { fontSize: '10px', color: '#666', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, marginBottom: '6px' }
-const pillBtn = (active) => ({ background: active ? ACCENT : 'transparent', border: `1px solid ${active ? ACCENT : 'var(--card-border)'}`, color: active ? '#fff' : 'var(--text-md)', fontSize: '12px', fontWeight: active ? 700 : 500, padding: '7px 15px', borderRadius: '99px', cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s', whiteSpace: 'nowrap' })
-const purpleBtn = { background: ACCENT, color: '#fff', border: 'none', borderRadius: '99px', padding: '9px 18px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: '6px' }
+const pillBtn = (active) => ({ background: active ? ACCENT : 'transparent', border: `1px solid ${active ? ACCENT : 'var(--card-border)'}`, color: active ? '#000' : 'var(--text-md)', fontSize: '12px', fontWeight: active ? 700 : 500, padding: '7px 15px', borderRadius: '99px', cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s', whiteSpace: 'nowrap' })
+const purpleBtn = { background: ACCENT, color: '#000', border: 'none', borderRadius: '99px', padding: '9px 18px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: '6px' }
 const ghostBtn = { background: 'transparent', border: '1px solid var(--card-border)', color: 'var(--text-md)', borderRadius: '99px', padding: '8px 16px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: '6px' }
 
 const relTime = (date) => {
@@ -65,7 +65,7 @@ function Toggle({ on, onChange, label, sub }) {
         {sub && <div style={{ fontSize: '10.5px', color: '#666', marginTop: '2px' }}>{sub}</div>}
       </div>
       <div style={{ width: '36px', height: '20px', borderRadius: '99px', background: on ? ACCENT : '#222', position: 'relative', transition: 'background .15s', flexShrink: 0 }}>
-        <span style={{ position: 'absolute', top: '2px', left: on ? '18px' : '2px', width: '16px', height: '16px', borderRadius: '50%', background: '#fff', transition: 'left .15s' }} />
+        <span style={{ position: 'absolute', top: '2px', left: on ? '18px' : '2px', width: '16px', height: '16px', borderRadius: '50%', background: on ? '#000' : '#fff', transition: 'left .15s' }} />
       </div>
     </button>
   )
@@ -181,7 +181,7 @@ export function BadgeRow({ badges, size = 'md' }) {
   return (
     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
       {list.map((b, i) => (
-        <span key={i} title={b.name || ''} style={{ fontSize: size === 'md' ? '11px' : '10px', fontWeight: 700, color: '#c4b5fd', background: `${ACCENT}15`, border: `1px solid ${ACCENT}35`, padding: size === 'md' ? '4px 10px' : '2px 8px', borderRadius: '99px', whiteSpace: 'nowrap' }}>
+        <span key={i} title={b.name || ''} style={{ fontSize: size === 'md' ? '11px' : '10px', fontWeight: 700, color: '#f4f4f5', background: `${ACCENT}15`, border: `1px solid ${ACCENT}35`, padding: size === 'md' ? '4px 10px' : '2px 8px', borderRadius: '99px', whiteSpace: 'nowrap' }}>
           {b.emoji || '🏅'} {b.name || 'Badge'}
         </span>
       ))}
@@ -254,7 +254,7 @@ export function TraderProfileModal({ userId, session, onClose }) {
             <SocialAvatar name={name} url={np?.avatar_url} size={68} />
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ fontSize: '19px', fontWeight: 800, color: '#fff', letterSpacing: '-0.4px' }}>{name}</div>
-              {np?.trading_style && <div style={{ fontSize: '11.5px', color: '#c4b5fd', marginTop: '2px' }}>{np.trading_style}</div>}
+              {np?.trading_style && <div style={{ fontSize: '11.5px', color: '#f4f4f5', marginTop: '2px' }}>{np.trading_style}</div>}
               <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>{followers} follower{followers === 1 ? '' : 's'}</div>
             </div>
             {myId && myId !== userId && (
@@ -600,7 +600,7 @@ export function NetworkFeed({ session, profile, isAdmin, onOpenProfile }) {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <button onClick={() => onOpenProfile?.(p.user_id)} style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: '13.5px', fontWeight: 800, color: 'var(--text-hi)' }}>{name}</button>
                   <div style={{ fontSize: '10.5px', color: '#666' }}>
-                    {relTime(p.created_at)} ago{p.type === 'trade_share' && <span style={{ color: '#c4b5fd' }}> · shared a trade</span>}
+                    {relTime(p.created_at)} ago{p.type === 'trade_share' && <span style={{ color: '#f4f4f5' }}> · shared a trade</span>}
                   </div>
                 </div>
                 {(p.user_id === myId || isAdmin) && (
@@ -617,7 +617,7 @@ export function NetworkFeed({ session, profile, isAdmin, onOpenProfile }) {
                   <Heart size={15} fill={liked ? '#f472b6' : 'none'} /> {p.likes_count || 0}
                 </button>
                 <button onClick={() => setOpenComments(prev => { const s = new Set(prev); s.has(p.id) ? s.delete(p.id) : s.add(p.id); return s })}
-                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', color: showComments ? '#c4b5fd' : '#666', fontFamily: 'inherit', fontSize: '12px', fontWeight: 700, padding: '4px' }}>
+                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', color: showComments ? '#f4f4f5' : '#666', fontFamily: 'inherit', fontSize: '12px', fontWeight: 700, padding: '4px' }}>
                   <MessageCircle size={15} /> {p.comments_count || 0}
                 </button>
               </div>
@@ -763,7 +763,7 @@ export function Leaderboard2({ session, onOpenProfile }) {
 
           {/* my rank — always pinned */}
           <div style={{ ...glass, marginTop: '12px', padding: '13px 16px', border: `1px solid ${ACCENT}40`, display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <Medal size={16} color="#c4b5fd" />
+            <Medal size={16} color="#f4f4f5" />
             {myIdx >= 0 ? (
               <>
                 <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-hi)' }}>Your rank: #{myIdx + 1}</span>
@@ -771,7 +771,7 @@ export function Leaderboard2({ session, onOpenProfile }) {
               </>
             ) : (
               <span style={{ fontSize: '12px', color: 'var(--text-md)' }}>
-                Not ranked this period — you need 10+ trades and <b style={{ color: '#c4b5fd' }}>leaderboard opt-in</b> (profile settings).
+                Not ranked this period — you need 10+ trades and <b style={{ color: '#f4f4f5' }}>leaderboard opt-in</b> (profile settings).
               </span>
             )}
           </div>
@@ -928,7 +928,7 @@ export function Challenges2({ session, isAdmin }) {
                   <>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '5px' }}>
                       <span style={{ color: '#888' }}>{done ? 'Completed 🎉' : 'Auto-tracked progress'}</span>
-                      <span style={{ fontWeight: 800, color: done ? GREEN : '#c4b5fd' }}>{value} / {ch.target} {meta.unit}</span>
+                      <span style={{ fontWeight: 800, color: done ? GREEN : '#f4f4f5' }}>{value} / {ch.target} {meta.unit}</span>
                     </div>
                     <div style={{ height: '7px', background: 'rgba(255,255,255,0.05)', borderRadius: '99px', overflow: 'hidden', marginBottom: '12px' }}>
                       <div style={{ width: `${done ? 100 : pct}%`, height: '100%', borderRadius: '99px', background: done ? GREEN : ACCENT, transition: 'width .5s ease' }} />
@@ -1032,7 +1032,7 @@ export function ShareTradeButton({ trade, compact = false, style = {} }) {
   }
   return (
     <button onClick={share} disabled={sharing} title="Share to Network" style={{
-      background: `${ACCENT}12`, border: `1px solid ${ACCENT}40`, color: '#c4b5fd',
+      background: `${ACCENT}12`, border: `1px solid ${ACCENT}40`, color: '#f4f4f5',
       borderRadius: '99px', padding: compact ? '6px 12px' : '9px 18px',
       fontSize: compact ? '11px' : '12px', fontWeight: 700, cursor: sharing ? 'wait' : 'pointer',
       fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: '6px',

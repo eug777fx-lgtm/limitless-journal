@@ -1,5 +1,5 @@
 import React from 'react'
-import { Plus, Search, Home, BookOpen, BarChart3, User, CreditCard, Newspaper, LogOut, Globe, Users, SlidersHorizontal, History, ShieldCheck } from 'lucide-react'
+import { Plus, Search, Home, BookOpen, BarChart3, User, CreditCard, Newspaper, LogOut, Globe, Users, ShieldCheck, ScrollText, Repeat } from 'lucide-react'
 import { useStore, go } from './store.jsx'
 import { Backdrop, Logo, wordSize } from './ui.jsx'
 
@@ -11,12 +11,12 @@ const NAV = [
   { id: 'calendar', label: 'Calendar' },
   { id: 'plan', label: 'Plan' },
 ]
-const MORE_ROUTES = ['account', 'billing', 'news', 'network', 'settings', 'calendar', 'plan', 'risk']
+const MORE_ROUTES = ['account', 'billing', 'news', 'network', 'calendar', 'plan', 'risk', 'admin', 'tos', 'copy']
 
 export const initials = (name) => (name || 'T').trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase()
 
 function TopNav({ route }) {
-  const { openLog, user, logout, onClassic, isAdmin } = useStore()
+  const { openLog, user, logout, isAdmin, isSuperAdmin } = useStore()
   const ref = React.useRef(null)
   const [pill, setPill] = React.useState(null)
   const [menu, setMenu] = React.useState(false)
@@ -39,7 +39,9 @@ function TopNav({ route }) {
     document.addEventListener('pointerdown', close)
     return () => document.removeEventListener('pointerdown', close)
   }, [menu])
-  const items = [[CreditCard, 'Subscription', 'billing'], [User, 'Account', 'account'], [Newspaper, 'News calendar', 'news'], [Users, 'Network', 'network'], [SlidersHorizontal, 'Settings', 'settings']]
+  const items = [[User, 'Account and settings', 'account'], [CreditCard, 'Subscription', 'billing'], [Newspaper, 'News calendar', 'news'], [Users, 'Network', 'network']]
+  if (isAdmin) items.push([ShieldCheck, 'Admin panel', 'admin'])
+  if (isSuperAdmin) items.push([ScrollText, 'TOS', 'tos'], [Repeat, 'TradeSync', 'copy'])
   return (
     <div className="topnav wrap">
       <nav ref={ref} aria-label="Main" className="capsule glass">
@@ -62,8 +64,6 @@ function TopNav({ route }) {
               {items.map(([I, l, r]) => (
                 <a key={r} href={'#' + r} onClick={() => setMenu(false)} className="row" style={{ gap: 10, padding: '10px 12px', borderRadius: 12, fontSize: 13.5 }}><I size={15} />{l}</a>
               ))}
-              {isAdmin && <button type="button" onClick={() => { setMenu(false); onClassic('admin') }} className="row" style={{ gap: 10, padding: '10px 12px', borderRadius: 12, fontSize: 13.5, width: '100%', background: 'transparent', border: 'none' }}><ShieldCheck size={15} />Admin panel</button>}
-              <button type="button" onClick={() => { setMenu(false); onClassic() }} className="row" style={{ gap: 10, padding: '10px 12px', borderRadius: 12, fontSize: 13.5, width: '100%', background: 'transparent', border: 'none' }}><History size={15} />Classic view</button>
               <a href={SITE} className="row" style={{ gap: 10, padding: '10px 12px', borderRadius: 12, fontSize: 13.5 }}><Globe size={15} />Back to site</a>
               <button type="button" onClick={logout} className="row" style={{ gap: 10, padding: '10px 12px', borderRadius: 12, fontSize: 13.5, width: '100%', background: 'transparent', border: 'none', color: 'var(--fg2)' }}><LogOut size={15} />Log out</button>
             </div>

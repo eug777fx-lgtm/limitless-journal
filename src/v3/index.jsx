@@ -1,5 +1,5 @@
-// LIMITLESS v3: the glass journal on real data. Mounted by App.jsx in place of
-// the classic layout when the new journal is switched on.
+// LIMITLESS v3: the glass journal on real data. App.jsx mounts it for every
+// signed in, approved trader. Older screens (plan, network, admin) render inside it.
 import React from 'react'
 import { Toaster } from 'react-hot-toast'
 import css from './styles.css?inline'
@@ -46,12 +46,15 @@ function useV3Document() {
 const LEGACY = {
   plan: { word: 'PLAN', title: 'Trading plan' },
   network: { word: 'NETWORK', title: 'Network' },
-  settings: { word: 'SETTINGS', title: 'Settings' },
+  admin: { word: 'ADMIN', title: 'Admin', admin: true },
+  tos: { word: 'TOS', title: 'TOS', superAdmin: true },
+  copy: { word: 'SYNC', title: 'TradeSync', superAdmin: true },
 }
 
 function Legacy({ route }) {
-  const { renderLegacy } = useStore()
+  const { renderLegacy, isAdmin, isSuperAdmin } = useStore()
   const meta = LEGACY[route]
+  if ((meta.admin && !isAdmin) || (meta.superAdmin && !isSuperAdmin)) return <Dashboard />
   return (
     <AppShell route={route} word={meta.word} title={meta.title}>
       <div className="wrap" style={{ paddingBottom: 60 }}>

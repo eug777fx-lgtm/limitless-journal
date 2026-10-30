@@ -337,7 +337,7 @@ function NominateModal({ session, onClose, onSubmitted }) {
                   <span style={{ fontSize: '12px', fontWeight: '800', color: 'var(--text-hi)', minWidth: '42px' }}>{t.symbol || '—'}</span>
                   <span style={{ fontSize: '11px', color: t.direction === 'Short' ? '#ff8080' : '#aaffa0' }}>{t.direction || ''}</span>
                   <span style={{ flex: 1, fontSize: '10.5px', color: '#666' }}>{t.trade_date ? new Date(t.trade_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}</span>
-                  {t.rr != null && <span style={{ fontSize: '11px', fontWeight: '700', color: '#c4b5fd' }}>{t.rr}R</span>}
+                  {t.rr != null && <span style={{ fontSize: '11px', fontWeight: '700', color: '#f4f4f5' }}>{t.rr}R</span>}
                   <span style={{ fontSize: '12.5px', fontWeight: '800', color: win ? '#aaffa0' : '#ff8080' }}>{win ? '+' : '−'}${Math.abs(Math.round(Number(t.pnl) || 0)).toLocaleString()}</span>
                 </button>
               )
@@ -793,8 +793,8 @@ export function NetworkChat({ session, profile, channel = 'general-chat', readOn
                   <div style={{ display: 'flex', gap: '4px', marginTop: '5px', flexWrap: 'wrap' }}>
                     {reactions.map(([emoji, users]) => (
                       <button key={emoji} onClick={() => react(m, emoji)} style={{
-                        background: users.includes(myId) ? 'rgba(124,58,237,0.15)' : '#141414',
-                        border: `1px solid ${users.includes(myId) ? 'rgba(124,58,237,0.45)' : '#222'}`,
+                        background: users.includes(myId) ? 'rgba(255,255,255,0.15)' : '#141414',
+                        border: `1px solid ${users.includes(myId) ? 'rgba(255,255,255,0.45)' : '#222'}`,
                         borderRadius: '99px', padding: '2px 8px', fontSize: '12px', cursor: 'pointer',
                         fontFamily: 'inherit', minHeight: 'auto', color: '#ccc', display: 'inline-flex', alignItems: 'center', gap: '4px',
                       }}>
@@ -830,7 +830,7 @@ export function NetworkChat({ session, profile, channel = 'general-chat', readOn
           {replyTo && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#101010', border: '1px solid #1f1f1f', borderRadius: '8px', padding: '6px 10px', marginBottom: '6px' }}>
               <span style={{ fontSize: '11px', color: '#888', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                Replying to <b style={{ color: '#c4b5fd' }}>{replyTo.username}</b> — {replyTo.message || '📷 image'}
+                Replying to <b style={{ color: '#f4f4f5' }}>{replyTo.username}</b> — {replyTo.message || '📷 image'}
               </span>
               <button onClick={() => setReplyTo(null)} style={{ background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', padding: '2px', minHeight: 'auto', fontSize: '12px' }}>✕</button>
             </div>

@@ -156,7 +156,7 @@ export function PaywallScreen({ subscription, tradeCount = 0, onLogout, onSynced
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, overflowY: 'auto', overflowX: 'hidden', background: '#080808', fontFamily: FONT, WebkitOverflowScrolling: 'touch' }}>
+    <div style={{ position: 'fixed', inset: 0, overflowY: 'auto', overflowX: 'hidden', background: '#000', fontFamily: FONT, WebkitOverflowScrolling: 'touch' }}>
       {css && <style dangerouslySetInnerHTML={{ __html: css }} />}
       <style dangerouslySetInnerHTML={{ __html: BILLING_CSS }} />
       {background}

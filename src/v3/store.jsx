@@ -91,9 +91,11 @@ export function V3Provider({ app, children }) {
 export const useStore = () => React.useContext(Ctx)
 
 // ── Hash routing (#dashboard, #journal …). Auth links (#access_token=…) are left alone. ──
-const ROUTES = ['dashboard', 'journal', 'analytics', 'calendar', 'plan', 'network', 'news', 'billing', 'account', 'settings', 'risk']
+const ROUTES = ['dashboard', 'journal', 'analytics', 'calendar', 'plan', 'network', 'news', 'billing', 'account', 'risk', 'admin', 'tos', 'copy']
+const ALIAS = { settings: 'account', subscription: 'billing' }
 const readRoute = () => {
-  const h = (location.hash || '').replace(/^#/, '')
+  const raw = (location.hash || '').replace(/^#/, '')
+  const h = ALIAS[raw] || raw
   return ROUTES.includes(h) ? h : 'dashboard'
 }
 export function useRoute() {

@@ -43,7 +43,7 @@ const lazyChunk = (loader) => lazy(() => loader().catch((err) => {
 }))
 
 const TOSPage            = lazyChunk(() => import('./TOS.jsx').then(m => ({ default: m.TOSPage })))
-// The new glass journal (v3). Admins first, then everyone via the newJournal flag.
+// The glass journal (v3), the app every trader sees.
 const V3App              = lazyChunk(() => import('./v3/index.jsx'))
 const CopyTraderPage     = lazyChunk(() => import('./CopyTrader.jsx').then(m => ({ default: m.CopyTraderPage })))
 const NetworkFeed        = lazyChunk(() => import('./NetworkSocial.jsx').then(m => ({ default: m.NetworkFeed })))
@@ -111,26 +111,27 @@ const takePendingPlan = () => {
 
 // ─── Global CSS ───────────────────────────────────────────────
 const ANIM_CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=Poppins:wght@400;500;600;700;800&display=swap');
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { overflow-x: hidden; max-width: 100vw; }
 body { margin: 0; padding: 0; background: var(--bg); overflow: hidden; overflow-x: hidden; max-width: 100vw; height: 100vh; }
 #root { margin: 0; padding: 0; width: 100%; max-width: 100vw; height: 100vh; overflow-x: hidden; }
 :root {
-  --bg: #080808; --card-bg: rgba(10,10,10,0.80); --card-border: #1c1c1c;
-  --sidebar-bg: rgba(6,6,6,0.96); --sidebar-border: #141414;
-  --text-hi: #ffffff; --text-md: #888888; --text-lo: #666666; --text-dim: #444444;
-  --inp-bg: #080808; --inp-border: #1c1c1c; --divider: #111111;
-  --card-shadow: none;
+  --bg: #000000; --card-bg: rgba(255,255,255,0.055); --card-border: rgba(255,255,255,0.10);
+  --sidebar-bg: rgba(10,10,12,0.72); --sidebar-border: rgba(255,255,255,0.08);
+  --text-hi: #ffffff; --text-md: rgba(255,255,255,0.70); --text-lo: rgba(255,255,255,0.52); --text-dim: rgba(255,255,255,0.34);
+  --inp-bg: rgba(255,255,255,0.05); --inp-border: rgba(255,255,255,0.10); --divider: rgba(255,255,255,0.08);
+  --card-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 20px 50px rgba(0,0,0,0.35);
+  --card-blur: blur(24px) saturate(1.4);
 }
 [data-glass="true"] {
-  --card-bg: rgba(255,255,255,0.04);
-  --card-border: rgba(255,255,255,0.08);
-  --card-shadow: 0 4px 24px rgba(0,0,0,0.3);
-  --card-blur: blur(20px);
-  --modal-bg: rgba(14,14,14,0.85);
-  --modal-border: rgba(255,255,255,0.08);
-  --sidebar-bg: rgba(6,6,6,0.75);
+  --card-bg: rgba(255,255,255,0.055);
+  --card-border: rgba(255,255,255,0.10);
+  --card-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 20px 50px rgba(0,0,0,0.35);
+  --card-blur: blur(24px) saturate(1.4);
+  --modal-bg: rgba(16,16,18,0.92);
+  --modal-border: rgba(255,255,255,0.12);
+  --sidebar-bg: rgba(10,10,12,0.72);
 }
 [data-glass="true"][data-mode="light"] {
   --card-bg: rgba(255,255,255,0.65);
@@ -141,8 +142,8 @@ body { margin: 0; padding: 0; background: var(--bg); overflow: hidden; overflow-
   --sidebar-bg: rgba(248,248,248,0.75);
 }
 [data-glass="false"], :root {
-  --modal-bg: #0a0a0a;
-  --modal-border: #1e1e1e;
+  --modal-bg: rgba(16,16,18,0.92);
+  --modal-border: rgba(255,255,255,0.12);
 }
 [data-glass="true"] .modal-inner { background: var(--modal-bg) !important; border-color: var(--modal-border) !important; backdrop-filter: blur(24px) !important; -webkit-backdrop-filter: blur(24px) !important; }
 [data-glass="true"] .add-modal-inner { background: var(--modal-bg) !important; border-color: var(--modal-border) !important; backdrop-filter: blur(24px) !important; -webkit-backdrop-filter: blur(24px) !important; }
@@ -495,10 +496,10 @@ const SWATCHES = [
 // ─── Shared Style Tokens ──────────────────────────────────────
 const card = {
   background: 'var(--card-bg)',
-  backdropFilter: 'blur(20px)',
-  WebkitBackdropFilter: 'blur(20px)',
+  backdropFilter: 'blur(24px) saturate(1.4)',
+  WebkitBackdropFilter: 'blur(24px) saturate(1.4)',
   border: '1px solid var(--card-border)',
-  borderRadius: '16px',
+  borderRadius: '24px',
   padding: '24px',
   boxShadow: 'var(--card-shadow)',
   transition: 'background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease',
@@ -556,7 +557,7 @@ const btn = {
   background: '#fff',
   color: '#000',
   border: 'none',
-  borderRadius: '10px',
+  borderRadius: '99px',
   padding: '10px 20px',
   cursor: 'pointer',
   fontWeight: '700',
@@ -570,7 +571,7 @@ const inp = {
   width: '100%',
   background: 'var(--inp-bg)',
   border: '1px solid var(--inp-border)',
-  borderRadius: '8px',
+  borderRadius: '12px',
   padding: '10px 12px',
   color: 'var(--text-hi)',
   fontSize: '13px',
@@ -610,34 +611,50 @@ const formatDate = (dateStr) => {
 
 
 // ─── Aurora Background ────────────────────────────────────────
-function AuroraBackground({ theme }) {
-  const [c1, c2] = THEME_COLORS[theme] || THEME_COLORS.white
-  const blob = (color, blur, anim, opacity, style) => ({
-    position: 'absolute', borderRadius: '50%',
-    background: `radial-gradient(circle at center, ${color} 0%, transparent 70%)`,
-    filter: `blur(${blur}px)`,
-    animation: `${anim} ease-in-out infinite`,
-    opacity,
-    ...style,
-  })
+const BRAND_FONT = "'Poppins', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
+
+// Black stage: masked grid, spotlight and the giant LIMITLESS word, same as the journal
+function AuroraBackground({ word = 'LIMITLESS' }) {
   return (
-    <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', zIndex: 0, pointerEvents: 'none' }}>
-      {/* Blob 1 — top-left */}
-      <div className="aurora-blob" style={blob(c1, 100, 'orb1 25s', 0.42, { top: '-10%',  left: '-10%',  width: '700px', height: '700px' })} />
-      {/* Blob 2 — bottom-right */}
-      <div className="aurora-blob" style={blob(c2, 120, 'orb2 30s', 0.40, { bottom: '-15%', right: '-10%', width: '800px', height: '800px' })} />
-      {/* Blob 3 — center offset */}
-      <div className="aurora-blob" style={blob(c1, 90,  'orb3 20s', 0.35, { top: '30%',   left: '28%',   width: '600px', height: '600px' })} />
-      {/* Blob 4 — top-right, half opacity */}
-      <div className="aurora-blob" style={blob(c2, 80,  'orb4 35s', 0.20, { top: '-5%',   right: '-5%',  width: '500px', height: '500px' })} />
-      {/* Grain texture overlay */}
-      <svg style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1, pointerEvents: 'none', opacity: 0.04 }}>
-        <filter id="grain">
-          <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/>
-          <feColorMatrix type="saturate" values="0"/>
-        </filter>
-        <rect width="100%" height="100%" filter="url(#grain)" opacity="0.15"/>
-      </svg>
+    <div aria-hidden="true" style={{ position: 'fixed', inset: 0, overflow: 'hidden', zIndex: 0, pointerEvents: 'none', background: '#000' }}>
+      <div style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px)', backgroundSize: '72px 72px', WebkitMaskImage: 'radial-gradient(70% 520px at 50% 160px, #000 20%, transparent 80%)', maskImage: 'radial-gradient(70% 520px at 50% 160px, #000 20%, transparent 80%)' }} />
+      <div style={{ position: 'absolute', left: '50%', top: '-280px', width: '1200px', height: '680px', marginLeft: '-600px', borderRadius: '50%', background: 'radial-gradient(closest-side, rgba(255,255,255,0.2), transparent)' }} />
+      <div style={{ position: 'absolute', left: '4%', bottom: '6%', width: '380px', height: '380px', borderRadius: '50%', background: 'rgba(255,255,255,0.07)', filter: 'blur(100px)' }} />
+      <div style={{ position: 'absolute', left: 0, right: 0, top: '88px', textAlign: 'center', fontFamily: BRAND_FONT, fontWeight: 800, fontSize: 'min(220px, 15.8vw)', lineHeight: 1, letterSpacing: '-0.045em', whiteSpace: 'nowrap', color: 'transparent', background: 'linear-gradient(180deg, #FFFFFF 0%, rgba(255,255,255,0.82) 42%, rgba(255,255,255,0.04) 100%)', WebkitBackgroundClip: 'text', backgroundClip: 'text', animation: 'pageFade 1s ease both' }}>{word}</div>
+    </div>
+  )
+}
+
+// Small frosted logo chip in the corner, plus the space the giant word needs above the card
+const STAGE_WORD = 'min(220px, 15.8vw)'
+function BrandMark() {
+  return (
+    <>
+      <a href="https://limitless-journal.com" aria-label="LIMITLESS home" style={{ position: 'fixed', top: 'calc(env(safe-area-inset-top, 0px) + 20px)', left: '20px', zIndex: 3, display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
+        <span style={{ width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(160deg, rgba(255,255,255,0.26), rgba(255,255,255,0.10))', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.45), inset 0 0 0 1px rgba(255,255,255,0.16), 0 6px 18px rgba(0,0,0,0.35)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}>
+          <img src="/logo2.png" alt="" style={{ width: '22px', height: 'auto', display: 'block', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.35))' }} />
+        </span>
+        <span style={{ fontFamily: BRAND_FONT, fontSize: '11px', fontWeight: 500, letterSpacing: '0.24em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.72)' }}>Trading Journal</span>
+      </a>
+      <div aria-hidden="true" style={{ height: `calc(72px + ${STAGE_WORD} * 0.9)` }} />
+    </>
+  )
+}
+
+const GATE_CARD = { background: 'rgba(255,255,255,0.055)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '30px', padding: '36px 36px 32px', maxWidth: '440px', margin: '0 auto', backdropFilter: 'blur(28px) saturate(1.4)', WebkitBackdropFilter: 'blur(28px) saturate(1.4)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.12), 0 30px 60px rgba(0,0,0,0.45)' }
+const GATE_BTN = { background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: '99px', color: '#fff', fontSize: '13px', fontWeight: 600, padding: '12px 28px', cursor: 'pointer', fontFamily: BRAND_FONT, minHeight: '44px' }
+const GATE_ICON = { width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(255,255,255,0.08)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.25), inset 0 0 0 1px rgba(255,255,255,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }
+const GATE_TITLE = { fontFamily: BRAND_FONT, fontSize: '22px', fontWeight: 600, letterSpacing: '-0.02em', color: '#fff', marginBottom: '10px', lineHeight: 1.2 }
+const GATE_BODY = { fontSize: '13.5px', color: 'rgba(255,255,255,0.66)', lineHeight: 1.7, marginBottom: '26px' }
+
+function GateShell({ children }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center', width: '100vw', minHeight: '100vh', height: '100vh', overflowY: 'auto', background: '#000', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif", position: 'relative' }}>
+      <style dangerouslySetInnerHTML={{ __html: ANIM_CSS }} />
+      <AuroraBackground />
+      <div style={{ position: 'relative', zIndex: 2, textAlign: 'center', animation: 'pageFade 0.4s ease both', width: '100%', maxWidth: '480px', padding: '40px 16px' }}>
+        {children}
+      </div>
     </div>
   )
 }
@@ -1008,8 +1025,8 @@ function AuthPage({ onAuth }) {
     padding: '10px',
     background: active ? 'rgba(255,255,255,0.06)' : 'transparent',
     border: 'none',
-    borderBottom: active ? '1px solid #333' : '1px solid transparent',
-    color: active ? '#fff' : '#555',
+    borderBottom: active ? '1px solid rgba(255,255,255,0.5)' : '1px solid transparent',
+    color: active ? '#fff' : 'rgba(255,255,255,0.5)',
     fontSize: '13px',
     fontWeight: active ? '600' : '400',
     cursor: 'pointer',
@@ -1020,9 +1037,9 @@ function AuthPage({ onAuth }) {
 
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
       width: '100vw', height: '100vh',
-      background: '#080808', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+      background: '#000', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
       position: 'relative',
       overflowY: 'auto',
     }}>
@@ -1031,15 +1048,7 @@ function AuthPage({ onAuth }) {
 
       <div className="auth-outer" style={{ position: 'relative', zIndex: 2, width: tab === 'signup' ? '440px' : '380px', transition: 'width 0.2s', margin: '40px auto' }}>
         {/* Logo */}
-        <div className="auth-logo-block" style={{ textAlign: 'center', marginBottom: '36px' }}>
-          <img className="auth-logo-img" src="/logo2.png" alt="logo" style={{ height: '64px', marginBottom: '14px', display: 'block', margin: '0 auto 14px' }} />
-          <div style={{ fontSize: '22px', fontWeight: '800', letterSpacing: '0.22em', color: '#fff', lineHeight: 1 }}>
-            LIMITLESS
-          </div>
-          <div className="auth-tagline" style={{ fontSize: '9px', color: '#ffffff', letterSpacing: '0.3em', marginTop: '7px', textTransform: 'uppercase', fontWeight: '600' }}>
-            Trading Journal
-          </div>
-        </div>
+        <BrandMark />
 
         {/* Card */}
         <div style={{ ...card, padding: '0', overflow: 'hidden' }}>
@@ -1097,7 +1106,7 @@ function AuthPage({ onAuth }) {
           ) : (
           <>
           {/* Tabs */}
-          <div className="auth-tabs" style={{ display: 'flex', borderBottom: '1px solid #141414' }}>
+          <div className="auth-tabs" style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
             <button style={tabStyle(tab === 'login')}  onClick={() => switchTab('login')}>Login</button>
             <button style={tabStyle(tab === 'signup')} onClick={() => switchTab('signup')}>Sign Up</button>
           </div>
@@ -1174,14 +1183,14 @@ function AuthPage({ onAuth }) {
                 {/* Phone with country selector */}
                 <div style={{ marginBottom: '14px' }}>
                   <div style={{ ...lbl, marginBottom: '7px', color: '#999' }}>Phone Number</div>
-                  <div style={{ display: 'flex', border: '1px solid #1c1c1c', borderRadius: '8px', overflow: 'hidden', background: '#080808' }}>
+                  <div style={{ display: 'flex', border: '1px solid var(--inp-border)', borderRadius: '12px', overflow: 'hidden', background: 'var(--inp-bg)' }}>
                     <select
                       value={country.name}
                       onChange={e => setCountry(COUNTRIES.find(c => c.name === e.target.value))}
                       style={{
-                        background: '#080808',
+                        background: 'transparent',
                         border: 'none',
-                        borderRight: '1px solid #1c1c1c',
+                        borderRight: '1px solid var(--inp-border)',
                         color: '#ccc',
                         fontSize: '13px',
                         padding: '10px 8px 10px 10px',
@@ -1474,9 +1483,9 @@ function SetNewPasswordPage({ onDone }) {
 
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
       width: '100vw', height: '100vh',
-      background: '#080808', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+      background: '#000', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
       position: 'relative', overflowY: 'auto',
     }}>
       <style dangerouslySetInnerHTML={{ __html: ANIM_CSS }} />
@@ -1484,13 +1493,7 @@ function SetNewPasswordPage({ onDone }) {
 
       <div className="auth-outer" style={{ position: 'relative', zIndex: 2, width: '380px', margin: '40px auto' }}>
         {/* Logo */}
-        <div className="auth-logo-block" style={{ textAlign: 'center', marginBottom: '36px' }}>
-          <img className="auth-logo-img" src="/logo2.png" alt="logo" style={{ height: '64px', marginBottom: '14px', display: 'block', margin: '0 auto 14px' }} />
-          <div style={{ fontSize: '22px', fontWeight: '800', letterSpacing: '0.22em', color: '#fff', lineHeight: 1 }}>LIMITLESS</div>
-          <div className="auth-tagline" style={{ fontSize: '9px', color: '#fff', letterSpacing: '0.3em', marginTop: '7px', textTransform: 'uppercase', fontWeight: '600' }}>
-            Trading Journal
-          </div>
-        </div>
+        <BrandMark />
 
         {/* Card */}
         <div style={{ ...card, padding: '0', overflow: 'hidden' }}>
@@ -1552,52 +1555,29 @@ function SetNewPasswordPage({ onDone }) {
 
 function BannedScreen({ onLogout }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100vw', height: '100vh', background: '#080808', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif", position: 'relative' }}>
-      <style dangerouslySetInnerHTML={{ __html: ANIM_CSS }} />
-      <AuroraBackground theme="white" />
-      <div style={{ position: 'relative', zIndex: 2, textAlign: 'center', padding: '40px', maxWidth: '420px' }}>
-        <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'rgba(255,128,128,0.06)', border: '1px solid rgba(255,128,128,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
-          <Ban size={26} color="#ff8080" />
-        </div>
-        <div style={{ fontSize: '22px', fontWeight: '800', letterSpacing: '-0.5px', color: '#fff', marginBottom: '10px' }}>Account Suspended</div>
-        <div style={{ fontSize: '13px', color: '#888', lineHeight: 1.6, marginBottom: '24px' }}>
-          Your account has been suspended. Contact support if you believe this is a mistake.
-        </div>
-        <button
-          onClick={onLogout}
-          style={{ background: 'transparent', border: '1px solid #2a2a2a', color: '#888', borderRadius: '99px', padding: '10px 24px', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.04em' }}
-        >Log Out</button>
+    <GateShell>
+      <BrandMark />
+      <div style={GATE_CARD}>
+        <div style={GATE_ICON}><Ban size={24} color="#ffa9a1" /></div>
+        <div style={GATE_TITLE}>Account suspended</div>
+        <div style={GATE_BODY}>Your account has been suspended. Contact support if you think this is a mistake.</div>
+        <button onClick={onLogout} style={GATE_BTN}>Log out</button>
       </div>
-    </div>
+    </GateShell>
   )
 }
 
 function PendingScreen({ onLogout }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100vw', height: '100vh', background: '#080808', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif", position: 'relative' }}>
-      <style dangerouslySetInnerHTML={{ __html: ANIM_CSS }} />
-      <AuroraBackground theme="white" />
-      <div style={{ position: 'relative', zIndex: 2, textAlign: 'center', animation: 'pageFade 0.3s ease both' }}>
-        <img src="/logo2.png" alt="logo" style={{ height: '64px', display: 'block', margin: '0 auto 16px' }} />
-        <div style={{ fontSize: '22px', fontWeight: '800', letterSpacing: '0.22em', color: '#fff', lineHeight: 1 }}>LIMITLESS</div>
-        <div style={{ fontSize: '9px', color: '#444', letterSpacing: '0.3em', marginTop: '7px', textTransform: 'uppercase', fontWeight: '600', marginBottom: '48px' }}>Trading Journal</div>
-        <div style={{ background: 'rgba(10,10,10,0.85)', border: '1px solid #1c1c1c', borderRadius: '18px', padding: '36px 44px', maxWidth: '420px', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}>
-          <div style={{ fontSize: '28px', marginBottom: '18px' }}>⏳</div>
-          <div style={{ fontSize: '17px', fontWeight: '700', color: '#fff', marginBottom: '12px', letterSpacing: '-0.3px' }}>Account Pending Approval</div>
-          <div style={{ fontSize: '13px', color: '#888', lineHeight: 1.75, marginBottom: '30px' }}>
-            Your account is pending approval.<br />
-            You'll gain access once approved by the admin.
-          </div>
-          <button
-            onClick={onLogout}
-            style={{ background: 'transparent', border: '1px solid #2a2a2a', borderRadius: '8px', color: '#666', fontSize: '12px', padding: '9px 28px', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s', letterSpacing: '0.04em' }}
-            className="action-btn"
-          >
-            Log out
-          </button>
-        </div>
+    <GateShell>
+      <BrandMark />
+      <div style={GATE_CARD}>
+        <div style={GATE_ICON}><Clock size={24} color="#fff" /></div>
+        <div style={GATE_TITLE}>Waiting for approval</div>
+        <div style={GATE_BODY}>Your account is set up. You get access to your journal as soon as an admin approves it.</div>
+        <button onClick={onLogout} style={GATE_BTN}>Log out</button>
       </div>
-    </div>
+    </GateShell>
   )
 }
 
@@ -1607,56 +1587,24 @@ function PendingScreen({ onLogout }) {
 // straight after signup. `pendingConfirm` adds the confirm-your-email note.
 function WaitlistScreen({ onLogout, onBack, pendingConfirm = false }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100vw', height: '100vh', background: '#080808', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif", position: 'relative', overflowY: 'auto' }}>
-      <style dangerouslySetInnerHTML={{ __html: ANIM_CSS }} />
-      <AuroraBackground theme="white" />
-      <div style={{ position: 'relative', zIndex: 2, textAlign: 'center', animation: 'pageFade 0.3s ease both', margin: '40px auto', padding: '0 16px' }}>
-        <img src="/logo2.png" alt="logo" style={{ height: '64px', display: 'block', margin: '0 auto 16px' }} />
-        <div style={{ fontSize: '22px', fontWeight: '800', letterSpacing: '0.22em', color: '#fff', lineHeight: 1 }}>LIMITLESS</div>
-        <div style={{ fontSize: '9px', color: '#444', letterSpacing: '0.3em', marginTop: '7px', textTransform: 'uppercase', fontWeight: '600', marginBottom: '40px' }}>Trading Journal</div>
-
-        <div style={{ background: 'rgba(10,10,10,0.85)', border: '1px solid #1c1c1c', borderRadius: '18px', padding: '40px 44px', maxWidth: '440px', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}>
-          {/* Crown badge */}
-          <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(255,217,102,0.08)', border: '1px solid rgba(255,217,102,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 22px', boxShadow: '0 0 0 6px rgba(255,217,102,0.04)' }}>
-            <Crown size={26} color="#ffd966" />
-          </div>
-
-          <div style={{ fontSize: '11px', fontWeight: '700', letterSpacing: '0.18em', textTransform: 'uppercase', color: '#ffd966', marginBottom: '12px' }}>Beta is Full</div>
-          <div style={{ fontSize: '23px', fontWeight: '800', color: '#fff', marginBottom: '14px', letterSpacing: '-0.5px', lineHeight: 1.2 }}>You're on the waitlist</div>
-
-          <div style={{ fontSize: '13px', color: '#999', lineHeight: 1.8, marginBottom: '8px' }}>
-            We've reached our <span style={{ color: '#fff', fontWeight: '600' }}>150 beta traders</span>. Subscriptions are coming soon.
-          </div>
-          <div style={{ fontSize: '13px', color: '#888', lineHeight: 1.8, marginBottom: pendingConfirm ? '20px' : '28px' }}>
-            You'll be the first to know when spots open — <span style={{ color: '#aaffa0', fontWeight: '600' }}>we'll email you</span>.
-          </div>
-
-          {pendingConfirm && (
-            <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid #1c1c1c', borderRadius: '10px', padding: '12px 16px', fontSize: '12px', color: '#888', lineHeight: 1.6, marginBottom: '28px' }}>
-              One more thing — confirm your email using the link we just sent so we can reach you.
-            </div>
-          )}
-
-          {onLogout ? (
-            <button
-              onClick={onLogout}
-              style={{ background: 'transparent', border: '1px solid #2a2a2a', borderRadius: '8px', color: '#666', fontSize: '12px', padding: '9px 28px', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s', letterSpacing: '0.04em' }}
-              className="action-btn"
-            >
-              Log out
-            </button>
-          ) : onBack ? (
-            <button
-              onClick={onBack}
-              style={{ background: 'transparent', border: '1px solid #2a2a2a', borderRadius: '8px', color: '#888', fontSize: '12px', padding: '9px 28px', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s', letterSpacing: '0.04em' }}
-              className="action-btn"
-            >
-              Back to login
-            </button>
-          ) : null}
+    <GateShell>
+      <BrandMark />
+      <div style={GATE_CARD}>
+        <div style={GATE_ICON}><Crown size={24} color="#fff" /></div>
+        <div style={{ fontFamily: BRAND_FONT, fontSize: '11px', fontWeight: 600, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.6)', marginBottom: '10px' }}>Beta is full</div>
+        <div style={GATE_TITLE}>You're on the waitlist</div>
+        <div style={{ ...GATE_BODY, marginBottom: pendingConfirm ? '18px' : '26px' }}>
+          We've reached our <span style={{ color: '#fff', fontWeight: 600 }}>150 beta traders</span>. Subscriptions open soon and you'll be the first to know. <span style={{ color: '#fff', fontWeight: 600 }}>We'll email you.</span>
         </div>
+        {pendingConfirm && (
+          <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '16px', padding: '12px 16px', fontSize: '12.5px', color: 'rgba(255,255,255,0.66)', lineHeight: 1.6, marginBottom: '24px' }}>
+            One more thing: confirm your email with the link we just sent so we can reach you.
+          </div>
+        )}
+        {onLogout ? <button onClick={onLogout} style={GATE_BTN}>Log out</button>
+          : onBack ? <button onClick={onBack} style={GATE_BTN}>Back to login</button> : null}
       </div>
-    </div>
+    </GateShell>
   )
 }
 
@@ -6030,7 +5978,7 @@ function NetworkResources({ isAdmin }) {
 }
 
 // ─── Network Page (LIMITLESS vertical layout) ─────────────
-const NETWORK_ACCENT = '#7c3aed'
+const NETWORK_ACCENT = '#e4e4e7'
 
 function NetworkPage({ session, setPage, profile }) {
   const isAdmin = isSuperAdmin(session?.user?.email)
@@ -6129,10 +6077,10 @@ function NetworkPage({ session, setPage, profile }) {
       {/* ── HEADER BANNER ── */}
       <div style={{
         position: 'relative', overflow: 'hidden',
-        background: `linear-gradient(135deg, rgba(124,58,237,0.10) 0%, rgba(13,13,13,0.92) 50%, rgba(8,8,8,0.95) 100%), #0d0d0d`,
+        background: `linear-gradient(135deg, rgba(255,255,255,0.10) 0%, rgba(13,13,13,0.92) 50%, rgba(8,8,8,0.95) 100%), #0d0d0d`,
         border: `1px solid ${accent}25`, borderRadius: '18px',
         padding: '32px 32px', marginBottom: '32px',
-        boxShadow: `0 0 0 1px ${accent}11 inset, 0 12px 48px rgba(124,58,237,0.08)`,
+        boxShadow: `0 0 0 1px ${accent}11 inset, 0 12px 48px rgba(255,255,255,0.08)`,
       }}>
         {/* Pulsing purple aurora blob */}
         <div style={{ position: 'absolute', top: '-40%', right: '-10%', width: '320px', height: '320px', borderRadius: '50%', background: `radial-gradient(circle, ${accent}55 0%, transparent 65%)`, filter: 'blur(60px)', animation: 'networkPulse 6s ease-in-out infinite', pointerEvents: 'none' }} />
@@ -6145,7 +6093,7 @@ function NetworkPage({ session, setPage, profile }) {
           <h1 style={{ fontSize: '44px', fontWeight: '900', letterSpacing: '-2px', color: '#fff', lineHeight: 1, marginBottom: '10px' }}>NETWORK</h1>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
             <div style={{ fontSize: '14px', color: '#aaa', letterSpacing: '0.01em' }}>Your trading community — grow together</div>
-            <button onClick={() => setEditProfile(true)} style={{ background: `${accent}15`, border: `1px solid ${accent}40`, color: '#c4b5fd', borderRadius: '99px', padding: '8px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button onClick={() => setEditProfile(true)} style={{ background: `${accent}15`, border: `1px solid ${accent}40`, color: '#f4f4f5', borderRadius: '99px', padding: '8px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <SocialAvatar name={myNetProfile?.display_name || profile?.username || 'me'} url={myNetProfile?.avatar_url} size={20} />
               My Trader Profile
             </button>
@@ -6292,7 +6240,7 @@ function NetworkPage({ session, setPage, profile }) {
             />
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
               <button onClick={() => setAnnModal(false)} disabled={annPosting} style={{ background: 'transparent', border: '1px solid #2a2a2a', color: 'var(--text-md)', borderRadius: '99px', padding: '9px 18px', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-              <button onClick={postAnnouncement} disabled={annPosting || !annDraft.trim()} style={{ background: accent, color: '#fff', border: 'none', borderRadius: '99px', padding: '9px 22px', fontSize: '12px', fontWeight: '700', cursor: annPosting ? 'wait' : 'pointer', fontFamily: 'inherit', opacity: (annPosting || !annDraft.trim()) ? 0.5 : 1 }}>
+              <button onClick={postAnnouncement} disabled={annPosting || !annDraft.trim()} style={{ background: accent, color: '#000', border: 'none', borderRadius: '99px', padding: '9px 22px', fontSize: '12px', fontWeight: '700', cursor: annPosting ? 'wait' : 'pointer', fontFamily: 'inherit', opacity: (annPosting || !annDraft.trim()) ? 0.5 : 1 }}>
                 {annPosting ? 'Posting…' : 'Post Announcement'}
               </button>
             </div>
@@ -7994,16 +7942,6 @@ export default function App() {
   const [passwordRecovery, setPasswordRecovery] = useState(false)
   const [announcement, setAnnouncement] = useState(null) // { text, active }
   const [featureFlags, setFeatureFlags] = useState({ monthlyGoalTracker: true, aiChecklist: true, newsCalendar: true, feedSection: true, paywall: false })
-  // New journal preference: 'off' = classic view. ?v3=1 / ?v3=0 switch it from a link.
-  const [v3Pref, setV3PrefRaw] = useState(() => {
-    try {
-      const q = new URLSearchParams(window.location.search).get('v3')
-      if (q === '1') localStorage.setItem('ltj_v3', 'on')
-      if (q === '0') localStorage.setItem('ltj_v3', 'off')
-      return localStorage.getItem('ltj_v3') || 'auto'
-    } catch { return 'auto' }
-  })
-  const setV3Pref = (v) => { try { localStorage.setItem('ltj_v3', v) } catch { /* private mode */ } setV3PrefRaw(v) }
   const [demoMode, setDemoModeRaw] = useState(() => localStorage.getItem('limitless_demo_mode') === 'true')
   const setDemoMode = (v) => {
     setDemoModeRaw(v)
@@ -8310,7 +8248,7 @@ export default function App() {
   // ── Loading ──
   if (authLoading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100vw', height: '100vh', background: '#080808', color: '#333', fontFamily: 'Inter, sans-serif', fontSize: '12px', letterSpacing: '0.1em' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100vw', height: '100vh', background: '#000', color: '#333', fontFamily: 'Inter, sans-serif', fontSize: '12px', letterSpacing: '0.1em' }}>
         <style dangerouslySetInnerHTML={{ __html: ANIM_CSS }} />
       </div>
     )
@@ -8336,7 +8274,7 @@ export default function App() {
   // flag, so a locked-out user never sees the app flash before the paywall) ──
   if (profileLoading || !profile || !subLoaded || !flagsLoaded) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100vw', height: '100vh', background: '#080808', color: '#333', fontFamily: 'Inter, sans-serif', fontSize: '12px', letterSpacing: '0.1em' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100vw', height: '100vh', background: '#000', color: '#333', fontFamily: 'Inter, sans-serif', fontSize: '12px', letterSpacing: '0.1em' }}>
         <style dangerouslySetInnerHTML={{ __html: ANIM_CSS }} />
       </div>
     )
@@ -8379,8 +8317,9 @@ export default function App() {
   }
 
   // ── New journal (v3) ──
-  const v3On = (isAdminUser || !!featureFlags.newJournal) && v3Pref !== 'off' && !viewUser
-  if (v3On) {
+  // Every approved trader gets the glass journal. The classic layout below only
+  // renders for an admin's read only "view as user" overlay.
+  if (!viewUser) {
     const renderLegacy = (r) => (
       <div data-mode={colorMode} data-glass={glassMode ? 'true' : 'false'} style={{ color: 'var(--text-hi)', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif", textAlign: 'left', minWidth: 0 }}>
         <style dangerouslySetInnerHTML={{ __html: ANIM_CSS }} />
@@ -8390,7 +8329,17 @@ export default function App() {
             <NetworkPage session={session} setPage={(pg) => { window.location.hash = pg }} profile={profile} />
           </Suspense>
         )}
-        {r === 'settings' && <Settings theme={theme} setTheme={handleSetTheme} session={session} profile={profile} setProfile={setProfile} glassMode={glassMode} setGlassMode={v => { setGlassMode(v); localStorage.setItem('glass_mode', v) }} onLogout={logout} trades={effectiveTrades} demoMode={demoMode} setDemoMode={setDemoMode} setTrades={setTrades} setPage={(pg) => { window.location.hash = pg }} uiV2={uiV2} setUiV2={setUiV2} />}
+        {r === 'admin' && isAdminUser && <AdminPanel session={session} setPage={(pg) => { window.location.hash = pg }} onViewUser={enterViewAs} />}
+        {r === 'tos' && isSuperAdmin(session?.user?.email) && (
+          <Suspense fallback={<ChunkFallback label="Loading TOS…" />}>
+            <TOSPage session={session} />
+          </Suspense>
+        )}
+        {r === 'copy' && isSuperAdmin(session?.user?.email) && (
+          <Suspense fallback={<ChunkFallback label="Loading TradeSync…" />}>
+            <CopyTraderPage session={session} journalTrades={trades} />
+          </Suspense>
+        )}
       </div>
     )
     return (
@@ -8405,11 +8354,11 @@ export default function App() {
           setSubscription={setSubscription}
           featureFlags={featureFlags}
           isAdmin={isAdminUser}
+          isSuperAdmin={isSuperAdmin(session?.user?.email)}
           paywallOn={paywallOn}
           logout={logout}
           uploadImages={uploadImages}
           renderLegacy={renderLegacy}
-          onClassic={(pg) => { setV3Pref('off'); try { window.history.replaceState(null, '', window.location.pathname + window.location.search) } catch { /* cosmetic */ } if (pg) setPage(pg) }}
         />
       </Suspense>
     )
@@ -8490,11 +8439,6 @@ export default function App() {
           <Plus size={16} />
           Add Trade
         </button>
-        {(isAdminUser || featureFlags.newJournal) && (
-          <button onClick={() => setV3Pref('on')} style={{ background: 'rgba(255,255,255,0.06)', color: '#fff', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '10px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, fontSize: '12.5px', width: '100%', marginTop: '-6px', marginBottom: '14px', padding: '9px' }}>
-            Try the new journal
-          </button>
-        )}
 
         {/* v2: sliding pill behind the active nav item */}
         {uiV2 && navPill && (
@@ -8858,11 +8802,6 @@ export default function App() {
 
             <div style={{ height: '1px', background: '#1a1a1a', marginBottom: '12px' }} />
 
-            {(isAdminUser || featureFlags.newJournal) && (
-              <button onClick={() => { setMobileSidebarOpen(false); setV3Pref('on') }} style={{ background: '#fff', color: '#000', border: 'none', borderRadius: '10px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700, fontSize: '13px', width: '100%', marginBottom: '12px', padding: '11px', minHeight: '44px' }}>
-                Try the new journal
-              </button>
-            )}
 
             {/* Nav items */}
             {nav.map(n => (
