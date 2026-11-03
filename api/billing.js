@@ -71,6 +71,12 @@ function baseUrl(req) {
   return process.env.APP_URL || 'https://app.limitless-journal.com'
 }
 
+// Test mode (sk_test_ / rk_test_ keys): checkout is limited to these accounts.
+const TESTERS = (process.env.BILLING_TESTERS || 'eug777fx@gmail.com,pirchmark@gmail.com,clozoya333@gmail.com')
+  .split(',').map((e) => e.trim().toLowerCase()).filter(Boolean)
+const testMode = () => /^(sk|rk)_test_/.test(process.env.STRIPE_SECRET_KEY || '')
+const isTester = (email) => TESTERS.includes(String(email || '').toLowerCase())
+
 // Pull a subscription from Stripe and write our row. Returns the row (or null
 // when the subscription can't be tied to a user).
 export async function syncSubscription(subOrId, fallbackUserId) {
@@ -135,13 +141,16 @@ async function checkout(req, res, user, body) {
   if (plan !== 'lite') return res.status(400).json({ error: 'Pro is not available yet.' })
   const price = process.env.STRIPE_PRICE_LITE
   if (!price) return res.status(503).json({ error: 'Payments open soon. Your journal is free until then.', code: 'billing_not_ready' })
+  // While the keys are Stripe test keys, only admins can open (test) checkout,
+  // so traders never land on a checkout that refuses real cards.
+  if (testMode() && !isTester(user.email)) return res.status(503).json({ error: 'Payments open soon. Your journal is free until then.', code: 'billing_not_ready' })
 
   const { row, customerId } = await getOrCreateCustomer(user)
   const base = baseUrl(req)
 
   // Already paying: send them to the portal instead of a second subscription.
   if (row?.stripe_subscription_id && ACCESS_STATUSES.includes(row.status)) {
-    const portal = await stripe('billing_portal/sessions', { method: 'POST', params: { customer: customerId, return_url: `${base}/?billing=portal` } })
+    const portal = await stripe('billing_portal/sessions', { method: 'POST', params: { customer: customerId, return_url: `${base}/?billing=portal#billing` } })
     return res.status(200).json({ url: portal.url, already: true })
   }
 
@@ -157,8 +166,8 @@ async function checkout(req, res, user, body) {
       billing_address_collection: 'auto',
       metadata: { user_id: user.id, plan },
       subscription_data: { metadata: { user_id: user.id, plan }, billing_mode: { type: 'flexible' } },
-      success_url: `${base}/?billing=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${base}/?billing=cancel`,
+      success_url: `${base}/?billing=success&session_id={CHECKOUT_SESSION_ID}#billing`,
+      cancel_url: `${base}/?billing=cancel#billing`,
       ...(tax ? { automatic_tax: { enabled: true }, customer_update: { address: 'auto' } } : {}),
     },
     // A double click within the same minute returns the same session instead of two.
@@ -171,7 +180,7 @@ async function portal(req, res, user) {
   const row = await getRow(user.id)
   if (!row?.stripe_customer_id) return res.status(400).json({ error: 'No billing account yet. Subscribe first.' })
   const configuration = process.env.STRIPE_PORTAL_CONFIG || undefined // default portal config when unset
-  const s = await stripe('billing_portal/sessions', { method: 'POST', params: { customer: row.stripe_customer_id, return_url: `${baseUrl(req)}/?billing=portal`, configuration } })
+  const s = await stripe('billing_portal/sessions', { method: 'POST', params: { customer: row.stripe_customer_id, return_url: `${baseUrl(req)}/?billing=portal#billing`, configuration } })
   return res.status(200).json({ url: s.url })
 }
 

@@ -14,6 +14,7 @@ import { Billing, Account } from './Account.jsx'
 import Backtest from './Backtest.jsx'
 import LogTrade from './LogTrade.jsx'
 import ShareCard from './ShareCard.jsx'
+import { BootLoader, BootDone } from '../lib/bootLoader.jsx'
 
 const FONTS = 'https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=Poppins:wght@300;400;500;600;700;800&display=swap'
 
@@ -89,9 +90,11 @@ function Router() {
 
 export default function V3App(props) {
   useV3Document()
+  if (props.tradesLoading) return <BootLoader />
   return (
     <V3Provider app={props}>
       <div className="v3root">
+        <BootDone />
         <Toaster position="top-center" toastOptions={{ style: { background: 'rgba(20,20,22,0.92)', color: '#fff', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 99, fontSize: 13 } }} />
         <Router />
       </div>

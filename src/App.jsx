@@ -21,6 +21,7 @@ import { useMyNetworkProfile } from './lib/networkShared.js'
 import { SocialAvatar } from './lib/SocialAvatar.jsx'
 // Billing: paywall gate + Subscription page (Stripe via api/billing.js)
 import { PaywallScreen, SubscriptionPage } from './Billing.jsx'
+import { BootLoader, BootDone } from './lib/bootLoader.jsx'
 import { fetchSubscription, hasPaidAccess, syncSubscription, startCheckout } from './lib/billing'
 
 // ─── Code-split boundaries ────────────────────────────────────
@@ -72,8 +73,8 @@ if (typeof window !== 'undefined') {
 // Shown while a lazy chunk is in flight.
 function ChunkFallback({ label = 'Loading', pad = '60px 20px' }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: pad, color: '#666', fontSize: '13px', letterSpacing: '0.02em' }}>
-      <Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} />
+    <div role="status" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px', padding: pad, color: 'rgba(255,255,255,0.5)', fontSize: '12.5px', letterSpacing: '0.02em' }}>
+      <div className="ltj-boot-bar"><i /></div>
       {label}
     </div>
   )
@@ -651,6 +652,7 @@ function GateShell({ children }) {
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center', width: '100vw', minHeight: '100vh', height: '100vh', overflowY: 'auto', background: '#000', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif", position: 'relative' }}>
       <style dangerouslySetInnerHTML={{ __html: ANIM_CSS }} />
+      <BootDone />
       <AuroraBackground />
       <div style={{ position: 'relative', zIndex: 2, textAlign: 'center', animation: 'pageFade 0.4s ease both', width: '100%', maxWidth: '480px', padding: '40px 16px' }}>
         {children}
@@ -1044,6 +1046,7 @@ function AuthPage({ onAuth }) {
       overflowY: 'auto',
     }}>
       <style dangerouslySetInnerHTML={{ __html: ANIM_CSS }} />
+      <BootDone />
       <AuroraBackground theme="white" />
 
       <div className="auth-outer" style={{ position: 'relative', zIndex: 2, width: tab === 'signup' ? '440px' : '380px', transition: 'width 0.2s', margin: '40px auto' }}>
@@ -1489,6 +1492,7 @@ function SetNewPasswordPage({ onDone }) {
       position: 'relative', overflowY: 'auto',
     }}>
       <style dangerouslySetInnerHTML={{ __html: ANIM_CSS }} />
+      <BootDone />
       <AuroraBackground theme="white" />
 
       <div className="auth-outer" style={{ position: 'relative', zIndex: 2, width: '380px', margin: '40px auto' }}>
@@ -8021,15 +8025,8 @@ export default function App() {
   }
   const exitViewAs = () => { setViewUser(null); setViewTrades([]); setViewLoading(false) }
 
-  // ── Premium boot loader (defined in index.html) — fade out once auth resolves ──
-  useEffect(() => {
-    if (authLoading) return // keep showing until we know logged-in or not
-    const loader = document.getElementById('app-loader')
-    if (!loader) return
-    loader.style.opacity = '0'
-    const timer = setTimeout(() => { loader.style.display = 'none' }, 600)
-    return () => clearTimeout(timer)
-  }, [authLoading])
+  // Boot loader (index.html): each final screen renders <BootDone />, which
+  // fades it once that screen has painted, so there is one loader, not three.
 
   // ── Auth init ──
   useEffect(() => {
@@ -8247,11 +8244,7 @@ export default function App() {
 
   // ── Loading ──
   if (authLoading) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100vw', height: '100vh', background: '#000', color: '#333', fontFamily: 'Inter, sans-serif', fontSize: '12px', letterSpacing: '0.1em' }}>
-        <style dangerouslySetInnerHTML={{ __html: ANIM_CSS }} />
-      </div>
-    )
+    return <BootLoader />
   }
 
   // ── Password recovery gate (takes priority — comes from email link) ──
@@ -8273,11 +8266,7 @@ export default function App() {
   // ── Profile loading (also waits for the subscription row and the paywall
   // flag, so a locked-out user never sees the app flash before the paywall) ──
   if (profileLoading || !profile || !subLoaded || !flagsLoaded) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100vw', height: '100vh', background: '#000', color: '#333', fontFamily: 'Inter, sans-serif', fontSize: '12px', letterSpacing: '0.1em' }}>
-        <style dangerouslySetInnerHTML={{ __html: ANIM_CSS }} />
-      </div>
-    )
+    return <BootLoader />
   }
 
   // ── Banned gate (admins still get access) ──
@@ -8298,7 +8287,7 @@ export default function App() {
         tradeCount={trades.length}
         onLogout={logout}
         onSynced={(s) => setSubscription(s)}
-        background={<AuroraBackground theme="white" />}
+        background={<><BootDone /><AuroraBackground /></>}
         css={ANIM_CSS}
       />
     )
@@ -8343,12 +8332,13 @@ export default function App() {
       </div>
     )
     return (
-      <Suspense fallback={<div style={{ minHeight: '100vh', background: '#000' }}><ChunkFallback label="Loading your journal…" pad="40vh 20px" /></div>}>
+      <Suspense fallback={<BootLoader />}>
         <V3App
           session={session}
           profile={profile}
           setProfile={setProfile}
           trades={trades}
+          tradesLoading={tradesLoading}
           setTrades={setTrades}
           subscription={subscription}
           setSubscription={setSubscription}
@@ -8400,6 +8390,7 @@ export default function App() {
         }}
       />
 
+      <BootDone />
       <AuroraBackground theme={theme} />
 
       {/* ── Sidebar ── */}

@@ -10,6 +10,7 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = 'service'
 process.env.STRIPE_SECRET_KEY = 'sk_test_x'
 process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test123'
 process.env.STRIPE_PRICE_LITE = 'price_lite'
+process.env.BILLING_TESTERS = 'a@b.c'
 
 const { formEncode, verifyStripeSignature, periodEnd } = await import('./stripe.js')
 const { default: handler } = await import('../billing.js')
@@ -230,4 +231,17 @@ test('portal needs a billing account, then returns the portal URL', async () => 
   const r2 = fakeRes()
   await handler(fakeReq({ action: 'portal', body: '{}', headers: { authorization: 'Bearer good', origin: 'https://app.limitless-journal.com' } }), r2)
   assert.equal(r2.body.url, 'https://billing.stripe.com/p/1')
+})
+
+test('test mode: checkout is closed to non testers', async () => {
+  const prev = process.env.BILLING_TESTERS
+  process.env.BILLING_TESTERS = 'someone@else.com'
+  const mod = await import('../billing.js?closed=' + Date.now())
+  process.env.BILLING_TESTERS = prev
+  const res = { code: 0, body: null, status(c) { this.code = c; return this }, json(b) { this.body = b; return this } }
+  const { Readable } = await import('stream')
+  const req = Object.assign(Readable.from(['{}']), { method: 'POST', url: '/api/billing?action=checkout', query: { action: 'checkout' }, headers: { authorization: 'Bearer good' } })
+  await mod.default(req, res)
+  assert.equal(res.code, 503)
+  assert.equal(res.body.code, 'billing_not_ready')
 })
