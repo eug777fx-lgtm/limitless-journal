@@ -52,6 +52,16 @@ export async function fetchSubscription(userId) {
   }
 }
 
+// Founding beta traders keep free access when the paywall is on (table: beta_access).
+export async function fetchBetaAccess(userId) {
+  try {
+    const { data, error } = await supabase.from('beta_access').select('user_id').eq('user_id', userId).maybeSingle()
+    return !error && !!data
+  } catch {
+    return false
+  }
+}
+
 async function call(action, body) {
   const { data: { session } } = await supabase.auth.getSession()
   const r = await fetch(`/api/billing?action=${action}`, {

@@ -22,7 +22,7 @@ import { SocialAvatar } from './lib/SocialAvatar.jsx'
 // Billing: paywall gate + Subscription page (Stripe via api/billing.js)
 import { PaywallScreen, SubscriptionPage } from './Billing.jsx'
 import { BootLoader, BootDone } from './lib/bootLoader.jsx'
-import { fetchSubscription, hasPaidAccess, syncSubscription, startCheckout } from './lib/billing'
+import { fetchSubscription, hasPaidAccess, syncSubscription, startCheckout, fetchBetaAccess } from './lib/billing'
 
 // ─── Code-split boundaries ────────────────────────────────────
 // TOS and TradeSync are super-admin-only, and the Network layer is a secondary
@@ -7954,6 +7954,7 @@ export default function App() {
   const [profileLoading, setProfileLoading] = useState(false)
   // Billing: the user's subscription row + whether app_settings (paywall flag) has loaded
   const [subscription,   setSubscription]   = useState(null)
+  const [betaFree,       setBetaFree]       = useState(false)
   const [subLoaded,      setSubLoaded]      = useState(false)
   const [flagsLoaded,    setFlagsLoaded]    = useState(false)
   const [tradesLoading,  setTradesLoading]  = useState(true)
@@ -8140,8 +8141,9 @@ export default function App() {
   }
 
   const loadSubscription = async (sess) => {
-    const sub = await fetchSubscription(sess.user.id)
+    const [sub, beta] = await Promise.all([fetchSubscription(sess.user.id), fetchBetaAccess(sess.user.id)])
     setSubscription(sub)
+    setBetaFree(beta)
     setSubLoaded(true)
   }
 
@@ -8280,7 +8282,7 @@ export default function App() {
   // so pending / waitlist users go straight to the paywall instead.
   const paywallOn = !!featureFlags.paywall
   const isAdminUser = isAnyAdmin(session?.user?.email)
-  if (paywallOn && !isAdminUser && !hasPaidAccess(subscription)) {
+  if (paywallOn && !isAdminUser && !betaFree && !hasPaidAccess(subscription)) {
     return (
       <PaywallScreen
         subscription={subscription}
@@ -8342,6 +8344,7 @@ export default function App() {
           setTrades={setTrades}
           subscription={subscription}
           setSubscription={setSubscription}
+          betaFree={betaFree}
           featureFlags={featureFlags}
           isAdmin={isAdminUser}
           isSuperAdmin={isSuperAdmin(session?.user?.email)}

@@ -95,7 +95,7 @@ const ROUTES = ['dashboard', 'journal', 'analytics', 'calendar', 'plan', 'networ
 const ALIAS = { settings: 'account', subscription: 'billing' }
 const readRoute = () => {
   const raw = (location.hash || '').replace(/^#/, '')
-  const h = ALIAS[raw] || raw
+  const h = ALIAS[raw] || raw || (location.pathname.startsWith('/asia') ? 'backtest' : '')
   return ROUTES.includes(h) ? h : 'dashboard'
 }
 export function useRoute() {

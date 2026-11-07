@@ -7,6 +7,7 @@ import { useStore } from './store.jsx'
 import { Seg, Modal, CloseBtn } from './ui.jsx'
 import { todayISO, dayLabel, fmtR, pct } from './data.js'
 import AppShell, { Empty } from './Shell.jsx'
+import AsiaTonight from './AsiaTonight.jsx'
 import { MODEL_VERSION, MIN_RR, STOP_BUFFER, RANGE_MIN, RANGE_MAX, narrativeFrom, levels, rr, resultR, backtestStats } from './backtestMath.js'
 
 const TABLE = 'backtest_sessions'
@@ -336,7 +337,7 @@ export default function Backtest() {
   const [rows, setRows] = React.useState([])
   const [state, setState] = React.useState('loading') // loading | ready | missing | error
   const [errMsg, setErrMsg] = React.useState('')
-  const [tab, setTab] = React.useState('Log')
+  const [tab, setTab] = React.useState('Tonight')
   const [draft, setDraftState] = React.useState(null)
   const [opens, setOpens] = React.useState(0)
   const setDraft = React.useCallback((d) => { if (d) setOpens((k) => k + 1); setDraftState(d) }, [])
@@ -374,17 +375,19 @@ export default function Backtest() {
           <>
             <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
               <span className="muted" style={{ flex: 1, minWidth: 220, fontSize: 13 }}>Asia Model {MODEL_VERSION.replace('asia-', '')} · limit at 0.705 of the NY range, with the narrative. Admins only.</span>
-              <Seg options={['Log', 'Stats', 'Model']} value={tab} onChange={setTab} label="Section" />
+              <Seg options={['Tonight', 'Log', 'Stats', 'Model']} value={tab} onChange={setTab} label="Section" />
               <button type="button" className="btn btn-primary" onClick={() => setDraft(blank())}><Plus size={15} /> Log session</button>
             </div>
 
-            <div className="grid g4 m2">
+            {tab !== 'Tonight' && <div className="grid g4 m2">
               <Tile k="Sessions" v={stats.sessions} sub={`${stats.fills} filled · ${stats.noTrade} no trade · ${stats.noFill} no fill`} />
               <Tile k="Win rate" v={stats.winRate === null ? '—' : pct(stats.winRate)} sub={`${plural(stats.wins, 'win')} · ${plural(stats.losses, 'loss').replace('losss', 'losses')}`} />
               <Tile k="Expectancy" v={fmtR(stats.expectancy)} sub="per filled trade" />
               <Tile k="Total" v={fmtR(stats.totalR, 1)} sub={`worst run: ${plural(stats.maxLossStreak, 'loss').replace('losss', 'losses')}`} />
-            </div>
-            {stats.fills < 30 && <span className="faint" style={{ fontSize: 12.5 }}>{stats.fills} of 30 filled trades. Treat these numbers as a guess until 30.</span>}
+            </div>}
+            {tab !== 'Tonight' && stats.fills < 30 && <span className="faint" style={{ fontSize: 12.5 }}>{stats.fills} of 30 filled trades. Treat these numbers as a guess until 30.</span>}
+
+            {tab === 'Tonight' && <AsiaTonight rows={rows} onLog={() => setDraft(blank())} />}
 
             {tab === 'Log' && (
               <>

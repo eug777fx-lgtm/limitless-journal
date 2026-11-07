@@ -9,7 +9,7 @@ import AppShell from './Shell.jsx'
 import { ImportModal, exportCSV } from './Journal.jsx'
 
 export function Billing() {
-  const { subscription, setSubscription, isAdmin, paywallOn, notify } = useStore()
+  const { subscription, setSubscription, isAdmin, paywallOn, notify, betaFree } = useStore()
   const [busy, setBusy] = React.useState('')
   const [err, setErr] = React.useState('')
   const paid = hasPaidAccess(subscription)
@@ -29,17 +29,17 @@ export function Billing() {
             <div className="col" style={{ gap: 4 }}>
               <span className="eyebrow">Current plan</span>
               <span className="row display" style={{ gap: 10, alignItems: 'baseline' }}>
-                <span style={{ fontSize: 34, fontWeight: 700 }}>{paid ? (PLANS[subscription.plan] || lite).name : isAdmin ? 'Admin' : paywallOn ? 'No plan' : 'Free beta'}</span>
+                <span style={{ fontSize: 34, fontWeight: 700 }}>{paid ? (PLANS[subscription.plan] || lite).name : isAdmin ? 'Admin' : betaFree ? 'Founding beta' : paywallOn ? 'No plan' : 'Free beta'}</span>
                 {paid && <span className="muted" style={{ fontSize: 15 }}>$15 / month</span>}
               </span>
             </div>
-            <span className={paid && !subscription.cancel_at_period_end ? 'tag tag-solid' : 'tag tag-soft'}>{paid ? (subscription.cancel_at_period_end ? 'Cancels soon' : subscription.status === 'past_due' ? 'Payment due' : 'Active') : isAdmin ? 'Full access' : paywallOn ? 'Inactive' : 'Free for now'}</span>
+            <span className={paid && !subscription.cancel_at_period_end ? 'tag tag-solid' : 'tag tag-soft'}>{paid ? (subscription.cancel_at_period_end ? 'Cancels soon' : subscription.status === 'past_due' ? 'Payment due' : 'Active') : isAdmin ? 'Full access' : betaFree ? 'Free for you' : paywallOn ? 'Inactive' : 'Free for now'}</span>
           </div>
           <div className="well row" style={{ gap: 10, borderRadius: 18, padding: '14px 16px', fontSize: 13.5 }}>
             <CalendarDays size={16} style={{ flexShrink: 0 }} />
             {paid
               ? subscription.cancel_at_period_end ? `Access continues until ${ends}, then your plan ends. Your trades stay saved.` : ends ? `Renews on ${ends} for $15.00.` : 'Your plan is active.'
-              : isAdmin ? 'You have admin access, so no subscription is needed.' : paywallOn ? 'Subscribe to keep full access to your journal.' : 'LIMITLESS is free for you right now. Subscribe to lock in Lite before the paywall goes live.'}
+              : isAdmin ? 'You have admin access, so no subscription is needed.' : betaFree ? 'You were here from the start, so the journal stays free for you. Subscribing is optional and supports LIMITLESS.' : paywallOn ? 'Subscribe to keep full access to your journal.' : 'LIMITLESS is free for you right now. Subscribe to lock in Lite before the paywall goes live.'}
           </div>
           <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
             {paid

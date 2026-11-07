@@ -1,5 +1,14 @@
 {
-  "rewrites": [],
+  "rewrites": [
+    {
+      "source": "/asia",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/asia/:path*",
+      "destination": "/index.html"
+    }
+  ],
   "crons": [
     {
       "path": "/api/weekly-email",

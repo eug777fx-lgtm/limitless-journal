@@ -7,6 +7,13 @@
 
     <!-- PWA -->
     <link rel="manifest" href="/manifest.json" />
+    <script>
+      // /asia installs as its own home screen app (LIMITLESS Asia)
+      if (location.pathname.indexOf('/asia') === 0) {
+        document.querySelector('link[rel="manifest"]').href = '/manifest-asia.json'
+        document.title = 'LIMITLESS Asia'
+      }
+    </script>
     <meta name="theme-color" content="#000000" />
     <link rel="apple-touch-icon" href="/logo2.png" />
     <link rel="apple-touch-icon" sizes="152x152" href="/logo2.png" />
@@ -14,7 +21,8 @@
     <link rel="apple-touch-icon" sizes="167x167" href="/logo2.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="LIMITLESS" />
+    <meta name="apple-mobile-web-app-title" content="LIMITLESS" id="apple-title" />
+    <script>if (location.pathname.indexOf('/asia') === 0) document.getElementById('apple-title').content = 'Asia'</script>
 
     <!-- Primary SEO -->
     <title>LIMITLESS — Trading Journal for Serious Traders</title>
