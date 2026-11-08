@@ -6258,9 +6258,9 @@ function NetworkPage({ session, setPage, profile }) {
 
 // ─── Admin access tiers ───────────────────────────────────────
 // SUPER_ADMIN: full access (TOS, TradeSync, Network, Demo Mode, Hall of Fame…).
-// CO_ADMINS: user management + support tickets only (no super-only modules).
+// CO_ADMINS: none. Since Nov 2026 the owner is the only admin (DB: public.is_admin()).
 const SUPER_ADMIN = 'eug777fx@gmail.com'
-const CO_ADMINS = ['pirchmark@gmail.com', 'clozoya333@gmail.com']
+const CO_ADMINS = []
 const isSuperAdmin = (email) => email === SUPER_ADMIN
 const isCoAdmin = (email) => CO_ADMINS.includes(email)
 const isAnyAdmin = (email) => isSuperAdmin(email) || isCoAdmin(email)

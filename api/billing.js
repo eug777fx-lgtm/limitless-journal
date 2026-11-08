@@ -72,7 +72,7 @@ function baseUrl(req) {
 }
 
 // Test mode (sk_test_ / rk_test_ keys): checkout is limited to these accounts.
-const TESTERS = (process.env.BILLING_TESTERS || 'eug777fx@gmail.com,pirchmark@gmail.com,clozoya333@gmail.com')
+const TESTERS = (process.env.BILLING_TESTERS || 'eug777fx@gmail.com')
   .split(',').map((e) => e.trim().toLowerCase()).filter(Boolean)
 const testMode = () => /^(sk|rk)_test_/.test(process.env.STRIPE_SECRET_KEY || '')
 const isTester = (email) => TESTERS.includes(String(email || '').toLowerCase())
