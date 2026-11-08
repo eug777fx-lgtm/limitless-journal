@@ -70,8 +70,8 @@ function Legacy({ route }) {
 
 // Admin only: the Asia Model backtest lab. Everyone else lands on the dashboard.
 function AdminBacktest() {
-  const { isAdmin } = useStore()
-  return isAdmin ? <Backtest /> : <Dashboard />
+  const { isSuperAdmin } = useStore()
+  return isSuperAdmin ? <Backtest /> : <Dashboard />
 }
 
 function Router() {

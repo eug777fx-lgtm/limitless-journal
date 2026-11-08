@@ -1,5 +1,7 @@
 // Daily check-in email — Vercel Cron (vercel.json: "0 0 * * *", every midnight UTC).
-// For every approved user, checks whether they logged any trades "today" and sends
+// Pro plan only: goes to traders with an active Pro subscription. Everyone else gets
+// the weekend recap (weekly-email.js). With no Pro subscribers it sends nothing.
+// For every Pro user, checks whether they logged any trades "today" and sends
 // a tailored email via Resend. Uses the Supabase service role to bypass RLS so it
 // can read all users + all trades.
 //   Env: RESEND_API_KEY, SUPABASE_URL (or VITE_SUPABASE_URL), SUPABASE_SERVICE_ROLE_KEY
@@ -10,6 +12,7 @@
 
 import { dailyJournaledEmail, dailyNoJournalEmail } from './_lib/email-templates.js'
 import { logEmail } from './_lib/log-email.js'
+import { suppressed, MAX_PER_RUN } from './_lib/email-guard.js'
 
 const SUPA_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -37,10 +40,15 @@ export default async function handler(req, res) {
 
   try {
     const today = todayISO()
-    const [profiles, trades] = await Promise.all([
+    const pro = await sb(`subscriptions?plan=eq.pro&status=in.(active,trialing,past_due)&select=user_id`)
+    const proIds = new Set((pro || []).map((x) => x.user_id))
+    if (!proIds.size) return res.status(200).json({ date: today, sent: 0, failed: 0, skipped: 0, note: 'no Pro subscribers' })
+    const block = await suppressed()
+    const [allProfiles, trades] = await Promise.all([
       sb(`profiles?status=eq.approved&select=id,username,first_name`),
       sb(`trades?trade_date=eq.${today}&select=user_id,pnl`),
     ])
+    const profiles = allProfiles.filter((p) => proIds.has(p.id) && !block.users.has(p.id)).slice(0, MAX_PER_RUN)
     // emails live in the auth.users mirror exposed by admin_users_view
     const usersView = await sb(`admin_users_view?select=id,email`).catch(() => [])
     const emailById = new Map((usersView || []).map((u) => [u.id, u.email]))

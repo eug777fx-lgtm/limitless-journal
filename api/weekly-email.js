@@ -1,5 +1,7 @@
-// Weekly performance report — Vercel Cron (vercel.json: "0 20 * * 6", Saturday 20:00 UTC).
-// For every approved user, summarises this week's (Mon–Sat) trades and emails a
+// Weekly performance report — Vercel Cron (vercel.json: "0 20 * * 6,0", Saturday and Sunday ~20:00 UTC).
+// Traders are split into two stable halves: half get it Saturday, half Sunday, so each
+// run stays under Resend's free plan limit of 100 emails per UTC day.
+// For every approved user in today's half, summarises this week's (Mon–Sat) trades and emails a
 // premium recap via Resend. Uses the Supabase service role to bypass RLS.
 // Window + per-user stats come from the shared api/_lib/weekly-stats.js helper
 // (same source of truth as the admin broadcast). Every send is logged.
@@ -9,6 +11,7 @@
 import { weeklyProfitableEmail, weeklyLosingEmail } from './_lib/email-templates.js'
 import { weeklyWindow, buildWeeklyStats } from './_lib/weekly-stats.js'
 import { logEmail } from './_lib/log-email.js'
+import { suppressed, weekendHalf, MAX_PER_RUN } from './_lib/email-guard.js'
 
 const SUPA_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -37,6 +40,12 @@ export default async function handler(req, res) {
     const usersView = await sb(`admin_users_view?select=id,email`).catch(() => [])
     const emailById = new Map((usersView || []).map((u) => [u.id, u.email]))
 
+    // Saturday sends half 0, Sunday half 1. ?half=0|1 forces one (manual re-run).
+    const forced = req.query?.half
+    const day = new Date().getUTCDay()
+    const half = forced === '0' || forced === '1' ? Number(forced) : day === 0 ? 1 : 0
+    const block = await suppressed()
+
     const byUser = new Map()
     for (const t of trades) {
       if (!byUser.has(t.user_id)) byUser.set(t.user_id, [])
@@ -44,9 +53,14 @@ export default async function handler(req, res) {
     }
 
     let sent = 0, failed = 0, skipped = 0
+    let attempts = 0
     for (const p of profiles) {
+      if (weekendHalf(p.id) !== half) continue
       const email = emailById.get(p.id)
       if (!email) { skipped++; await logEmail({ userId: p.id, emailType: 'weekly', status: 'skipped', error: 'no email', sentBy: 'system' }); continue }
+      if (block.users.has(p.id) || block.emails.has(email.toLowerCase())) { skipped++; continue }
+      if (attempts >= MAX_PER_RUN) { skipped++; continue }
+      attempts++
       const user = { first_name: p.first_name || p.username || '' }
       const ts = byUser.get(p.id) || []
       const stats = buildWeeklyStats(ts, range)
@@ -76,8 +90,8 @@ export default async function handler(req, res) {
       }
     }
 
-    console.log(`weekly-email ${range}: sent ${sent}, failed ${failed}, skipped ${skipped}`)
-    return res.status(200).json({ range, sent, failed, skipped })
+    console.log(`weekly-email ${range} half ${half}: sent ${sent}, failed ${failed}, skipped ${skipped}`)
+    return res.status(200).json({ range, half, sent, failed, skipped })
   } catch (e) {
     console.error('weekly-email fatal:', e.message)
     return res.status(500).json({ error: e.message })

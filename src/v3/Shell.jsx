@@ -40,7 +40,8 @@ function TopNav({ route }) {
     return () => document.removeEventListener('pointerdown', close)
   }, [menu])
   const items = [[User, 'Account and settings', 'account'], [CreditCard, 'Subscription', 'billing'], [Newspaper, 'News calendar', 'news'], [Users, 'Network', 'network']]
-  if (isAdmin) items.push([FlaskConical, 'Asia backtest', 'backtest'], [ShieldCheck, 'Admin panel', 'admin'])
+  if (isSuperAdmin) items.push([FlaskConical, 'Asia backtest', 'backtest'])
+  if (isAdmin) items.push([ShieldCheck, 'Admin panel', 'admin'])
   if (isSuperAdmin) items.push([ScrollText, 'TOS', 'tos'], [Repeat, 'TradeSync', 'copy'])
   return (
     <div className="topnav wrap">

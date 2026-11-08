@@ -12,7 +12,11 @@
   "crons": [
     {
       "path": "/api/weekly-email",
-      "schedule": "0 20 * * 6"
+      "schedule": "0 20 * * 6,0"
+    },
+    {
+      "path": "/api/daily-email",
+      "schedule": "0 0 * * *"
     }
   ]
 }

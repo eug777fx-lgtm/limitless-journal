@@ -374,7 +374,7 @@ export default function Backtest() {
         {state === 'ready' && (
           <>
             <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
-              <span className="muted" style={{ flex: 1, minWidth: 220, fontSize: 13 }}>Asia Model {MODEL_VERSION.replace('asia-', '')} · limit at 0.705 of the NY range, with the narrative. Admins only.</span>
+              <span className="muted" style={{ flex: 1, minWidth: 220, fontSize: 13 }}>Asia Model {MODEL_VERSION.replace('asia-', '')} · limit at 0.705 of the NY range, with the narrative. Only visible to you.</span>
               <Seg options={['Tonight', 'Log', 'Stats', 'Model']} value={tab} onChange={setTab} label="Section" />
               <button type="button" className="btn btn-primary" onClick={() => setDraft(blank())}><Plus size={15} /> Log session</button>
             </div>
