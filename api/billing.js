@@ -140,7 +140,7 @@ async function checkout(req, res, user, body) {
   const plan = body.plan || 'lite'
   if (plan !== 'lite') return res.status(400).json({ error: 'Pro is not available yet.' })
   const price = process.env.STRIPE_PRICE_LITE
-  if (!price) return res.status(503).json({ error: 'Payments open soon. Your journal is free until then.', code: 'billing_not_ready' })
+  if (!price || !process.env.STRIPE_SECRET_KEY) return res.status(503).json({ error: 'Payments open soon. Your journal is free until then.', code: 'billing_not_ready' })
   // While the keys are Stripe test keys, only admins can open (test) checkout,
   // so traders never land on a checkout that refuses real cards.
   if (testMode() && !isTester(user.email)) return res.status(503).json({ error: 'Payments open soon. Your journal is free until then.', code: 'billing_not_ready' })
