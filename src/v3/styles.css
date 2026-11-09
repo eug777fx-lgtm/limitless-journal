@@ -174,8 +174,17 @@ textarea.input { height: auto; padding: 14px 16px; line-height: 1.5; resize: ver
 @keyframes burst { 0% { opacity: 0; transform: translate(0, 0) scale(.4); } 25% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--tx), var(--ty)) scale(1); } }
 @keyframes ring { from { stroke-dashoffset: var(--len); } }
 
-.view { animation: viewIn .7s var(--ease) backwards; }
+/* Page change. Glass blur (backdrop-filter) switches off while any parent is fading,
+   then snaps on at the end, which reads as a sudden darkening. So parents only move,
+   and each glass panel fades on its own, keeping its blur the whole time. */
+@keyframes viewMove { from { transform: translateY(14px); } to { transform: none; } }
+@keyframes riseMove { from { transform: translateY(18px); } to { transform: none; } }
+.view > main { animation: viewMove .7s var(--ease) backwards; }
+.view > main > *:not(.glass):not(:has(.glass)) { animation: fade .6s var(--ease) backwards; }
+.view > main .glass:not(.modal):not(.toast):not(.float) { animation: fade .6s var(--ease) backwards; animation-delay: calc(var(--i, 0) * 70ms + 40ms); }
 .stagger > * { animation: rise .8s var(--ease) both; animation-delay: calc(var(--i, 0) * 70ms + 120ms); }
+.stagger > *:has(.glass):not(.glass) { animation-name: riseMove; }
+.view > main .stagger > .glass { animation: rise .8s var(--ease) both; animation-delay: calc(var(--i, 0) * 70ms + 120ms); }
 .float { animation: float 7s ease-in-out infinite; }
 
 /* ── Overlays ──────────────────────────────────────── */
