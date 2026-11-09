@@ -133,6 +133,11 @@ textarea.input { height: auto; padding: 14px 16px; line-height: 1.5; resize: ver
 .fab { width: 64px; height: 64px; border-radius: 50%; border: none; background: #FFFFFF; color: #000; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 0 30px rgba(255,255,255,0.4), 0 16px 30px rgba(0,0,0,0.6); transition: transform .4s var(--spring); }
 .fab:active { transform: scale(.9); }
 .mobilehead { display: none; }
+/* Persistent chrome (outside the page): same spots as before, never re-created on tab switch */
+.chrome .topnav { position: fixed; left: 0; right: 0; top: calc(env(safe-area-inset-top, 0px) + 18px); margin: 0; pointer-events: none; }
+.chrome .topnav > * { pointer-events: auto; }
+.chrome .mobilehead { position: absolute; top: 0; left: 0; right: 0; z-index: 50; }
+.chrome-space { height: 56px; }
 
 /* ── Layout ────────────────────────────────────────── */
 .wrap { max-width: 1280px; margin: 0 auto; padding-left: max(28px, env(safe-area-inset-left, 0px)); padding-right: max(28px, env(safe-area-inset-right, 0px)); }
@@ -206,6 +211,7 @@ textarea.input { height: auto; padding: 14px 16px; line-height: 1.5; resize: ver
   .app .topnav { display: none; }
   .app .tabbar { display: flex; }
   .app .mobilehead { display: flex; }
+  .app .chrome-space { height: calc(env(safe-area-inset-top, 0px) + 62px); }
   .app .backdrop .word { top: 80px !important; }
   .app main { padding-bottom: 120px; }
   .panel { padding: 20px; }

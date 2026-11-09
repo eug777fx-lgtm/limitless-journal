@@ -5,7 +5,7 @@ import { Toaster } from 'react-hot-toast'
 import css from './styles.css?inline'
 import { V3Provider, useStore, useRoute } from './store.jsx'
 import { ToastHost, useGlassLight } from './ui.jsx'
-import AppShell from './Shell.jsx'
+import AppShell, { Chrome } from './Shell.jsx'
 import Dashboard from './Dashboard.jsx'
 import Journal from './Journal.jsx'
 import Analytics from './Analytics.jsx'
@@ -80,6 +80,7 @@ function Router() {
   const C = { dashboard: Dashboard, journal: Journal, analytics: Analytics, calendar: Calendar, news: News, billing: Billing, account: Account, backtest: AdminBacktest }[route]
   return (
     <>
+      <Chrome route={route} />
       <React.Fragment key={route}>{C ? <C /> : LEGACY[route] ? <Legacy route={route} /> : <Dashboard />}</React.Fragment>
       <LogTrade />
       <ShareCard />

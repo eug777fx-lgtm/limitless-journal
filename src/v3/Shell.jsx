@@ -83,21 +83,20 @@ const TABS = [
   { id: 'account', label: 'More', Icon: User },
 ]
 
-export default function AppShell({ route, word, title, children }) {
+const TITLES = { dashboard: 'Dashboard', journal: 'Journal', analytics: 'Analytics', calendar: 'Calendar', news: 'News', billing: 'Subscription', account: 'Account', backtest: 'Asia backtest', plan: 'Trading plan', network: 'Network', admin: 'Admin', tos: 'TOS', copy: 'TradeSync', risk: 'Risk' }
+
+// Nav, phone header and tab bar live OUTSIDE the page, so switching tabs never
+// re-creates them: the logo and the glass don't flash on every page change.
+export function Chrome({ route }) {
   const { openLog, user } = useStore()
   return (
-    <div className="stage app view" key={route}>
-      <Backdrop word={word} top={104} size={240} orbs={[{ left: '5%', top: 700, width: 360, height: 360 }, { right: '4%', top: 1100, width: 420, height: 420 }]} />
+    <div className="app chrome">
       <TopNav route={route} />
       <header className="mobilehead wrap" style={{ alignItems: 'center', justifyContent: 'space-between', paddingTop: 'calc(env(safe-area-inset-top, 0px) + 18px)' }}>
         <a href="#dashboard" className="logo-dot glass logo-chip" aria-label="Dashboard"><Logo /></a>
-        <span className="display" style={{ fontWeight: 600, fontSize: 15 }}>{title}</span>
+        <span className="display" style={{ fontWeight: 600, fontSize: 15 }}>{TITLES[route] || 'LIMITLESS'}</span>
         <a href="#account" className="logo-dot glass display" aria-label="Account" style={{ fontSize: 12, fontWeight: 600 }}>{initials(user.name)}</a>
       </header>
-      <main>
-        <div aria-hidden="true" style={{ height: `calc(${wordSize(word, 240)} * 0.82)` }} />
-        {children}
-      </main>
       <div className="tabbar">
         <nav aria-label="Main" className="glass">
           {TABS.map(({ id, label, Icon }) => (
@@ -106,6 +105,19 @@ export default function AppShell({ route, word, title, children }) {
         </nav>
         <button type="button" className="fab" aria-label="Log trade" onClick={openLog}><Plus size={24} strokeWidth={2.6} /></button>
       </div>
+    </div>
+  )
+}
+
+export default function AppShell({ route, word, children }) {
+  return (
+    <div className="stage app view" key={route}>
+      <Backdrop word={word} top={104} size={240} orbs={[{ left: '5%', top: 700, width: 360, height: 360 }, { right: '4%', top: 1100, width: 420, height: 420 }]} />
+      <div className="chrome-space" aria-hidden="true" />
+      <main>
+        <div aria-hidden="true" style={{ height: `calc(${wordSize(word, 240)} * 0.82)` }} />
+        {children}
+      </main>
     </div>
   )
 }
