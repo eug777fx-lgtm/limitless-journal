@@ -101,9 +101,12 @@ export function Modal({ open, onClose, label, children, maxWidth = 780 }) {
     if (!open) return
     const onKey = (e) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', onKey)
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev }
+    // Lock the page behind the sheet. iOS ignores overflow:hidden on body, so pin the body in place
+    // at its current scroll position and put it back exactly there on close.
+    const b = document.body, y = window.scrollY
+    const prev = { overflow: b.style.overflow, position: b.style.position, top: b.style.top, left: b.style.left, right: b.style.right, width: b.style.width }
+    Object.assign(b.style, { overflow: 'hidden', position: 'fixed', top: `-${y}px`, left: '0', right: '0', width: '100%' })
+    return () => { document.removeEventListener('keydown', onKey); Object.assign(b.style, prev); window.scrollTo(0, y) }
   }, [open, onClose])
   if (!open) return null
   return (
