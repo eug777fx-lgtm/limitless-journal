@@ -17,6 +17,8 @@
 // Optional: STRIPE_PRICE_PRO, APP_URL, STRIPE_AUTOMATIC_TAX=true, STRIPE_PORTAL_CONFIG
 
 import { stripe, verifyStripeSignature, planForPrice, periodEnd, ACCESS_STATUSES } from './_lib/stripe.js'
+import { paidWelcomeEmail } from './_lib/email-templates.js'
+import { logEmail } from './_lib/log-email.js'
 
 // Raw body is required for the webhook signature, so parse JSON ourselves.
 export const config = { api: { bodyParser: false } }
@@ -197,6 +199,30 @@ async function sync(req, res, user) {
   return res.status(200).json({ subscription: updated || row })
 }
 
+// Welcome email after the first successful checkout. Sent once per user: Stripe can
+// deliver the same event more than once, so email_log is checked first. Never throws.
+async function sendPaidWelcome(userId, email, plan) {
+  try {
+    const key = process.env.RESEND_API_KEY
+    if (!key || !userId || !email) return
+    const done = await sb(`email_log?user_id=eq.${encodeURIComponent(userId)}&email_type=eq.paid_welcome&status=eq.sent&select=id&limit=1`).catch(() => [])
+    if (done?.length) return
+    const prof = (await sb(`profiles?id=eq.${encodeURIComponent(userId)}&select=first_name,username&limit=1`).catch(() => []))?.[0] || {}
+    const { subject, html } = paidWelcomeEmail({ first_name: prof.first_name || prof.username || '', plan })
+    const from = process.env.APPROVAL_FROM_EMAIL || 'LIMITLESS <noreply@limitless-journal.com>'
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      body: JSON.stringify({ from, to: email, reply_to: 'support@limitless-journal.com', subject, html }),
+    })
+    if (!r.ok) {
+      await logEmail({ userId, recipientEmail: email, emailType: 'paid_welcome', status: 'failed', error: await r.text().catch(() => 'send failed'), sentBy: 'system' })
+      return
+    }
+    await logEmail({ userId, recipientEmail: email, emailType: 'paid_welcome', status: 'sent', resendId: (await r.json().catch(() => ({}))).id || null, sentBy: 'system' })
+  } catch (e) { console.warn('billing: welcome email failed', e.message) }
+}
+
 async function webhook(req, res, raw) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET
   if (!secret) {
@@ -214,7 +240,9 @@ async function webhook(req, res, raw) {
     switch (event.type) {
       case 'checkout.session.completed':
         if (obj.mode === 'subscription' && obj.subscription) {
-          await syncSubscription(typeof obj.subscription === 'string' ? obj.subscription : obj.subscription.id, obj.client_reference_id || obj.metadata?.user_id)
+          const synced = await syncSubscription(typeof obj.subscription === 'string' ? obj.subscription : obj.subscription.id, obj.client_reference_id || obj.metadata?.user_id)
+          const uid = synced?.user_id || obj.client_reference_id || obj.metadata?.user_id
+          await sendPaidWelcome(uid, obj.customer_details?.email || obj.customer_email, synced?.plan || obj.metadata?.plan)
         }
         break
       case 'customer.subscription.created':

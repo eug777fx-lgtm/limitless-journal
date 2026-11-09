@@ -22,7 +22,7 @@ export const PLANS = {
       'Trading plan with AI checklist',
       'Economic news calendar',
       'CSV import and export',
-      'Daily and weekly review emails',
+      'Weekly recap email',
     ],
   },
   pro: {
@@ -33,6 +33,7 @@ export const PLANS = {
     // Shown blurred until Pro launches.
     features: [
       'Everything in Lite',
+      'Daily journal reminders by email',
       'Prop firm rule engines and drawdown gauges',
       'Payout tracker and scaling planner',
       'Multi account command center',

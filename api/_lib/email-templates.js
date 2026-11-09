@@ -310,3 +310,44 @@ export function weeklyLosingEmail(user = {}, stats = {}) {
   const name = user.first_name || 'trader'
   return { subject: `Tough week — let's review, ${name}`, html: weeklyBody(name, stats, 'loss') }
 }
+
+// ── Template 8 — paidWelcomeEmail(user) → right after a trader pays ───────────
+// Black and white only, no dashes, no price. Sent once per user from the Stripe webhook.
+export function paidWelcomeEmail(user = {}) {
+  const name = user.first_name || 'trader'
+  const plan = user.plan === 'pro' ? 'Pro' : 'Lite'
+  const step = (n, title, text) => `<tr>
+      <td width="40" valign="top" ${cd('padding:14px 0 14px 18px;')}>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" ${cd()}><tr>
+          <td align="center" width="28" height="28" ${wh('border-radius:14px;width:28px;height:28px;color:#000000;font-size:13px;font-weight:700;font-family:Arial,sans-serif;')}>${n}</td>
+        </tr></table>
+      </td>
+      <td valign="top" ${cd('padding:14px 18px 14px 12px;')}>
+        <p style="margin:0;color:#ffffff;font-size:15px;font-weight:700;line-height:1.4;">${title}</p>
+        <p style="margin:4px 0 0;color:#8a8a8a;font-size:13px;line-height:1.55;">${text}</p>
+      </td>
+    </tr>`
+  const inner = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ${dk()}>
+      <tr><td align="center" ${dk()}>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" ${dk()}><tr>
+          <td ${dk('padding:7px 16px;border:1px solid #2a2a2a;border-radius:999px;color:#ffffff;font-size:11px;font-weight:700;letter-spacing:0.18em;')}>${plan.toUpperCase()} MEMBER</td>
+        </tr></table>
+        <h1 style="margin:22px 0 10px;color:#ffffff;font-size:28px;font-weight:700;line-height:1.2;">Welcome to LIMITLESS, ${esc(name)}.</h1>
+        <p style="margin:0 auto;max-width:440px;color:#9a9a9a;font-size:16px;line-height:1.6;">Your ${plan} membership is active. From today, every trade you take gets remembered: the why, how you felt, and what it cost you.</p>
+      </td></tr>
+    </table>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ${dk('margin-top:28px;')}>
+      <tr><td ${dk('padding:0 0 10px;')}><p style="margin:0;color:#666666;font-size:11px;font-weight:700;letter-spacing:0.2em;">START HERE</p></td></tr>
+      <tr><td ${cd('border:1px solid #1f1f1f;border-radius:12px;')}>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ${cd('border-radius:12px;')}>
+          ${step(1, 'Log your first trade', 'The number first, then the why. It takes seconds.')}
+          ${step(2, 'Write your trading plan', 'Your rules become a checklist, so every trade is checked against them.')}
+          ${step(3, 'Put LIMITLESS on your phone', 'Open the app in your phone browser, tap Share, then Add to Home Screen.')}
+        </table>
+      </td></tr>
+    </table>
+    ${ctaButton('Open your journal', APP_URL)}
+    <p style="margin:26px 0 0;color:#666666;font-size:12px;line-height:1.7;text-align:center;">Your plan, invoices and card are in Account, Billing.<br>Questions? Just reply to this email.</p>`
+  return { subject: `Welcome to LIMITLESS, ${name}. Your membership is active.`, html: page(inner) }
+}

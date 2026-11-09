@@ -1,7 +1,7 @@
 /* LIMITLESS service worker — minimal app-shell cache for installability + offline shell.
    Network-first: always try the network, fall back to cache only when offline. */
-const CACHE = 'limitless-v1'
-const SHELL = ['/', '/index.html', '/manifest.json', '/LIMITLESS LOGO FAVICON.png']
+const CACHE = 'limitless-v2'
+const SHELL = ['/', '/index.html', '/manifest.json', '/favicon-48.png']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).catch(() => {}))
