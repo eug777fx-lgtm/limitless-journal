@@ -13,7 +13,7 @@ import {
   Bell, Megaphone, Link2, Download, ChevronDown, RefreshCw, LogOut,
   Mail, Ban, Flag, Activity, MessageSquare, Save, Send, Eye, MousePointerClick, ImageOff,
   Globe, Video, Flame, Play, Clock, Award, Heart,
-  Trophy, FileText, ExternalLink, Calendar, Brain, Crown, CreditCard,
+  Trophy, FileText, ExternalLink, Calendar, Brain, Crown, CreditCard, ArrowRight, EyeOff,
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 // Always-loaded Network primitives (a hook can never be lazy'd).
@@ -905,6 +905,7 @@ function AuthPage({ onAuth }) {
   const [inviteValid, setInviteValid] = useState(null) // null | true | false
   // Beta-closed: null | 'instant' (session created) | 'confirm' (email confirm needed)
   const [waitlisted, setWaitlisted] = useState(null)
+  const [showPw, setShowPw] = useState(false)
 
   // Detect ?invite=XXX in URL and validate it
   useEffect(() => {
@@ -997,7 +998,7 @@ function AuthPage({ onAuth }) {
             setWaitlisted('confirm')
             return
           }
-          setMessage('Account created — check your email to confirm, then log in.')
+          setMessage('Account created. Check your email to confirm, then sign in.')
           setTab('login')
         }
       }
@@ -1020,272 +1021,190 @@ function AuthPage({ onAuth }) {
     )
   }
 
-  const switchTab = (t) => { setTab(t); setError(''); setMessage('') }
+  const switchTab = (t) => { setTab(t); setError(''); setMessage(''); setShowPw(false) }
+  const isLogin = tab === 'login'
 
-  const tabStyle = (active) => ({
-    flex: 1,
-    padding: '10px',
-    background: active ? 'rgba(255,255,255,0.06)' : 'transparent',
-    border: 'none',
-    borderBottom: active ? '1px solid rgba(255,255,255,0.5)' : '1px solid transparent',
-    color: active ? '#fff' : 'rgba(255,255,255,0.5)',
-    fontSize: '13px',
-    fontWeight: active ? '600' : '400',
-    cursor: 'pointer',
-    fontFamily: 'inherit',
-    transition: 'all 0.15s',
-    borderRadius: '8px 8px 0 0',
-  })
+  const Notice = ({ kind, children }) => (
+    <div className={'la-note ' + (kind === 'err' ? 'la-note-err' : kind === 'ok' ? 'la-note-ok' : '')} role={kind === 'err' ? 'alert' : 'status'}>{children}</div>
+  )
 
   return (
-    <div style={{
-      display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
-      width: '100vw', height: '100vh',
-      background: '#000', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-      position: 'relative',
-      overflowY: 'auto',
-    }}>
-      <style dangerouslySetInnerHTML={{ __html: ANIM_CSS }} />
+    <div className="la-root">
+      <style dangerouslySetInnerHTML={{ __html: ANIM_CSS + AUTH_CSS }} />
       <BootDone />
-      <AuroraBackground theme="white" />
+      <div className="la-bg" aria-hidden="true"><div className="la-beam" /><div className="la-grid" /></div>
 
-      <div className="auth-outer" style={{ position: 'relative', zIndex: 2, width: tab === 'signup' ? '440px' : '380px', transition: 'width 0.2s', margin: '40px auto' }}>
-        {/* Logo */}
-        <BrandMark />
+      <a href="https://limitless-journal.com" className="la-home" aria-label="LIMITLESS home">
+        <span className="la-chip"><img src="/logo2.png" alt="" /></span>
+        <span className="la-word">LIMITLESS</span>
+      </a>
 
-        {/* Card */}
-        <div style={{ ...card, padding: '0', overflow: 'hidden' }}>
+      <main className="la-wrap auth-outer">
+        {/* Left: what you get (desktop only) */}
+        <section className="la-pitch" aria-hidden="true">
+          <span className="la-eyebrow">The trading journal</span>
+          <h1 className="la-h1">Trade with<br /><span>a memory.</span></h1>
+          <p className="la-lead">Every trade, the why behind it, and what it cost you. In one place, on every device.</p>
+          <ul className="la-list">
+            {['Log a trade in seconds', 'Insights that find your leaks', 'P&L calendar and trading plan'].map((t) => (
+              <li key={t}><span className="la-tick"><Check size={12} strokeWidth={3} /></span>{t}</li>
+            ))}
+          </ul>
+        </section>
+
+        {/* Right: the form */}
+        <section className="la-card" aria-label={view === 'forgot' ? 'Reset password' : isLogin ? 'Sign in' : 'Create account'}>
           {view === 'forgot' ? (
-            <div className="auth-form-inner" style={{ padding: '28px 28px 24px' }}>
-              <div style={{ marginBottom: '18px' }}>
-                <div style={{ fontSize: '17px', fontWeight: '700', letterSpacing: '-0.3px', color: '#fff', marginBottom: '6px' }}>Reset Password</div>
-                <div style={{ fontSize: '12px', color: '#777', lineHeight: 1.5 }}>Enter your email and we'll send you a reset link.</div>
+            <>
+              <h2 className="la-h2">Reset your password</h2>
+              <p className="la-sub">Enter your email and we'll send you a reset link.</p>
+              {message && <Notice kind="ok">{message}</Notice>}
+              {error && <Notice kind="err">{error}</Notice>}
+              <label className="la-field"><span>Email</span>
+                <input className="la-input" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={onForgotKey} autoComplete="email" autoFocus />
+              </label>
+              <button type="button" className="la-btn" onClick={submitForgot} disabled={loading}>{loading ? 'Sending…' : 'Send reset link'}{!loading && <ArrowRight size={16} />}</button>
+              <p className="la-switch"><button type="button" onClick={goAuth}>Back to sign in</button></p>
+            </>
+          ) : (
+            <>
+              <div className="la-seg" role="tablist" aria-label="Account">
+                <span className="la-seg-pill" style={{ transform: isLogin ? 'translateX(0)' : 'translateX(100%)' }} />
+                <button type="button" role="tab" aria-selected={isLogin} className={isLogin ? 'on' : ''} onClick={() => switchTab('login')}>Sign in</button>
+                <button type="button" role="tab" aria-selected={!isLogin} className={!isLogin ? 'on' : ''} onClick={() => switchTab('signup')}>Create account</button>
               </div>
 
-              {message && (
-                <div style={{ background: 'rgba(170,255,160,0.05)', border: '1px solid rgba(170,255,160,0.15)', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: '#aaffa0', marginBottom: '18px', lineHeight: 1.5 }}>
-                  {message}
-                </div>
-              )}
-              {error && (
-                <div style={{ background: 'rgba(255,128,128,0.05)', border: '1px solid rgba(255,128,128,0.15)', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: '#ff8080', marginBottom: '18px', lineHeight: 1.5 }}>
-                  {error}
-                </div>
+              <h2 className="la-h2">{isLogin ? 'Welcome back' : 'Create your account'}</h2>
+              <p className="la-sub">{isLogin ? 'Sign in to your journal.' : 'Start journaling in under a minute.'}</p>
+
+              {message && <Notice kind="ok">{message}</Notice>}
+              {error && <Notice kind="err">{error}</Notice>}
+
+              {/* Came from the site's checkout: say what happens next */}
+              {hasPendingPlan() && (
+                <Notice>
+                  <b>LIMITLESS Lite, $15 a month</b><br />
+                  {isLogin ? 'Sign in and you go straight to secure checkout by Stripe.' : 'Step 1 of 2: create your account. Next is secure checkout by Stripe.'}
+                </Notice>
               )}
 
-              <div className="auth-field" style={{ marginBottom: '18px' }}>
-                <div style={{ ...lbl, marginBottom: '7px', color: '#999' }}>Email</div>
-                <input
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  onKeyDown={onForgotKey}
-                  style={inp}
-                  autoComplete="email"
-                />
-              </div>
+              {!isLogin && inviteCode && inviteValid !== null && (
+                <Notice kind={inviteValid ? 'ok' : 'err'}>{inviteValid ? `Invite ${inviteCode} applied. You're approved on signup.` : `Invite ${inviteCode} is invalid or already used.`}</Notice>
+              )}
 
-              <button
-                style={{ ...btn, width: '100%', padding: '12px', opacity: loading ? 0.6 : 1, marginBottom: '14px' }}
-                onClick={submitForgot}
-                disabled={loading}
-              >
-                {loading ? '...' : 'Send Reset Link'}
+              {!isLogin && (
+                <>
+                  <div className="la-row2">
+                    <label className="la-field"><span>First name</span>
+                      <input className="la-input" type="text" placeholder="Johnny" value={firstName} onChange={e => setFirstName(e.target.value)} onKeyDown={onKey} autoComplete="given-name" />
+                    </label>
+                    <label className="la-field"><span>Last name</span>
+                      <input className="la-input" type="text" placeholder="Smith" value={lastName} onChange={e => setLastName(e.target.value)} onKeyDown={onKey} autoComplete="family-name" />
+                    </label>
+                  </div>
+                  <label className="la-field"><span>Phone <em>optional</em></span>
+                    <div className="la-phone">
+                      <select aria-label="Country code" value={country.name} onChange={e => setCountry(COUNTRIES.find(c => c.name === e.target.value))}>
+                        {COUNTRIES.map(c => <option key={c.name} value={c.name}>{c.name} {c.code}</option>)}
+                      </select>
+                      <span className="la-cc">{country.code}</span>
+                      <input type="tel" placeholder="555 1234" value={phoneNum} onChange={e => setPhoneNum(e.target.value)} onKeyDown={onKey} autoComplete="tel-national" />
+                    </div>
+                  </label>
+                </>
+              )}
+
+              <label className="la-field"><span>Email</span>
+                <input className="la-input" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={onKey} autoComplete="email" />
+              </label>
+
+              <label className="la-field"><span>Password{isLogin && <button type="button" className="la-forgot" onClick={goForgot}>Forgot password?</button>}</span>
+                <div className="la-pw">
+                  <input className="la-input" type={showPw ? 'text' : 'password'} placeholder={isLogin ? 'Your password' : 'At least 6 characters'} value={password} onChange={e => setPassword(e.target.value)} onKeyDown={onKey} autoComplete={isLogin ? 'current-password' : 'new-password'} />
+                  <button type="button" className="la-eye" aria-label={showPw ? 'Hide password' : 'Show password'} onClick={() => setShowPw(!showPw)}>{showPw ? <EyeOff size={17} /> : <Eye size={17} />}</button>
+                </div>
+              </label>
+
+              <button type="button" className="la-btn" onClick={submit} disabled={loading}>
+                {loading ? (isLogin ? 'Signing in…' : 'Creating account…') : isLogin ? 'Sign in' : 'Create account'}{!loading && <ArrowRight size={16} />}
               </button>
 
-              <div style={{ textAlign: 'center' }}>
-                <button
-                  type="button"
-                  onClick={goAuth}
-                  style={{ background: 'transparent', border: 'none', color: '#666', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', padding: '4px 0', letterSpacing: '0.02em', transition: 'color 0.15s' }}
-                  onMouseEnter={e => { e.currentTarget.style.color = '#aaa' }}
-                  onMouseLeave={e => { e.currentTarget.style.color = '#666' }}
-                >
-                  ← Back to Login
-                </button>
-              </div>
-            </div>
-          ) : (
-          <>
-          {/* Tabs */}
-          <div className="auth-tabs" style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-            <button style={tabStyle(tab === 'login')}  onClick={() => switchTab('login')}>Login</button>
-            <button style={tabStyle(tab === 'signup')} onClick={() => switchTab('signup')}>Sign Up</button>
-          </div>
-
-          {/* Form */}
-          <div className="auth-form-inner" style={{ padding: '28px 28px 24px' }}>
-            {message && (
-              <div style={{ background: 'rgba(170,255,160,0.05)', border: '1px solid rgba(170,255,160,0.15)', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: '#aaffa0', marginBottom: '18px', lineHeight: 1.5 }}>
-                {message}
-              </div>
-            )}
-            {error && (
-              <div style={{ background: 'rgba(255,128,128,0.05)', border: '1px solid rgba(255,128,128,0.15)', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: '#ff8080', marginBottom: '18px', lineHeight: 1.5 }}>
-                {error}
-              </div>
-            )}
-
-            {/* Came from the site's checkout: say what happens next */}
-            {hasPendingPlan() && (
-              <div style={{ border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '12px 14px', marginBottom: '16px', fontSize: '12px', color: '#bbb', lineHeight: 1.55 }}>
-                <div style={{ color: '#fff', fontWeight: 600, fontSize: '13px', marginBottom: '4px' }}>LIMITLESS Lite · $15 a month</div>
-                {tab === 'signup'
-                  ? 'Step 1 of 2: create your account. Next you go to secure checkout by Stripe.'
-                  : 'Log in and you go straight to secure checkout by Stripe.'}
-              </div>
-            )}
-
-            {/* Invite indicator (signup) */}
-            {tab === 'signup' && inviteCode && inviteValid !== null && (
-              <div style={{
-                background: inviteValid ? 'rgba(170,255,160,0.05)' : 'rgba(255,217,102,0.05)',
-                border: `1px solid ${inviteValid ? 'rgba(170,255,160,0.20)' : 'rgba(255,217,102,0.20)'}`,
-                borderRadius: '8px', padding: '10px 14px', marginBottom: '14px',
-                fontSize: '12px', color: inviteValid ? '#aaffa0' : '#ffd966',
-                lineHeight: 1.5,
-              }}>
-                {inviteValid
-                  ? `🎟️ Invite code ${inviteCode} — auto-approved on signup`
-                  : `Invite code ${inviteCode} is invalid or already used`}
-              </div>
-            )}
-
-            {/* Sign Up extra fields */}
-            {tab === 'signup' && (
-              <>
-                {/* First + Last name */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '14px' }}>
-                  <div>
-                    <div style={{ ...lbl, marginBottom: '7px', color: '#999' }}>First Name</div>
-                    <input
-                      type="text"
-                      placeholder="Johnny"
-                      value={firstName}
-                      onChange={e => setFirstName(e.target.value)}
-                      onKeyDown={onKey}
-                      style={inp}
-                      autoComplete="given-name"
-                    />
-                  </div>
-                  <div>
-                    <div style={{ ...lbl, marginBottom: '7px', color: '#999' }}>Last Name</div>
-                    <input
-                      type="text"
-                      placeholder="Smith"
-                      value={lastName}
-                      onChange={e => setLastName(e.target.value)}
-                      onKeyDown={onKey}
-                      style={inp}
-                      autoComplete="family-name"
-                    />
-                  </div>
-                </div>
-
-                {/* Phone with country selector */}
-                <div style={{ marginBottom: '14px' }}>
-                  <div style={{ ...lbl, marginBottom: '7px', color: '#999' }}>Phone Number</div>
-                  <div style={{ display: 'flex', border: '1px solid var(--inp-border)', borderRadius: '12px', overflow: 'hidden', background: 'var(--inp-bg)' }}>
-                    <select
-                      value={country.name}
-                      onChange={e => setCountry(COUNTRIES.find(c => c.name === e.target.value))}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        borderRight: '1px solid var(--inp-border)',
-                        color: '#ccc',
-                        fontSize: '13px',
-                        padding: '10px 8px 10px 10px',
-                        outline: 'none',
-                        cursor: 'pointer',
-                        flexShrink: 0,
-                        width: '148px',
-                        fontFamily: 'inherit',
-                        appearance: 'none',
-                        WebkitAppearance: 'none',
-                      }}
-                    >
-                      {COUNTRIES.map(c => (
-                        <option key={c.name} value={c.name}>
-                          {c.name} {c.code}
-                        </option>
-                      ))}
-                    </select>
-                    <div style={{ display: 'flex', alignItems: 'center', padding: '0 10px', color: '#555', fontSize: '13px', flexShrink: 0, borderRight: '1px solid #1c1c1c', whiteSpace: 'nowrap' }}>
-                      {country.code}
-                    </div>
-                    <input
-                      type="tel"
-                      placeholder="555 1234"
-                      value={phoneNum}
-                      onChange={e => setPhoneNum(e.target.value)}
-                      onKeyDown={onKey}
-                      style={{ ...inp, border: 'none', borderRadius: 0, flex: 1, width: 'auto' }}
-                      autoComplete="tel-national"
-                    />
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* Email */}
-            <div className="auth-field" style={{ marginBottom: '14px' }}>
-              <div style={{ ...lbl, marginBottom: '7px', color: '#999' }}>Email</div>
-              <input
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                onKeyDown={onKey}
-                style={inp}
-                autoComplete="email"
-              />
-            </div>
-
-            {/* Password */}
-            <div className="auth-pw" style={{ marginBottom: tab === 'login' ? '8px' : '22px' }}>
-              <div style={{ ...lbl, marginBottom: '7px', color: '#999' }}>Password</div>
-              <input
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                onKeyDown={onKey}
-                style={inp}
-                autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
-              />
-            </div>
-
-            {tab === 'login' && (
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '18px' }}>
-                <button
-                  type="button"
-                  onClick={goForgot}
-                  style={{ background: 'transparent', border: 'none', color: '#666', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', padding: '2px 0', letterSpacing: '0.02em', transition: 'color 0.15s' }}
-                  onMouseEnter={e => { e.currentTarget.style.color = '#aaa' }}
-                  onMouseLeave={e => { e.currentTarget.style.color = '#666' }}
-                >
-                  Forgot Password?
-                </button>
-              </div>
-            )}
-
-            <button
-              style={{ ...btn, width: '100%', padding: '12px', opacity: loading ? 0.6 : 1 }}
-              onClick={submit}
-              disabled={loading}
-            >
-              {loading ? '...' : tab === 'login' ? 'Log In' : 'Create Account'}
-            </button>
-          </div>
-          </>
+              <p className="la-switch">
+                {isLogin ? <>New to LIMITLESS? <button type="button" onClick={() => switchTab('signup')}>Create an account</button></> : <>Already have an account? <button type="button" onClick={() => switchTab('login')}>Sign in</button></>}
+              </p>
+              {!isLogin && <p className="la-legal">By creating an account you agree to the <a href="https://limitless-journal.com/terms" target="_blank" rel="noreferrer">Terms</a> and <a href="https://limitless-journal.com/privacy" target="_blank" rel="noreferrer">Privacy Policy</a>.</p>}
+            </>
           )}
-        </div>
-      </div>
+        </section>
+      </main>
     </div>
   )
 }
+
+const AUTH_CSS = `
+.la-root { position: fixed; inset: 0; overflow-y: auto; background: #000; color: #fff; text-align: left; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; -webkit-font-smoothing: antialiased; }
+.la-bg { position: fixed; inset: 0; pointer-events: none; }
+.la-beam { position: absolute; inset: 0; background: radial-gradient(70% 50% at 50% -10%, rgba(255,255,255,.16), rgba(255,255,255,.03) 55%, transparent 75%); }
+.la-grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px); background-size: 56px 56px; -webkit-mask-image: radial-gradient(80% 60% at 50% 30%, #000 20%, transparent 80%); mask-image: radial-gradient(80% 60% at 50% 30%, #000 20%, transparent 80%); }
+.la-home { position: absolute; z-index: 3; top: calc(env(safe-area-inset-top, 0px) + 22px); left: 24px; display: flex; align-items: center; gap: 12px; text-decoration: none; }
+.la-chip { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: linear-gradient(160deg, rgba(255,255,255,.24), rgba(255,255,255,.08)); box-shadow: inset 0 1px 0 rgba(255,255,255,.4), inset 0 0 0 1px rgba(255,255,255,.14); }
+.la-chip img { width: 22px; display: block; }
+.la-word { font-family: 'Poppins', 'Inter', sans-serif; font-weight: 600; font-size: 12px; letter-spacing: .32em; color: rgba(255,255,255,.85); }
+.la-wrap { position: relative; z-index: 2; min-height: 100%; max-width: 1080px; margin: 0 auto; padding: 110px 24px 48px; display: grid; grid-template-columns: 1fr 440px; gap: 72px; align-items: center; }
+.la-eyebrow { display: block; font-size: 12px; font-weight: 600; letter-spacing: .24em; text-transform: uppercase; color: rgba(255,255,255,.5); margin-bottom: 20px; }
+.la-root .la-h1 { text-align: left; margin: 0; font-family: 'Poppins', 'Inter', sans-serif; font-weight: 600; font-size: 64px; line-height: 1; letter-spacing: -.045em; color: #fff; }
+.la-h1 span { color: rgba(255,255,255,.45); }
+.la-root .la-lead { text-align: left; margin: 22px 0 0; max-width: 420px; font-size: 17px; line-height: 1.55; color: rgba(255,255,255,.6); }
+.la-list { list-style: none; margin: 30px 0 0; padding: 0; display: grid; gap: 14px; }
+.la-list li { display: flex; align-items: center; gap: 12px; font-size: 15px; font-weight: 500; color: rgba(255,255,255,.85); }
+.la-tick { width: 24px; height: 24px; border-radius: 50%; background: #fff; color: #000; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 18px rgba(255,255,255,.3); flex-shrink: 0; }
+.la-card { position: relative; padding: 30px 30px 26px; border-radius: 28px; background: linear-gradient(160deg, rgba(255,255,255,.085), rgba(255,255,255,.025)); box-shadow: inset 0 1px 0 rgba(255,255,255,.14), inset 0 0 0 1px rgba(255,255,255,.08), 0 40px 100px rgba(0,0,0,.6); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); }
+.la-seg { position: relative; display: grid; grid-template-columns: 1fr 1fr; padding: 4px; border-radius: 999px; background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px rgba(255,255,255,.07); margin-bottom: 26px; }
+.la-seg-pill { position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc(50% - 4px); border-radius: 999px; background: #fff; box-shadow: 0 4px 16px rgba(0,0,0,.35); transition: transform .28s cubic-bezier(.2,.8,.2,1); }
+.la-seg button { position: relative; z-index: 1; height: 40px; border: 0; background: none; border-radius: 999px; font: 600 14px 'Inter', sans-serif; color: rgba(255,255,255,.6); cursor: pointer; transition: color .2s; }
+.la-seg button.on { color: #000; }
+.la-root .la-h2 { margin: 0; font-family: 'Poppins', 'Inter', sans-serif; font-weight: 600; font-size: 26px; letter-spacing: -.03em; color: #fff; -webkit-text-fill-color: #fff; background: none; text-align: left; }
+.la-root .la-sub { text-align: left; }
+.la-sub { margin: 6px 0 22px; font-size: 14px; color: rgba(255,255,255,.55); }
+.la-note { margin: 0 0 16px; padding: 12px 14px; border-radius: 14px; font-size: 13px; line-height: 1.5; color: rgba(255,255,255,.75); background: rgba(255,255,255,.05); box-shadow: inset 0 0 0 1px rgba(255,255,255,.1); }
+.la-note b { color: #fff; font-weight: 600; }
+.la-note-ok { color: #c9f5c2; background: rgba(170,255,160,.06); box-shadow: inset 0 0 0 1px rgba(170,255,160,.2); }
+.la-note-err { color: #ffb4b4; background: rgba(255,120,120,.07); box-shadow: inset 0 0 0 1px rgba(255,120,120,.22); }
+.la-row2 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 12px; }
+.la-field { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.la-field > span { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; font-weight: 500; color: rgba(255,255,255,.75); }
+.la-field > span em { font-style: normal; font-weight: 400; color: rgba(255,255,255,.35); margin-left: 6px; margin-right: auto; }
+.la-input, .la-phone { width: 100%; height: 50px; border-radius: 14px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); color: #fff; font: 400 15px 'Inter', sans-serif; transition: border-color .15s, background .15s, box-shadow .15s; box-sizing: border-box; }
+.la-input { padding: 0 16px; outline: none; min-width: 0; }
+.la-card, .la-field { min-width: 0; }
+.la-input::placeholder, .la-phone input::placeholder { color: rgba(255,255,255,.3); }
+.la-input:focus, .la-phone:focus-within { border-color: rgba(255,255,255,.5); background: rgba(255,255,255,.07); box-shadow: 0 0 0 4px rgba(255,255,255,.07); }
+.la-phone { display: flex; align-items: center; overflow: hidden; position: relative; }
+.la-phone select { position: absolute; left: 0; top: 0; width: 76px; height: 100%; opacity: 0; cursor: pointer; }
+.la-cc { width: 76px; flex-shrink: 0; height: 100%; display: flex; align-items: center; justify-content: center; border-right: 1px solid rgba(255,255,255,.1); color: rgba(255,255,255,.8); font-size: 15px; pointer-events: none; }
+.la-cc::after { content: ''; margin-left: 6px; border: 4px solid transparent; border-top-color: rgba(255,255,255,.5); transform: translateY(2px); }
+.la-phone input { flex: 1; min-width: 0; height: 100%; padding: 0 16px; border: 0; background: none; color: #fff; font: inherit; outline: none; }
+.la-pw { position: relative; }
+.la-pw .la-input { padding-right: 50px; }
+.la-eye { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border: 0; border-radius: 10px; background: none; color: rgba(255,255,255,.5); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.la-eye:hover { color: #fff; }
+.la-forgot { border: 0; background: none; padding: 0; color: rgba(255,255,255,.5); font: 500 13px 'Inter', sans-serif; cursor: pointer; }
+.la-forgot:hover { color: #fff; }
+.la-btn { width: 100%; height: 52px; margin-top: 6px; border: 0; border-radius: 999px; background: #fff; color: #000; font: 600 15px 'Inter', sans-serif; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; box-shadow: 0 0 40px rgba(255,255,255,.18), 0 10px 30px rgba(0,0,0,.4); transition: transform .15s, box-shadow .15s, opacity .15s; }
+.la-btn:hover { transform: translateY(-1px); box-shadow: 0 0 56px rgba(255,255,255,.26), 0 12px 34px rgba(0,0,0,.45); }
+.la-btn:disabled { opacity: .6; cursor: default; transform: none; }
+.la-switch { margin: 20px 0 0; text-align: center; font-size: 14px; color: rgba(255,255,255,.5); }
+.la-switch button { border: 0; background: none; padding: 0; color: #fff; font: 600 14px 'Inter', sans-serif; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(255,255,255,.3); }
+.la-legal { margin: 14px 0 0; text-align: center; font-size: 12px; line-height: 1.5; color: rgba(255,255,255,.35); }
+.la-legal a { color: rgba(255,255,255,.6); }
+@media (max-width: 900px) {
+  .la-wrap { grid-template-columns: minmax(0,1fr); gap: 0; max-width: 460px; padding: 92px 18px 40px; align-items: start; }
+  .la-pitch { display: none; }
+  .la-card { padding: 24px 20px 22px; border-radius: 24px; }
+  .la-h2 { font-size: 24px; }
+  .la-input, .la-phone { font-size: 16px; }
+}
+`
 
 // ─── PnlTooltip ───────────────────────────────────────────────
 function PnlTooltip({ active, payload, label: day }) {
