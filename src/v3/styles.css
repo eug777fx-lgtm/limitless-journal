@@ -134,7 +134,7 @@ textarea.input { height: auto; padding: 14px 16px; line-height: 1.5; resize: ver
 .fab:active { transform: scale(.9); }
 .mobilehead { display: none; }
 /* Persistent chrome (outside the page): same spots as before, never re-created on tab switch */
-.chrome .topnav { position: fixed; left: 0; right: 0; top: calc(env(safe-area-inset-top, 0px) + 18px); margin: 0; pointer-events: none; }
+.chrome .topnav { position: fixed; left: 0; right: 0; top: calc(env(safe-area-inset-top, 0px) + 18px); margin: 0 auto; pointer-events: none; }
 .chrome .topnav > * { pointer-events: auto; }
 .chrome .mobilehead { position: absolute; top: 0; left: 0; right: 0; z-index: 50; }
 .chrome-space { height: 56px; }
