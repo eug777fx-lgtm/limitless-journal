@@ -7,6 +7,7 @@ import { V3Provider, useStore, useRoute } from './store.jsx'
 import { ToastHost, useGlassLight } from './ui.jsx'
 import AppShell, { Chrome } from './Shell.jsx'
 import Dashboard from './Dashboard.jsx'
+import DashboardV4 from './DashboardV4.jsx'
 import Journal from './Journal.jsx'
 import Analytics from './Analytics.jsx'
 import { Calendar, News } from './Pages.jsx'
@@ -16,7 +17,7 @@ import LogTrade from './LogTrade.jsx'
 import ShareCard from './ShareCard.jsx'
 import { BootLoader, BootDone } from '../lib/bootLoader.jsx'
 
-const FONTS = 'https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=Poppins:wght@300;400;500;600;700;800&display=swap'
+const FONTS = 'https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@500;600&family=Poppins:wght@300;400;500;600;700;800&display=swap'
 
 function useV3Document() {
   React.useLayoutEffect(() => {
@@ -77,7 +78,9 @@ function AdminBacktest() {
 function Router() {
   const route = useRoute()
   useGlassLight()
-  const C = { dashboard: Dashboard, journal: Journal, analytics: Analytics, calendar: Calendar, news: News, billing: Billing, account: Account, backtest: AdminBacktest }[route]
+  const { isSuperAdmin } = useStore()
+  // New dashboard: owner only until it is switched on for everyone
+  const C = { dashboard: isSuperAdmin ? DashboardV4 : Dashboard, journal: Journal, analytics: Analytics, calendar: Calendar, news: News, billing: Billing, account: Account, backtest: AdminBacktest }[route]
   return (
     <>
       <Chrome route={route} />
