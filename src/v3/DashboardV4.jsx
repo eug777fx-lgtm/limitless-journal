@@ -233,26 +233,27 @@ function sessionState(now, [name, tz, open, close]) {
 }
 const dur = (m) => (m >= 60 * 24 ? `${Math.floor(m / 1440)}d ${Math.floor((m % 1440) / 60)}h` : m >= 60 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m` : `${m}m`)
 
-function Greeting({ first, s, label, count }) {
+function Greeting() {
   const [now, setNow] = React.useState(() => new Date())
   React.useEffect(() => { const i = setInterval(() => setNow(new Date()), 20000); return () => clearInterval(i) }, [])
-  const h = now.getHours()
-  const greet = h < 5 ? 'Late night' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
-  const words = [...greet.split(' ').map((w, i, a) => (i === a.length - 1 ? w + ',' : w)), first + '.']
   const stamp = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) + ' · ' + now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
   const sess = SESSIONS.map((x) => sessionState(now, x))
-  const wr = s.chron.length ? Math.round((s.wins.length / s.chron.length) * 100) : 0
+  const open = sess.filter((x) => x.open)
+  const next = sess.filter((x) => !x.open).sort((a, b) => a.mins - b.mins)[0]
+  const words = open.length
+    ? [...open.map((x) => x.name).join(' & ').split(' '), open.length > 1 ? 'open.' : 'is', ...(open.length > 1 ? [] : ['open.'])]
+    : [next.name, 'opens', 'in', dur(next.mins) + '.']
+  const sub = open.length
+    ? `${open.map((x) => `${x.name} closes in ${dur(x.mins)}`).join(' · ')}${next ? ` · ${next.name} opens in ${dur(next.mins)}` : ''}`
+    : 'Markets are quiet. Review, plan, and wait for your session.'
+  const key = open.map((x) => x.name).join() + '|' + (open.length ? '' : next.name)
   return (
     <div className="greet">
       <span className="mono gstamp"><i />{stamp}</span>
-      <h1 aria-label={`${greet}, ${first}.`}>
-        {words.map((w, i) => <span key={i} className={'gw' + (i === words.length - 1 ? ' name' : '')} style={{ '--i': i }}><span>{w}</span></span>)}
+      <h1 key={key} aria-label={words.join(' ')}>
+        {words.map((w, i) => <span key={i} className={'gw' + (i >= words.length - (open.length ? (open.length > 1 ? 1 : 2) : 3) ? ' name' : '')} style={{ '--i': i }}><span>{w}</span></span>)}
       </h1>
-      <p className="gsum">
-        {count ? (
-          <>{s.net >= 0 ? 'Up ' : 'Down '}<b>{plain(s.net)}</b> {label === 'All time' ? 'all time' : 'in ' + label} · <b>{count}</b> {count === 1 ? 'trade' : 'trades'} · <b>{wr}%</b> win rate{s.best && s.byDay[s.best] > 0 ? <> · best day <b>{signedK(s.byDay[s.best])}</b></> : null}</>
-        ) : <>No trades in {label === 'All time' ? 'your journal' : label} yet. Clean slate.</>}
-      </p>
+      <p className="gsum">{sub}</p>
       <div className="gsess" aria-label="Market sessions">
         {sess.map((x) => (
           <span key={x.name} className={'gs' + (x.open ? ' open' : '')}>
@@ -307,7 +308,7 @@ export default function DashboardV4() {
       <div className="chrome-space" aria-hidden="true" />
       <div className="v4-wrap">
         <section className="hello rise">
-          <Greeting first={first} s={s} label={b.label} count={s.chron.length} />
+          <Greeting />
           <div className="tools">
             <div ref={segRef} className="seg4 glassy" role="group" aria-label="Period">
               {pill && <i style={{ left: pill.left, width: pill.width }} />}
