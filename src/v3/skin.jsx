@@ -42,6 +42,10 @@ export function useSkinActive(owner) {
   React.useLayoutEffect(() => {
     document.documentElement.classList.toggle('ltj-v4', active)
     document.documentElement.classList.toggle('ltj-v4-light', light)
+    // paint the page behind everything (phone status bar, overscroll) in the theme colour
+    const bg = active ? (light ? '#F1F2F3' : '#000000') : ''
+    document.documentElement.style.backgroundColor = bg
+    document.body.style.backgroundColor = bg
     const b = document.body
     b.classList.toggle('v4-skin', active)
     b.classList.toggle('v4-light', light)

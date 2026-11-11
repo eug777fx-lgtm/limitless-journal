@@ -225,7 +225,7 @@ export default function Journal() {
   const [sel, setSel] = React.useState(() => { try { return sessionStorage.getItem('ltj_v3_sel') || (trades[0] && trades[0].id) } catch { return trades[0] && trades[0].id } })
   const [sheet, setSheet] = React.useState(false)
   const [imp, setImp] = React.useState(false)
-  const [limit, setLimit] = React.useState(40)
+  const [limit, setLimit] = React.useState(() => (typeof matchMedia !== 'undefined' && matchMedia('(max-width: 760px)').matches ? 24 : 40))
   React.useEffect(() => {
     try {
       const pre = sessionStorage.getItem('ltj_v3_sel')

@@ -45,9 +45,12 @@ void main(){
 
 const still = () => document.documentElement.getAttribute('data-motion') === 'off' || matchMedia('(prefers-reduced-motion: reduce)').matches
 
-export default function Ink({ range = [0.86, 0.985], highlight = 0.12, zoom = 1.5, scale = 0.5, pull = 1.4, seed = 3.1, follow = 'window', className = '' }) {
+// phones get a lighter version: fewer pixels and fewer frames, so scrolling and page switches stay smooth
+const PHONE = typeof matchMedia !== 'undefined' && (matchMedia('(pointer: coarse)').matches || matchMedia('(max-width: 760px)').matches)
+
+export default function Ink({ range = [0.86, 0.985], highlight = 0.12, zoom = 1.5, scale = 0.5, pull = 1.4, seed = 3.1, follow = 'window', className = '', fps = 30, phoneFps = 12, phoneScale = 0.28 }) {
   const ref = React.useRef(null)
-  const opts = React.useRef({}); opts.current = { range, highlight, zoom, scale, pull, seed }
+  const opts = React.useRef({}); opts.current = { range, highlight, zoom, scale: PHONE ? Math.min(scale, phoneScale) : scale, pull, seed, gap: 1000 / (PHONE ? phoneFps : fps) }
   React.useEffect(() => {
     const cv = ref.current; if (!cv) return
     const gl = cv.getContext('webgl', { antialias: false, alpha: false, preserveDrawingBuffer: false, powerPreference: 'low-power' })
@@ -64,12 +67,13 @@ export default function Ink({ range = [0.86, 0.985], highlight = 0.12, zoom = 1.
 
     let W = 1, H = 1
     const size = () => {
-      const r = cv.getBoundingClientRect(), sc = opts.current.scale * Math.min(2, devicePixelRatio || 1)
+      const r = cv.getBoundingClientRect(), sc = opts.current.scale * (PHONE ? 1 : Math.min(2, devicePixelRatio || 1))
       W = cv.width = Math.max(2, Math.round(r.width * sc)); H = cv.height = Math.max(2, Math.round(r.height * sc))
       gl.viewport(0, 0, W, H)
     }
     size()
-    const ro = new ResizeObserver(() => { size(); if (!running) draw(performance.now()) }); ro.observe(cv)
+    let lastW = 0, lastH = 0
+    const ro = new ResizeObserver(() => { const r = cv.getBoundingClientRect(); if (Math.abs(r.width - lastW) < 2 && Math.abs(r.height - lastH) < 80) return; lastW = r.width; lastH = r.height; size(); if (!running) draw(performance.now()) }); ro.observe(cv)
 
     // pointer: target follows the mouse, the paint eases toward it
     const target = { x: 0.5, y: -2 }, cur = { x: 0.5, y: -2 }, vel = { x: 0, y: 0 }
@@ -95,7 +99,7 @@ export default function Ink({ range = [0.86, 0.985], highlight = 0.12, zoom = 1.
     }
     const frame = (now) => {
       raf = requestAnimationFrame(frame)
-      if (now - last < 33) return
+      if (now - last < opts.current.gap) return
       last = now; draw(now)
     }
     const start = () => { if (running || still() || document.hidden || !visible) return; running = true; raf = requestAnimationFrame(frame) }

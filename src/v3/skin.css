@@ -614,3 +614,26 @@ body.v4-skin .chrome .tabbar { transition: opacity .3s, transform .4s cubic-bezi
 .v4 .hello .tools .sk-samples { display: inline-flex !important; }
 .sk-samples button + button { margin-left: 4px; }
 @media (max-width: 760px) { .v4 .hello .tools .sk-samples { display: none !important; } }
+
+/* ── round 8: phone speed + dark mode ── */
+.tart g { animation: none !important; }
+.jg-card { content-visibility: auto; contain-intrinsic-size: 260px 230px; }
+@media (max-width: 760px), (pointer: coarse) {
+  /* glass blur is the heaviest thing a phone draws: use solid cards instead */
+  body.v4-skin { --v4-card: rgba(22,22,24,.92); }
+  body.v4-skin.v4-light { --v4-card: rgba(255,255,255,.94); }
+  body.v4-skin :is(.v4page, .overlay, .v4) :is(.glass, .glassy, .jg-card, .gs, .jr-tabs, .sk-ibtn, .sk-owner, .pill),
+  body.v4-skin .v4 .seg4, body.v4-skin .v4 .ibtn { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+  body.v4-skin .chrome .tabbar nav, body.v4-skin .chrome .capsule { -webkit-backdrop-filter: blur(14px) !important; backdrop-filter: blur(14px) !important; }
+  body.v4-skin .overlay { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+  /* quick, single fade between pages instead of many staggered animations */
+  body.v4-skin .view > main { animation: fade .22s ease both !important; }
+  body.v4-skin .view > main *, body.v4-skin .v4 .rise, body.v4-skin .v4 .v4-wrap > *, body.v4-skin .jg-card, body.v4-skin .jg-sep, body.v4-skin .pl-items li { animation: none !important; }
+  body.v4-skin .v4 .v4-wrap { animation: fade .22s ease both; }
+  .jg-card:hover { transform: none; }
+  .jg-card:hover .jg-img > * { transform: none; }
+  .v4 .hero .hero-art i { animation: none !important; }
+}
+/* dark mode: dark backdrop all the way to the phone edges */
+html.ltj-v4:not(.ltj-v4-light), html.ltj-v4:not(.ltj-v4-light) body { background-color: #000 !important; }
+html.ltj-v4.ltj-v4-light, html.ltj-v4.ltj-v4-light body { background-color: #F1F2F3 !important; }

@@ -44,8 +44,10 @@ export function buildArt(t, n = 46) {
   return { candles, iEntry, iExit, entry, tp, sl, long, win, R }
 }
 
+const PHONE = typeof matchMedia !== 'undefined' && matchMedia('(max-width: 760px)').matches
+
 export function TradeArt({ t, labels = true, className = '' }) {
-  const a = React.useMemo(() => buildArt(t), [t.id, t.pnl, t.r, t.side])
+  const a = React.useMemo(() => buildArt(t, PHONE ? 30 : 46), [t.id, t.pnl, t.r, t.side])
   const W = 320, H = 200, pad = 14
   const lo = Math.min(a.sl, a.tp, ...a.candles.map((c) => c.l)), hi = Math.max(a.sl, a.tp, ...a.candles.map((c) => c.h))
   const y = (v) => pad + (1 - (v - lo) / (hi - lo || 1)) * (H - pad * 2)
