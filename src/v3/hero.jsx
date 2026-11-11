@@ -5,11 +5,12 @@ import { createPortal } from 'react-dom'
 import { ImagePlus, Check, Upload, Trash2 } from 'lucide-react'
 import { useSkin, setSkin } from './skin.jsx'
 import Ink from './ink.jsx'
+import { Haze } from './scene.jsx'
 
 export function HeroBg({ theme }) {
   const { hero, heroImg, heroColor } = useSkin()
   const light = theme === 'light'
-  if (hero === 'haze') return <div className="hero-haze" aria-hidden="true"><div className="sk-aurora"><i className="a1" /><i className="a2" /><i className="a3" /></div></div>
+  if (hero === 'haze') return <div className="hero-haze" aria-hidden="true"><Haze key={theme} /></div>
   if (hero === 'art') return <span className={'hero-art ' + theme} aria-hidden="true"><i /></span>
   if (hero === 'custom' && heroImg) return <span className={'hero-art custom' + (heroColor ? ' color' : '')} aria-hidden="true"><i style={{ backgroundImage: `url(${heroImg})` }} /></span>
   return <Ink key={theme} className="hero-ink" phoneFps={30} phoneScale={0.6} range={light ? [0.7, 1.0] : [0.0, 0.26]} highlight={light ? 0.12 : 0.26} zoom={1.05} scale={0.6} seed={7.7} />

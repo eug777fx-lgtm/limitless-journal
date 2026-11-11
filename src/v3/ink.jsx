@@ -107,10 +107,14 @@ export default function Ink({ range = [0.86, 0.985], highlight = 0.12, zoom = 1.
       gl.uniform1f(U.SEED, o.seed); gl.uniform1f(U.ZOOM, o.zoom); gl.uniform1f(U.PULL, fine ? o.pull : 0)
       gl.drawArrays(gl.TRIANGLES, 0, 3)
     }
+    // a popup covers the page: hold the paint (time stands still, so it resumes without a jump)
+    let prev = 0, lost = 0
     const frame = (now) => {
       raf = requestAnimationFrame(frame)
+      const dt = prev ? Math.min(now - prev, 100) : 0; prev = now
+      if (document.querySelector('.overlay')) { lost += dt; return }
       if (now - last < opts.current.gap || now < hold) return
-      last = now; draw(now)
+      last = now; draw(now - lost)
     }
     const start = () => { if (running || still() || document.hidden || !visible) return; running = true; raf = requestAnimationFrame(frame) }
     const stop = () => { running = false; cancelAnimationFrame(raf) }

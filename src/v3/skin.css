@@ -851,3 +851,9 @@ img.tart { display: block; width: 100%; height: 100%; object-fit: fill; user-sel
 .nx-finish-bar { display: block; width: calc(100% - 36px); margin: 12px 18px; text-align: center; }
 .nx-mme { padding: 0 6px; }
 .nx-mme .nx-av { font-size: 10px; }
+
+/* silver haze drawn on a small canvas (no live CSS blur) */
+.sk-aurora.cv { filter: none !important; }
+.sk-aurora.cv i { visibility: hidden; animation: none !important; }
+.sk-aurora.cv .sk-haze-cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.sk-scene .sk-terrain.drift.js { animation: none; will-change: transform; }
