@@ -96,18 +96,32 @@ export function Bar({ pct, fill, delay = 0.2 }) {
   )
 }
 
+// One shared page lock for every open sheet. With two sheets open (a trade, then Edit on top)
+// they can close in any order and the page always comes back scrollable.
+let locks = 0, saved = null
+function lockPage() {
+  if (locks++ > 0) return
+  const b = document.body, y = window.scrollY
+  saved = { y, style: { overflow: b.style.overflow, position: b.style.position, top: b.style.top, left: b.style.left, right: b.style.right, width: b.style.width } }
+  Object.assign(b.style, { overflow: 'hidden', position: 'fixed', top: `-${y}px`, left: '0', right: '0', width: '100%' })
+}
+function unlockPage() {
+  if (locks === 0 || --locks > 0) return
+  const b = document.body
+  if (saved) { Object.assign(b.style, saved.style); window.scrollTo(0, saved.y) }
+  else Object.assign(b.style, { overflow: '', position: '', top: '', left: '', right: '', width: '' })
+  saved = null
+}
+
 export function Modal({ open, onClose, label, children, maxWidth = 780 }) {
+  const close = React.useRef(onClose); close.current = onClose
   React.useEffect(() => {
     if (!open) return
-    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    const onKey = (e) => { if (e.key === 'Escape') close.current() }
     document.addEventListener('keydown', onKey)
-    // Lock the page behind the sheet. iOS ignores overflow:hidden on body, so pin the body in place
-    // at its current scroll position and put it back exactly there on close.
-    const b = document.body, y = window.scrollY
-    const prev = { overflow: b.style.overflow, position: b.style.position, top: b.style.top, left: b.style.left, right: b.style.right, width: b.style.width }
-    Object.assign(b.style, { overflow: 'hidden', position: 'fixed', top: `-${y}px`, left: '0', right: '0', width: '100%' })
-    return () => { document.removeEventListener('keydown', onKey); Object.assign(b.style, prev); window.scrollTo(0, y) }
-  }, [open, onClose])
+    lockPage()
+    return () => { document.removeEventListener('keydown', onKey); unlockPage() }
+  }, [open])
   if (!open) return null
   return (
     <div className="overlay sheet" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>

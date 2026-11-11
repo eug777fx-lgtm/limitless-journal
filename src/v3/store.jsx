@@ -130,7 +130,13 @@ export function useRoute() {
     applyTransitionPref()
     const on = () => {
       const next = readRoute()
-      const apply = () => { flushSync(() => setRoute(next)); window.scrollTo(0, 0) }
+      const apply = () => {
+        flushSync(() => setRoute(next))
+        // safety net: never leave the page pinned if no sheet is open
+        const b = document.body
+        if (!document.querySelector('.overlay') && b.style.position === 'fixed') Object.assign(b.style, { overflow: '', position: '', top: '', left: '', right: '', width: '' })
+        window.scrollTo(0, 0)
+      }
       if (document.documentElement.classList.contains('vt-on') && !document.querySelector('.overlay')) {
         try { document.startViewTransition(apply); return } catch { /* fall back */ }
       }
