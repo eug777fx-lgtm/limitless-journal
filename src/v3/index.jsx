@@ -10,6 +10,7 @@ import Dashboard from './Dashboard.jsx'
 import DashboardV4 from './DashboardV4.jsx'
 import Journal from './Journal.jsx'
 import Plan from './Plan.jsx'
+import Network from './Network.jsx'
 import Analytics from './Analytics.jsx'
 import { Calendar, News } from './Pages.jsx'
 import { Billing, Account } from './Account.jsx'
@@ -66,7 +67,7 @@ function Legacy({ route }) {
   return (
     <AppShell route={route} word={meta.word} title={meta.title}>
       <div className="wrap" style={{ paddingBottom: 60 }}>
-        <div className="glass v3-legacy" style={{ padding: 'clamp(4px, 1.5vw, 12px)', overflow: 'hidden' }}>
+        <div className={'glass v3-legacy lg-' + route} style={{ padding: 'clamp(4px, 1.5vw, 12px)', overflow: 'hidden' }}>
           {renderLegacy(route)}
         </div>
       </div>
@@ -86,7 +87,7 @@ function Router() {
   const { isSuperAdmin } = useStore()
   // New look: owner only until it is switched on for everyone
   const skinOn = useSkinActive(isSuperAdmin)
-  const C = { dashboard: skinOn ? DashboardV4 : Dashboard, journal: Journal, analytics: Analytics, calendar: Calendar, news: News, billing: Billing, account: Account, backtest: AdminBacktest, ...(skinOn ? { plan: Plan } : {}) }[route]
+  const C = { dashboard: skinOn ? DashboardV4 : Dashboard, journal: Journal, analytics: Analytics, calendar: Calendar, news: News, billing: Billing, account: Account, backtest: AdminBacktest, ...(skinOn ? { plan: Plan, network: Network } : {}) }[route]
   return (
     <>
       <Chrome route={route} />

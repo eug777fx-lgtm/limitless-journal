@@ -45,7 +45,8 @@ function TopNav({ route }) {
   const items = [[User, 'Account and settings', 'account'], [CreditCard, 'Subscription', 'billing'], [Newspaper, 'News calendar', 'news'], [Users, 'Network', 'network']]
   if (isSuperAdmin) items.push([FlaskConical, 'Asia backtest', 'backtest'])
   if (isAdmin) items.push([ShieldCheck, 'Admin panel', 'admin'])
-  if (isSuperAdmin) items.push([ScrollText, 'TOS', 'tos'], [Repeat, 'TradeSync', 'copy'])
+  const skinOn = useSkin().on && isSuperAdmin
+  if (isSuperAdmin) items.push(...(skinOn ? [] : [[ScrollText, 'TOS', 'tos']]), [Repeat, 'TradeSync', 'copy'])
   return (
     <div className="topnav wrap">
       <nav ref={ref} aria-label="Main" className="capsule glass">
