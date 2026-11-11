@@ -68,7 +68,10 @@ export default function Ink({ range = [0.86, 0.985], highlight = 0.12, zoom = 1.
     let W = 1, H = 1
     const size = () => {
       const r = cv.getBoundingClientRect(), sc = opts.current.scale * Math.min(PHONE ? 1.5 : 2, devicePixelRatio || 1)
-      W = cv.width = Math.max(2, Math.round(r.width * sc)); H = cv.height = Math.max(2, Math.round(r.height * sc))
+      let w = r.width * sc, h = r.height * sc
+      const cap = 1100000, px = w * h
+      if (px > cap) { const k = Math.sqrt(cap / px); w *= k; h *= k }
+      W = cv.width = Math.max(2, Math.round(w)); H = cv.height = Math.max(2, Math.round(h))
       gl.viewport(0, 0, W, H)
     }
     size()
@@ -89,6 +92,9 @@ export default function Ink({ range = [0.86, 0.985], highlight = 0.12, zoom = 1.
     let hold = 0
     const onNav = () => { hold = performance.now() + (PHONE ? 500 : 250) }
     addEventListener('hashchange', onNav)
+    // while the page scrolls, the paint holds still so scrolling gets the whole GPU
+    const onScroll = () => { hold = Math.max(hold, performance.now() + 180) }
+    addEventListener('scroll', onScroll, { passive: true })
     let raf = 0, last = 0, running = false, visible = true
     const draw = (now) => {
       const o = opts.current
@@ -113,7 +119,7 @@ export default function Ink({ range = [0.86, 0.985], highlight = 0.12, zoom = 1.
     const vis = () => (document.hidden ? stop() : start())
     document.addEventListener('visibilitychange', vis)
     draw(performance.now()); start()
-    return () => { stop(); removeEventListener('hashchange', onNav); ro.disconnect(); io.disconnect(); document.removeEventListener('visibilitychange', vis); removeEventListener('pointermove', move); const ext = gl.getExtension('WEBGL_lose_context'); if (ext) ext.loseContext() }
+    return () => { stop(); removeEventListener('hashchange', onNav); removeEventListener('scroll', onScroll); ro.disconnect(); io.disconnect(); document.removeEventListener('visibilitychange', vis); removeEventListener('pointermove', move); const ext = gl.getExtension('WEBGL_lose_context'); if (ext) ext.loseContext() }
   }, [])
   return <canvas ref={ref} className={'paint ' + className} aria-hidden="true" />
 }

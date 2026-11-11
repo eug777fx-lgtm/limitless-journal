@@ -8,6 +8,7 @@ import AppShell from './Shell.jsx'
 import { Modal, PnL } from './ui.jsx'
 import { TradeArt } from './art.jsx'
 import { dayLabel, money } from './data.js'
+import NetworkSetup from './NetworkSetup.jsx'
 
 const PAGE = 15
 const ago = (d) => {
@@ -132,7 +133,7 @@ function Leaderboard({ onProfile, compact = false }) {
   )
 }
 
-function Profile({ uid, me, back, onLoaded }) {
+function Profile({ uid, me, back, onLoaded, onEdit, mine }) {
   const [np, setNp] = React.useState(null)
   const [followers, setFollowers] = React.useState(0)
   const [following, setFollowing] = React.useState(false)
@@ -142,7 +143,7 @@ function Profile({ uid, me, back, onLoaded }) {
       supabase.from('network_profiles').select('*').eq('user_id', uid).maybeSingle(),
       supabase.from('network_follows').select('*', { count: 'exact', head: true }).eq('following_id', uid),
       me ? supabase.from('network_follows').select('follower_id').eq('following_id', uid).eq('follower_id', me).maybeSingle() : Promise.resolve({ data: null }),
-    ]).then(([a, b, c]) => { if (!alive) return; setNp(a.data || {}); setFollowers(b.count || 0); setFollowing(!!c.data); onLoaded && onLoaded(a.data) })
+    ]).then(([a, b, c]) => { if (!alive) return; setNp(uid === me && mine ? { ...(a.data || {}), ...mine } : a.data || {}); setFollowers(b.count || 0); setFollowing(!!c.data); onLoaded && onLoaded(a.data) })
     return () => { alive = false }
   }, [uid, me]) // eslint-disable-line react-hooks/exhaustive-deps
   const toggle = async () => {
@@ -159,10 +160,19 @@ function Profile({ uid, me, back, onLoaded }) {
       <div className="nx-pro-row">
         <Avatar name={name} url={np?.avatar_url} size={78} />
         {me && me !== uid && <button type="button" className={'nx-follow' + (following ? ' on' : '')} onClick={toggle}>{following ? 'Following' : 'Follow'}</button>}
+        {me && me === uid && <button type="button" className="nx-follow on" onClick={onEdit}>Edit profile</button>}
       </div>
       <h2>{name}</h2>
       <span className="nx-dim">{handle(np)}</span>
       {np?.bio && <p className="nx-text">{np.bio}</p>}
+      {np?.trading_style && <div className="nx-styles">{np.trading_style.split(' · ').filter(Boolean).map((s) => <span key={s}>{s}</span>)}</div>}
+      {(np?.twitter || np?.instagram) && (
+        <div className="nx-socials">
+          {np.twitter && <a href={`https://x.com/${String(np.twitter).replace(/^@/, '')}`} target="_blank" rel="noreferrer">X @{String(np.twitter).replace(/^@/, '')}</a>}
+          {np.instagram && <a href={`https://instagram.com/${String(np.instagram).replace(/^@/, '')}`} target="_blank" rel="noreferrer">Instagram @{String(np.instagram).replace(/^@/, '')}</a>}
+        </div>
+      )}
+      {uid === me && !np?.bio && !np?.trading_style && <button type="button" className="nx-finish" onClick={onEdit}>Finish your profile so traders know who you are</button>}
       <span className="nx-dim nx-small"><b>{followers}</b> followers</span>
     </div>
   )
@@ -189,6 +199,8 @@ export default function Network() {
   const [ann, setAnn] = React.useState([])
   const [members, setMembers] = React.useState(null)
   const [myNp, setMyNp] = React.useState(null)
+  const [setup, setSetup] = React.useState(null) // null | 'new' | 'edit'
+  const [npLoaded, setNpLoaded] = React.useState(false)
   const busy = React.useRef(false)
   const sentinel = React.useRef(null)
   const composer = React.useRef(null)
@@ -231,7 +243,12 @@ export default function Network() {
   React.useEffect(() => {
     if (!me) return
     supabase.from('network_follows').select('following_id').eq('follower_id', me).then(({ data }) => setFollowIds(new Set((data || []).map((f) => f.following_id))))
-    supabase.from('network_profiles').select('*').eq('user_id', me).maybeSingle().then(({ data }) => setMyNp(data))
+    supabase.from('network_profiles').select('*').eq('user_id', me).maybeSingle().then(({ data }) => {
+      setMyNp(data); setNpLoaded(true)
+      let done = false
+      try { done = !!localStorage.getItem('ltj_nx_setup_' + me) } catch { /* ignore */ }
+      if (!done && (!data || (!data.avatar_url && !data.bio && !data.trading_style))) setSetup('new')
+    })
     supabase.from('network_messages').select('*').eq('channel', 'announcements').order('created_at', { ascending: false }).limit(3).then(({ data }) => setAnn(data || []))
     supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('status', 'approved').then(({ count }) => setMembers(count || 0))
   }, [me])
@@ -295,12 +312,14 @@ export default function Network() {
             {view === 'leaderboard' ? <b className="nx-tabtitle">Leaderboard</b> : who ? <b className="nx-tabtitle">Profile</b> : (
               [['all', 'For you'], ['following', 'Following'], ['top', 'Top']].map(([k, l]) => <button key={k} type="button" className={filter === k ? 'on' : ''} onClick={() => goFeed(k)}>{l}</button>)
             )}
+            {me && <button type="button" className={'nx-mlb nx-mme' + (who === me ? ' on' : '')} onClick={() => openProfile(me)} aria-label="Your profile"><Avatar name={myNp?.display_name || myName} url={myNp?.avatar_url} size={28} /></button>}
             <button type="button" className={'nx-mlb' + (view === 'leaderboard' ? ' on' : '')} onClick={() => { setWho(null); setView(view === 'leaderboard' ? 'feed' : 'leaderboard') }} aria-label="Leaderboard"><Trophy size={16} /></button>
           </div>
 
           {view === 'leaderboard' ? <Leaderboard onProfile={openProfile} /> : (
             <>
-              {who && <Profile uid={who} me={me} back={() => setWho(null)} />}
+              {who && <Profile key={who + (myNp?.updated_at || '')} uid={who} me={me} mine={myNp} back={() => setWho(null)} onEdit={() => setSetup('edit')} />}
+              {!who && npLoaded && !setup && myNp !== undefined && (!myNp || (!myNp.bio && !myNp.trading_style)) && <button type="button" className="nx-finish nx-finish-bar" onClick={() => setSetup('edit')}>Set up your trader profile so others can find you</button>}
               {!who && (
                 <div className="nx-compose">
                   <Avatar name={myNp?.display_name || myName} url={myNp?.avatar_url} />
@@ -350,6 +369,8 @@ export default function Network() {
         </aside>
       </div>
 
+      <NetworkSetup open={!!setup} edit={setup === 'edit'} np={myNp} onClose={() => { setSetup(null); try { localStorage.setItem('ltj_nx_setup_' + me, '1') } catch { /* ignore */ } }}
+        onSaved={(data, fol) => { setMyNp(data); setProfiles((m) => new Map(m).set(me, data)); setFollowIds(new Set(fol)); setTimeout(() => composer.current && composer.current.focus(), 300) }} />
       <Modal open={pick} onClose={() => setPick(false)} label="Share a trade" maxWidth={560}>
         <div className="lt">
           <header className="lt-head"><div className="col" style={{ gap: 4 }}><span className="sk-mono">Share to the Network</span><h2>Pick a trade</h2></div></header>

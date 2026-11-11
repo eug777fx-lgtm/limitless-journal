@@ -1,6 +1,7 @@
 // Generated trade chart. Every trade gets a picture: the real screenshot when there is one,
 // otherwise a candle chart drawn from the trade itself (side, result, R, entry and exit).
 import React from 'react'
+import { useSkin } from './skin.jsx'
 
 const hash = (s) => { let h = 2166136261; for (const c of String(s)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) } return h >>> 0 }
 const fmt = (v) => (Math.abs(v) >= 1000 ? v.toLocaleString('en-US', { maximumFractionDigits: 2 }) : Number(v.toFixed(Math.abs(v) < 10 ? 4 : 2)).toString())
@@ -46,36 +47,49 @@ export function buildArt(t, n = 46) {
 
 const PHONE = typeof matchMedia !== 'undefined' && matchMedia('(max-width: 760px)').matches
 
-export function TradeArt({ t, labels = true, className = '' }) {
-  const a = React.useMemo(() => buildArt(t, PHONE ? 30 : 46), [t.id, t.pnl, t.r, t.side])
+// Drawn once to a picture and cached, so a journal full of charts stays light to scroll.
+const PAL = {
+  light: { ink: '#0B0B0C', dim: '#9AA0A8', line: '#E1E4E8', solid: '#FFFFFF', tp: 'rgba(11,11,12,.09)', hatch: 'rgba(11,11,12,.22)' },
+  dark: { ink: '#FFFFFF', dim: 'rgba(255,255,255,.42)', line: 'rgba(255,255,255,.09)', solid: '#0E0E0F', tp: 'rgba(255,255,255,.10)', hatch: 'rgba(255,255,255,.24)' },
+}
+const cache = new Map()
+function artUrl(t, theme, n, labels) {
+  const key = `${t.id}|${t.pnl}|${t.r}|${t.side}|${theme}|${n}|${labels ? 1 : 0}`
+  const hit = cache.get(key); if (hit) return hit
+  const c = PAL[theme] || PAL.light
+  const a = buildArt(t, n)
   const W = 320, H = 200, pad = 14
-  const lo = Math.min(a.sl, a.tp, ...a.candles.map((c) => c.l)), hi = Math.max(a.sl, a.tp, ...a.candles.map((c) => c.h))
-  const y = (v) => pad + (1 - (v - lo) / (hi - lo || 1)) * (H - pad * 2)
+  const lo = Math.min(a.sl, a.tp, ...a.candles.map((k) => k.l)), hi = Math.max(a.sl, a.tp, ...a.candles.map((k) => k.h))
+  const y = (v) => (pad + (1 - (v - lo) / (hi - lo || 1)) * (H - pad * 2)).toFixed(1)
   const cw = W / a.candles.length
   const x0 = a.iEntry * cw, x1 = Math.min(W, (a.iExit + 3) * cw)
-  const pid = 'h' + React.useId().replace(/[^a-zA-Z0-9]/g, '')
-  const hasPx = t.entry !== null && t.entry !== undefined && t.exit !== null && t.exit !== undefined
-  return (
-    <svg className={'tart ' + className} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
-      <defs><pattern id={pid} width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="5" className="tart-hatch" /></pattern></defs>
-      {[0.25, 0.5, 0.75].map((g) => <line key={g} className="tart-grid" x1="0" x2={W} y1={H * g} y2={H * g} />)}
-      <rect className="tart-tp" x={x0} width={x1 - x0} y={Math.min(y(a.entry), y(a.tp))} height={Math.abs(y(a.tp) - y(a.entry))} />
-      <rect className="tart-sl" fill={`url(#${pid})`} x={x0} width={x1 - x0} y={Math.min(y(a.entry), y(a.sl))} height={Math.abs(y(a.sl) - y(a.entry))} />
-      <line className="tart-entry" x1={x0} x2={x1} y1={y(a.entry)} y2={y(a.entry)} />
-      {a.candles.map((c, i) => {
-        const up = c.c >= c.o, cx = i * cw + cw / 2
-        return (
-          <g key={i} className={up ? 'tart-up' : 'tart-dn'} style={{ '--i': i }}>
-            <line x1={cx} x2={cx} y1={y(c.h)} y2={y(c.l)} />
-            <rect x={cx - cw * 0.32} width={cw * 0.64} y={y(Math.max(c.o, c.c))} height={Math.max(1, Math.abs(y(c.o) - y(c.c)))} rx="0.6" />
-          </g>
-        )
-      })}
-      <circle className="tart-in" cx={x0 + cw / 2} cy={y(a.entry)} r="3.2" />
-      <circle className={a.win ? 'tart-out win' : 'tart-out loss'} cx={a.iExit * cw + cw / 2} cy={y(a.win ? a.tp : a.sl)} r="3.6" />
-      {labels && hasPx && <text className="tart-lbl" x={4} y={Math.max(10, y(a.entry) - 5)}>{fmt(Number(t.entry))}</text>}
-    </svg>
-  )
+  const r = (n2) => n2.toFixed(1)
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">`
+  svg += `<defs><pattern id="h" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="5" stroke="${c.hatch}" stroke-width="1.2"/></pattern></defs>`
+  ;[0.25, 0.5, 0.75].forEach((g) => { svg += `<line x1="0" x2="${W}" y1="${H * g}" y2="${H * g}" stroke="${c.line}" stroke-width="1" vector-effect="non-scaling-stroke"/>` })
+  svg += `<rect x="${r(x0)}" width="${r(x1 - x0)}" y="${Math.min(y(a.entry), y(a.tp))}" height="${Math.abs(y(a.tp) - y(a.entry)).toFixed(1)}" fill="${c.tp}"/>`
+  svg += `<rect x="${r(x0)}" width="${r(x1 - x0)}" y="${Math.min(y(a.entry), y(a.sl))}" height="${Math.abs(y(a.sl) - y(a.entry)).toFixed(1)}" fill="url(#h)"/>`
+  svg += `<line x1="${r(x0)}" x2="${r(x1)}" y1="${y(a.entry)}" y2="${y(a.entry)}" stroke="${c.dim}" stroke-width="1" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>`
+  a.candles.forEach((k, i) => {
+    const col = k.c >= k.o ? c.ink : c.dim, cx = i * cw + cw / 2
+    svg += `<line x1="${r(cx)}" x2="${r(cx)}" y1="${y(k.h)}" y2="${y(k.l)}" stroke="${col}" stroke-width="1" vector-effect="non-scaling-stroke"/>`
+    svg += `<rect x="${r(cx - cw * 0.32)}" width="${r(cw * 0.64)}" y="${y(Math.max(k.o, k.c))}" height="${Math.max(1, Math.abs(y(k.o) - y(k.c))).toFixed(1)}" fill="${col}"/>`
+  })
+  svg += `<circle cx="${r(x0 + cw / 2)}" cy="${y(a.entry)}" r="3.2" fill="${c.solid}" stroke="${c.ink}" stroke-width="1.6"/>`
+  svg += a.win ? `<circle cx="${r(a.iExit * cw + cw / 2)}" cy="${y(a.tp)}" r="3.6" fill="${c.ink}" stroke="${c.solid}" stroke-width="1.4"/>` : `<circle cx="${r(a.iExit * cw + cw / 2)}" cy="${y(a.sl)}" r="3.6" fill="${c.solid}" stroke="${c.ink}" stroke-width="1.6"/>`
+  const hasPx = labels && t.entry !== null && t.entry !== undefined && t.exit !== null && t.exit !== undefined
+  if (hasPx) svg += `<text x="4" y="${Math.max(10, Number(y(a.entry)) - 5)}" font-family="monospace" font-size="9" font-weight="600" fill="${c.dim}">${fmt(Number(t.entry))}</text>`
+  svg += '</svg>'
+  const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
+  if (cache.size > 800) cache.delete(cache.keys().next().value)
+  cache.set(key, url)
+  return url
+}
+
+export function TradeArt({ t, labels = true, className = '' }) {
+  const { theme } = useSkin()
+  const url = artUrl(t, theme === 'dark' ? 'dark' : 'light', PHONE ? 30 : 46, labels)
+  return <img className={'tart ' + className} src={url} alt="" decoding="async" draggable="false" />
 }
 
 // Screenshot if the trade has one, else the generated chart
