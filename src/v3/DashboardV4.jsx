@@ -7,7 +7,6 @@ import { LOGO } from './ui.jsx'
 import { isoLocal, monthLabel, dayLabel } from './data.js'
 import { useSkin, setSkin, SkinTools } from './skin.jsx'
 import { Scene } from './scene.jsx'
-import Ink from './ink.jsx'
 import { TradeImage } from './art.jsx'
 import './v4.css'
 
@@ -212,6 +211,58 @@ function Intro({ name, label, net, geom, chartEl, onDone }) {
   )
 }
 
+// Welcome header: live clock, a greeting that types itself in, your period in one line,
+// and the three trading sessions with live countdowns
+const SESSIONS = [['Asia', 'Asia/Tokyo', 9 * 60, 15 * 60], ['London', 'Europe/London', 8 * 60, 16 * 60 + 30], ['New York', 'America/New_York', 9 * 60 + 30, 16 * 60]]
+const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+function zoneNow(now, tz) {
+  try {
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(now).map((x) => [x.type, x.value]))
+    return { wd: WD.indexOf(p.weekday), min: (+p.hour % 24) * 60 + +p.minute }
+  } catch { return { wd: now.getDay(), min: now.getHours() * 60 + now.getMinutes() } }
+}
+function sessionState(now, [name, tz, open, close]) {
+  const { wd, min } = zoneNow(now, tz)
+  const weekday = wd >= 1 && wd <= 5
+  if (weekday && min >= open && min < close) return { name, open: true, mins: close - min }
+  if (weekday && min < open) return { name, open: false, mins: open - min }
+  let mins = 24 * 60 - min + open, w = (wd + 1) % 7
+  while (w === 0 || w === 6) { mins += 24 * 60; w = (w + 1) % 7 }
+  return { name, open: false, mins }
+}
+const dur = (m) => (m >= 60 * 24 ? `${Math.floor(m / 1440)}d ${Math.floor((m % 1440) / 60)}h` : m >= 60 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m` : `${m}m`)
+
+function Greeting({ first, s, label, count }) {
+  const [now, setNow] = React.useState(() => new Date())
+  React.useEffect(() => { const i = setInterval(() => setNow(new Date()), 20000); return () => clearInterval(i) }, [])
+  const h = now.getHours()
+  const greet = h < 5 ? 'Late night' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
+  const words = [...greet.split(' ').map((w, i, a) => (i === a.length - 1 ? w + ',' : w)), first + '.']
+  const stamp = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) + ' · ' + now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  const sess = SESSIONS.map((x) => sessionState(now, x))
+  const wr = s.chron.length ? Math.round((s.wins.length / s.chron.length) * 100) : 0
+  return (
+    <div className="greet">
+      <span className="mono gstamp"><i />{stamp}</span>
+      <h1 aria-label={`${greet}, ${first}.`}>
+        {words.map((w, i) => <span key={i} className={'gw' + (i === words.length - 1 ? ' name' : '')} style={{ '--i': i }}><span>{w}</span></span>)}
+      </h1>
+      <p className="gsum">
+        {count ? (
+          <>{s.net >= 0 ? 'Up ' : 'Down '}<b>{plain(s.net)}</b> {label === 'All time' ? 'all time' : 'in ' + label} · <b>{count}</b> {count === 1 ? 'trade' : 'trades'} · <b>{wr}%</b> win rate{s.best && s.byDay[s.best] > 0 ? <> · best day <b>{signedK(s.byDay[s.best])}</b></> : null}</>
+        ) : <>No trades in {label === 'All time' ? 'your journal' : label} yet. Clean slate.</>}
+      </p>
+      <div className="gsess" aria-label="Market sessions">
+        {sess.map((x) => (
+          <span key={x.name} className={'gs' + (x.open ? ' open' : '')}>
+            <i />{x.name}<small>{x.open ? `open · ${dur(x.mins)} left` : `opens in ${dur(x.mins)}`}</small>
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function DashboardV4() {
   const { trades, user, openLog, sample } = useStore()
   const { theme } = useSkin()
@@ -247,8 +298,6 @@ export default function DashboardV4() {
   const aw = s.wins.length ? s.gw / s.wins.length : 0, al = s.losses.length ? s.gl / s.losses.length : 0
   const green = s.days.filter((d) => s.byDay[d] > 0).length
   const recent = trades.slice(0, 12)
-  const greet = new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening'
-  const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
   const openTrade = (t) => { sessionStorage.setItem('ltj_v3_sel', t.id); location.hash = 'journal' }
 
   return (
@@ -257,10 +306,7 @@ export default function DashboardV4() {
       <div className="chrome-space" aria-hidden="true" />
       <div className="v4-wrap">
         <section className="hello rise">
-          <div>
-            <h1>{greet}, <span>{first}.</span></h1>
-            <p>{today} · {monthTrades} {monthTrades === 1 ? 'trade' : 'trades'} this month</p>
-          </div>
+          <Greeting first={first} s={s} label={b.label} count={s.chron.length} />
           <div className="tools">
             {sample && <span className="owner">Sample trades <button type="button" onClick={() => setSkin({ sample: false })}>Hide</button></span>}
             <SkinTools />
@@ -283,7 +329,7 @@ export default function DashboardV4() {
         ) : (
           <>
             <section className="hero glassy rise" aria-label="Net P&L">
-              <Ink className="hero-ink" range={theme === 'light' ? [0.6, 1.0] : [0.0, 0.3]} highlight={theme === 'light' ? 0.14 : 0.3} zoom={1.05} scale={0.6} pull={2.2} seed={7.7} />
+              <span className={'hero-art ' + theme} aria-hidden="true"><i /></span>
               <span className="hero-scrim" aria-hidden="true" />
               <div className="top">
                 <span className="mono live"><b />Net P&amp;L · {b.label}</span>

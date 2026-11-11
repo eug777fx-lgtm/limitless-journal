@@ -4,7 +4,7 @@ import React from 'react'
 import { useStore } from './store.jsx'
 import { useSkin, Terrain } from './skin.jsx'
 import { isoLocal } from './data.js'
-import Ink, { Bubble } from './ink.jsx'
+import Ink from './ink.jsx'
 
 const still = () => document.documentElement.getAttribute('data-motion') === 'off' || matchMedia('(prefers-reduced-motion: reduce)').matches
 
@@ -82,7 +82,6 @@ export function Scene({ light }) {
       {scene === 'aurora' && <Aurora mood={mood} />}
       {scene === 'drive' && <Drive light={light} mood={mood} />}
       {scene !== 'ink' && <div className={scene === 'still' ? 'sk-terrain' : 'sk-terrain drift'}><Terrain light={light} /></div>}
-      {scene !== 'still' && <Bubble />}
     </div>
   )
 }

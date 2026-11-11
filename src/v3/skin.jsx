@@ -56,6 +56,7 @@ export function SkinTools({ children }) {
     <div className="sk-tools">
       {children}
       <span className="sk-owner">Only you see this <button type="button" onClick={() => setSkin({ on: false })}>Old view</button></span>
+      <button type="button" className="sk-old" title="Only you see the new look" onClick={() => setSkin({ on: false })}>Old view</button>
       <span className="sk-scenes">
         <button type="button" className="sk-ibtn" aria-label="Background scene" aria-expanded={open} onClick={() => setOpen((o) => !o)}><Clapperboard size={16} /></button>
         {open && (

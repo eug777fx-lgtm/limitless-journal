@@ -78,8 +78,7 @@ export default function Ink({ range = [0.86, 0.985], highlight = 0.12, zoom = 1.
       target.x = (e.clientX - r.left) / r.width
       target.y = 1 - (e.clientY - r.top) / r.height
     }
-    const fine = matchMedia('(pointer: fine)').matches
-    if (fine) addEventListener('pointermove', move, { passive: true })
+    const fine = false // the paint moves on its own; the pointer does not push it
 
     const t0 = performance.now() - 40000
     let raf = 0, last = 0, running = false, visible = true
@@ -88,7 +87,7 @@ export default function Ink({ range = [0.86, 0.985], highlight = 0.12, zoom = 1.
       const px = cur.x, py = cur.y
       cur.x += (target.x - cur.x) * 0.08; cur.y += (target.y - cur.y) * 0.08
       vel.x = vel.x * 0.9 + (cur.x - px) * 2.2; vel.y = vel.y * 0.9 + (cur.y - py) * 2.2
-      gl.uniform2f(U.R, W, H); gl.uniform1f(U.T, (now - t0) / 1000)
+      gl.uniform2f(U.R, W, H); gl.uniform1f(U.T, (now - t0) / 1000 * 1.7)
       gl.uniform2f(U.M, cur.x, cur.y); gl.uniform2f(U.V, vel.x, vel.y)
       gl.uniform2f(U.RANGE, o.range[0], o.range[1]); gl.uniform1f(U.HL, o.highlight)
       gl.uniform1f(U.SEED, o.seed); gl.uniform1f(U.ZOOM, o.zoom); gl.uniform1f(U.PULL, fine ? o.pull : 0)

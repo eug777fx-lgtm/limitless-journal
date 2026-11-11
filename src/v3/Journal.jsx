@@ -277,17 +277,8 @@ export default function Journal() {
             {groups.length === 0 && <Empty title="No trades match." body="Try another filter or clear the search." action={q ? <button type="button" className="btn btn-ghost btn-sm" onClick={() => setQ('')}><X size={13} /> Clear search</button> : null} />}
             <div className="jg-grid">
               {groups.map((g, gi) => {
-                const w = g.trades.filter((t) => t.pnl > 0).length
-                const d = new Date(g.date + 'T12:00:00')
                 return (
                   <React.Fragment key={g.date}>
-                    <div className={'jg-dayt ' + (g.net > 0 ? 'win' : g.net < 0 ? 'loss' : '')} style={{ '--d': `${Math.min(gi * 3, 14) * 45}ms` }} aria-label={dayLabel(g.date, true)}>
-                      <span className="sk-mono">{d.toLocaleDateString('en-US', { weekday: 'short' })} · {d.toLocaleDateString('en-US', { month: 'short' })}</span>
-                      <b className="jg-dnum">{d.getDate()}</b>
-                      <PnL v={g.net} className="jg-net" />
-                      <span className="jg-dots">{g.trades.map((t) => <i key={t.id} className={t.pnl > 0 ? 'w' : t.pnl < 0 ? 'l' : ''} />)}</span>
-                      <span className="sk-mono">{g.trades.length} {g.trades.length === 1 ? 'trade' : 'trades'} · {w}W {g.trades.length - w}L</span>
-                    </div>
                     {g.trades.map((t, i) => (
                       <button key={t.id} type="button" className={'jg-card ' + (t.pnl > 0 ? 'win' : t.pnl < 0 ? 'loss' : '')} style={{ '--d': `${Math.min(gi * 3 + i + 1, 16) * 45}ms` }} onClick={() => choose(t.id)} aria-label={`${t.symbol} ${t.side} ${money(t.pnl)}`}>
                         <span className="jg-img"><TradeImage t={t} /></span>
@@ -295,7 +286,7 @@ export default function Journal() {
                         {t.r !== null && <span className="jg-chip r">{fmtR(t.r, 1)}</span>}
                         <span className="jg-meta">
                           <span className="jg-row"><b>{t.symbol}</b><PnL v={t.pnl} /></span>
-                          <small>{[t.setup !== 'Untagged' ? t.setup : null, t.session, t.plan === 'YES' ? 'plan kept' : t.plan === 'NO' ? 'off plan' : t.plan === 'PARTIALLY' ? 'partly' : null].filter(Boolean).join(' · ') || dayLabel(t.date)}</small>
+                          <small>{[new Date(t.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }), t.session, t.plan === 'YES' ? 'plan kept' : t.plan === 'NO' ? 'off plan' : t.plan === 'PARTIALLY' ? 'partly' : null].filter(Boolean).join(' · ')}</small>
                         </span>
                       </button>
                     ))}
