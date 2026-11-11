@@ -74,6 +74,14 @@ export function V3Provider({ app, children }) {
       if (error) throw new Error(error.message)
       setTrades((prev) => prev.filter((t) => t.id !== id))
     },
+    async deleteTrades(ids) {
+      if (!ids.length) return 0
+      const { error } = await supabase.from('trades').delete().in('id', ids).eq('user_id', uid)
+      if (error) throw new Error(error.message)
+      const gone = new Set(ids)
+      setTrades((prev) => prev.filter((t) => !gone.has(t.id)))
+      return ids.length
+    },
     async importTrades(rows) {
       const clean = rows.map((r) => ({ ...r, user_id: uid, trade_date: r.trade_date || new Date().toISOString().slice(0, 10) }))
       const { data, error } = await supabase.from('trades').insert(clean).select()

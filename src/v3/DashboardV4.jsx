@@ -8,6 +8,7 @@ import { isoLocal, monthLabel, dayLabel } from './data.js'
 import { useSkin, setSkin, SkinTools } from './skin.jsx'
 import { Scene } from './scene.jsx'
 import { replaySplash } from './Splash.jsx'
+import { SampleControls } from './samples.jsx'
 import { HeroBg, HeroPicker } from './hero.jsx'
 import { TradeImage } from './art.jsx'
 import './v4.css'
@@ -301,7 +302,7 @@ export default function DashboardV4() {
             </div>
             <Greeting />
             <div className="tools-r">
-              {sample && <span className="owner">Sample trades <button type="button" onClick={() => setSkin({ sample: false })}>Hide</button></span>}
+              <SampleControls />
               <SkinTools />
               <button type="button" className="ibtn glassy" aria-label="Replay welcome" title="Replay welcome" onClick={replaySplash}><RotateCcw size={16} /></button>
             </div>

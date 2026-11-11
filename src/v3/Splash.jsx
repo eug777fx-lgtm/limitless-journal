@@ -11,6 +11,8 @@ export default function Splash() {
   const { user } = useStore()
   const [show, setShow] = React.useState(() => { try { return !sessionStorage.getItem(KEY) } catch { return false } })
   const [out, setOut] = React.useState(false)
+  // if the loading screen is still up, carry on from it instead of popping the logo again
+  const [cont] = React.useState(() => !!document.querySelector('.ltj-boot'))
   React.useEffect(() => {
     const replay = () => { setOut(false); setShow(true) }
     addEventListener('ltj-splash', replay)
@@ -29,7 +31,7 @@ export default function Splash() {
   const first = (user.name || 'Trader').split(' ')[0]
   const date = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
   return (
-    <div className={'splash' + (out ? ' out' : '')} onClick={() => setOut(true)} role="presentation">
+    <div className={'splash' + (out ? ' out' : '') + (cont ? ' cont' : '')} onClick={() => setOut(true)} role="presentation">
       <div className="splash-mark">
         <svg viewBox="0 0 200 200" aria-hidden="true">
           <circle className="r1" cx="100" cy="100" r="92" />

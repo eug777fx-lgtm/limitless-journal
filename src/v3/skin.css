@@ -604,3 +604,13 @@ body.v4-skin .chrome .tabbar { transition: opacity .3s, transform .4s cubic-bezi
   .jg-meta small { display: block; }
 }
 @media (max-width: 380px) { .v4 .hello .tools { grid-template-columns: 1fr; } .v4 .hello .tools-r { justify-self: start; } }
+/* splash continuing from the loading screen: logo already there, ring completes */
+.splash.cont .splash-logo { animation: none; }
+.splash.cont .r1 { animation-delay: .05s; animation-duration: .8s; }
+.splash.cont .r2 { animation-delay: .8s; }
+.splash.cont .splash-hi span { animation-delay: .55s; }
+.splash.cont .splash-hi .nm { animation-delay: .7s; }
+.splash.cont .splash-date { animation-delay: .9s; }
+.v4 .hello .tools .sk-samples { display: inline-flex !important; }
+.sk-samples button + button { margin-left: 4px; }
+@media (max-width: 760px) { .v4 .hello .tools .sk-samples { display: none !important; } }

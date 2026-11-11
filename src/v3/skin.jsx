@@ -38,7 +38,10 @@ export function useSkinActive(owner) {
   const s = useSkin()
   const active = !!owner && s.on
   const light = active && s.theme === 'light'
+  React.useEffect(() => { try { localStorage.setItem('ltj_v4_owner', owner ? '1' : '0') } catch { /* ignore */ } }, [owner])
   React.useLayoutEffect(() => {
+    document.documentElement.classList.toggle('ltj-v4', active)
+    document.documentElement.classList.toggle('ltj-v4-light', light)
     const b = document.body
     b.classList.toggle('v4-skin', active)
     b.classList.toggle('v4-light', light)
@@ -48,7 +51,7 @@ export function useSkinActive(owner) {
   }, [active, light])
   React.useEffect(() => () => {
     document.body.classList.remove('v4-skin', 'v4-light')
-    document.documentElement.classList.remove('v4-light-root')
+    document.documentElement.classList.remove('v4-light-root', 'ltj-v4', 'ltj-v4-light')
   }, [])
   return active
 }

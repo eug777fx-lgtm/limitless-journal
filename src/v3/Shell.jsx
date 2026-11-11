@@ -4,6 +4,7 @@ import { useStore, go } from './store.jsx'
 import { Backdrop, Logo, wordSize } from './ui.jsx'
 import { useSkin, setSkin, SkinTools, SampleBanner } from './skin.jsx'
 import { Scene } from './scene.jsx'
+import { SampleControls } from './samples.jsx'
 
 const SITE = 'https://limitless-journal.com'
 const NAV = [
@@ -126,7 +127,7 @@ export default function AppShell({ route, word, title, children }) {
               <span className="sk-mono">{date}</span>
               <h1>{title || TITLES[route] || 'LIMITLESS'}</h1>
             </div>
-            <SkinTools><SampleBanner /></SkinTools>
+            <SkinTools><SampleControls /></SkinTools>
           </header>
           {children}
         </main>

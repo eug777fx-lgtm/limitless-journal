@@ -20,6 +20,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="LIMITLESS" id="apple-title" />
+    <script>try { if (localStorage.getItem('ltj_v4_owner') === '1' && localStorage.getItem('ltj_v4_on') !== '0') { document.documentElement.classList.add('ltj-v4'); if (localStorage.getItem('ltj_v4_theme') !== 'dark') document.documentElement.classList.add('ltj-v4-light') } } catch (e) {}</script>
     <script>if (location.pathname.indexOf('/asia') === 0) document.getElementById('apple-title').content = 'Asia'</script>
 
     <!-- Primary SEO -->
@@ -58,6 +59,17 @@
       .ltj-boot-bar i { position: absolute; top: 0; bottom: 0; left: 0; width: 38%; border-radius: 99px; background: #fff; box-shadow: 0 0 12px rgba(255,255,255,0.6); animation: ltjSlide 1.25s cubic-bezier(.65, 0, .35, 1) infinite; }
       #app-loader .ltj-boot-chip { animation: ltjIn .7s cubic-bezier(.34, 1.56, .64, 1) both, ltjBreath 2.4s ease-in-out .7s infinite; }
       #app-loader .ltj-boot-bar { animation: ltjFade .5s ease .25s both; }
+      /* owner preview of the new look: the same logo and ring the opening screen continues from */
+      html.ltj-v4, html.ltj-v4 body { background: #000; }
+      html.ltj-v4.ltj-v4-light, html.ltj-v4.ltj-v4-light body { background: #F1F2F3; }
+      html.ltj-v4 .ltj-boot { background: #000; }
+      html.ltj-v4.ltj-v4-light .ltj-boot { background: #F1F2F3; }
+      html.ltj-v4 .ltj-boot-grid, html.ltj-v4 .ltj-boot-spot, html.ltj-v4 .ltj-boot-bar { display: none; }
+      html.ltj-v4 .ltj-boot-chip, html.ltj-v4 #app-loader .ltj-boot-chip { width: 96px; height: 96px; background: #0B0B0C; box-shadow: 0 24px 44px -16px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,255,255,.12); animation: ltjIn .7s cubic-bezier(.34, 1.56, .64, 1) both; }
+      html.ltj-v4 .ltj-boot-chip img { width: 54px; filter: none; }
+      html.ltj-v4 .ltj-boot-chip::after { content: ""; position: absolute; inset: -21px; border-radius: 50%; border: 2.2px solid transparent; border-top-color: #fff; border-right-color: rgba(255,255,255,.35); animation: ltjSpin 1s linear infinite; }
+      html.ltj-v4.ltj-v4-light .ltj-boot-chip::after { border-top-color: #0B0B0C; border-right-color: rgba(11,11,12,.3); }
+      @keyframes ltjSpin { to { transform: rotate(360deg); } }
       @keyframes ltjIn { from { opacity: 0; transform: scale(.86); } to { opacity: 1; transform: none; } }
       @keyframes ltjFade { from { opacity: 0; } to { opacity: 1; } }
       @keyframes ltjBreath { 0%, 100% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.45), inset 0 0 0 1px rgba(255,255,255,0.16), 0 10px 30px rgba(0,0,0,0.5), 0 0 0 rgba(255,255,255,0); } 50% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), inset 0 0 0 1px rgba(255,255,255,0.2), 0 10px 30px rgba(0,0,0,0.5), 0 0 44px rgba(255,255,255,0.16); } }
