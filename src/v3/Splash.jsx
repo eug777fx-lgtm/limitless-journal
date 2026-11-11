@@ -10,7 +10,8 @@ const still = () => document.documentElement.getAttribute('data-motion') === 'of
 
 export default function Splash() {
   const { user } = useStore()
-  const [show, setShow] = React.useState(() => { try { return !sessionStorage.getItem(KEY) } catch { return false } })
+  const tz = useTzSetting()
+  const [show, setShow] = React.useState(() => { try { const s = !sessionStorage.getItem(KEY); if (!s) setTimeout(() => dispatchEvent(new Event('ltj-splash-done')), 0); return s } catch { return false } })
   const [out, setOut] = React.useState(false)
   // if the loading screen is still up, carry on from it instead of popping the logo again
   const [cont] = React.useState(() => !!document.querySelector('.ltj-boot'))
@@ -23,11 +24,11 @@ export default function Splash() {
     if (!show) return
     try { sessionStorage.setItem(KEY, '1') } catch { /* private mode */ }
     const t1 = setTimeout(() => setOut(true), still() ? 900 : 2600)
-    const t2 = setTimeout(() => { setShow(false); setOut(false) }, still() ? 1300 : 3300)
+    const t2 = setTimeout(() => { setShow(false); setOut(false); dispatchEvent(new Event('ltj-splash-done')) }, still() ? 1300 : 3300)
     return () => { clearTimeout(t1); clearTimeout(t2) }
   }, [show])
   if (!show) return null
-  const h = tzHour(useTzSetting())
+  const h = tzHour(tz)
   const greet = h < 5 ? 'Late night' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
   const first = (user.name || 'Trader').split(' ')[0]
   const date = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })

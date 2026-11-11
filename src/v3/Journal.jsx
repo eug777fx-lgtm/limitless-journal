@@ -15,7 +15,7 @@ function Shots({ t }) {
   React.useEffect(() => { setI(0) }, [t.id])
   const { isSuperAdmin } = useStore()
   const skin = useSkin()
-  if (!t.shots.length && isSuperAdmin && skin.on) {
+  if (!t.shots.length && skin.on) {
     return (
       <div className="jg-art">
         <TradeArt t={t} />
@@ -217,7 +217,7 @@ export function exportCSV(trades) {
 export default function Journal() {
   const { trades, stats, openLog, isSuperAdmin } = useStore()
   const skin = useSkin()
-  const gallery = !!isSuperAdmin && skin.on
+  const gallery = skin.on
   const [tab, setTab] = React.useState(() => { try { return sessionStorage.getItem('ltj_jr_tab') || 'trades' } catch { return 'trades' } })
   const pickTab = (t) => { setTab(t); try { sessionStorage.setItem('ltj_jr_tab', t) } catch { /* ignore */ } }
   const [seg, setSeg] = React.useState('All')

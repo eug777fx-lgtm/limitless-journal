@@ -1,6 +1,7 @@
 import React from 'react'
 import { CreditCard, RefreshCw, Download, Upload, LogOut, ClipboardList, Users, Newspaper, CalendarDays, Check, Lock, Send, Trash2, RotateCcw, AlertTriangle, FlaskConical, ShieldCheck, Repeat } from 'lucide-react'
-import { useStore } from './store.jsx'
+import { useStore, getTransition, applyTransitionPref, TRANSITION_KEY } from './store.jsx'
+import { replayTour } from './Tour.jsx'
 import { Seg, Modal, PnL } from './ui.jsx'
 import { supabase } from '../lib/supabase'
 import { money } from './data.js'
@@ -100,10 +101,11 @@ function DangerModal({ cfg, busy, onClose }) {
 }
 
 export function Account() {
-  const { user, profile, settings, setSetting, notify, saveProfile, trades, setTrades, setProfile, logout, isAdmin, isSuperAdmin } = useStore()
+  const { user, profile, settings, setSetting, notify, saveProfile, trades, setTrades, setProfile, logout, isAdmin, isSuperAdmin, pro } = useStore()
   const tz = useTzSetting()
   const skinState = useSkin()
-  const skinOn = !!isSuperAdmin && skinState.on
+  const skinOn = skinState.on
+  const [trans, setTrans] = React.useState(getTransition)
   const init = () => ({ first_name: profile?.first_name || '', last_name: profile?.last_name || '', username: profile?.username || '', phone: profile?.phone || '', market_focus: profile?.market_focus || '' })
   const [p, setP] = React.useState(init)
   const [goal, setGoal] = React.useState(profile?.monthly_goal ? String(profile.monthly_goal) : '')
@@ -178,11 +180,11 @@ export function Account() {
   const links = [
     [ClipboardList, 'Trading plan', 'Rules, setup model and the AI checklist', '#plan'],
     [Newspaper, 'News calendar', 'This week and next, in your time zone', '#news'],
-    [Users, 'Network', 'Feed, leaderboard, challenges and chat', '#network'],
+    ...(pro ? [[Users, 'Network', 'Feed, leaderboard and challenges', '#network']] : []),
     [CreditCard, 'Subscription', 'Your plan and billing', '#billing'],
     ...(isAdmin ? [[ShieldCheck, 'Admin panel', 'Users, approvals, tickets and emails', '#admin']] : []),
     ...(isAdmin ? [[FlaskConical, 'Asia backtest', 'Admin only: levels, session log and stats', '#backtest']] : []),
-    ...(isSuperAdmin ? [[Repeat, 'TradeSync', 'Owner only: copy trading', '#copy']] : []),
+    ...(pro ? [[Repeat, 'TradeSync', 'Copy trading across your accounts', '#copy']] : []),
   ]
   return (
     <AppShell route="account" word="ACCOUNT" title="Account">
@@ -229,6 +231,13 @@ export function Account() {
           </div>
         </section>
 
+        {skinOn && (
+          <section className="glass panel" aria-label="Page transition">
+            <div className="panel-head"><h2>Page transition</h2><span className="faint" style={{ fontSize: 12.5 }}>How pages change when you switch tabs</span></div>
+            <Seg options={[{ value: 'smooth', label: 'Smooth' }, { value: 'quick', label: 'Quick' }, { value: 'off', label: 'Off' }]} value={trans} onChange={(v) => { try { localStorage.setItem(TRANSITION_KEY, v) } catch { /* ignore */ } applyTransitionPref(); setTrans(v) }} label="Page transition" />
+            <button type="button" className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start' }} onClick={replayTour}>Show the app tour again</button>
+          </section>
+        )}
         {skinOn && (
           <section className="glass panel" aria-label="Time zone">
             <div className="panel-head"><h2>Time zone</h2><span className="faint" style={{ fontSize: 12.5 }}>Used for the clock on your dashboard</span></div>

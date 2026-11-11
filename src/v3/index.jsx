@@ -20,7 +20,10 @@ import LogTradeV4 from './LogTradeV4.jsx'
 import Splash from './Splash.jsx'
 import ShareCard from './ShareCard.jsx'
 import { BootLoader, BootDone } from '../lib/bootLoader.jsx'
-import { useSkinActive, SkinReturn } from './skin.jsx'
+import { useSkinActive, useSkin } from './skin.jsx'
+import { Scene } from './scene.jsx'
+import Tour from './Tour.jsx'
+import { ProLock } from './Shell.jsx'
 import skinCss from './skin.css?inline'
 
 const FONTS = 'https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@500;600&family=Poppins:wght@300;400;500;600;700;800&display=swap'
@@ -57,13 +60,34 @@ const LEGACY = {
   network: { word: 'NETWORK', title: 'Network' },
   admin: { word: 'ADMIN', title: 'Admin', admin: true },
   tos: { word: 'TOS', title: 'TOS', superAdmin: true },
-  copy: { word: 'SYNC', title: 'TradeSync', superAdmin: true },
+  copy: { word: 'SYNC', title: 'TradeSync', pro: true },
+}
+
+// Locked page for Pro features (Network, TradeSync)
+function ProPage({ title }) {
+  return (
+    <AppShell route="billing" word="PRO" title={title}>
+      <div className="wrap" style={{ paddingBottom: 60 }}>
+        <div className="glass panel" style={{ alignItems: 'center', padding: '40px 20px' }}>
+          <ProLock title={`${title} is part of Pro`} body="Pro is coming soon. It adds the LIMITLESS Network and TradeSync on top of everything in your plan." />
+          <a href="#billing" className="btn btn-primary btn-sm">See plans</a>
+        </div>
+      </div>
+    </AppShell>
+  )
+}
+
+function NetworkLocked() { return <ProPage title="Network" /> }
+
+function BgScene() {
+  const { theme } = useSkin()
+  return <Scene light={theme === 'light'} />
 }
 
 function Legacy({ route }) {
-  const { renderLegacy, isAdmin, isSuperAdmin } = useStore()
+  const { renderLegacy, isAdmin, isSuperAdmin, pro } = useStore()
   const meta = LEGACY[route]
-  if ((meta.admin && !isAdmin) || (meta.superAdmin && !isSuperAdmin)) return <Dashboard />
+  if ((meta.admin && !isAdmin) || (meta.superAdmin && !isSuperAdmin) || (meta.pro && !pro)) return <ProPage title={meta.title} />
   return (
     <AppShell route={route} word={meta.word} title={meta.title}>
       <div className="wrap" style={{ paddingBottom: 60 }}>
@@ -78,23 +102,24 @@ function Legacy({ route }) {
 // Admin only: the Asia Model backtest lab. Everyone else lands on the dashboard.
 function AdminBacktest() {
   const { isSuperAdmin } = useStore()
-  return isSuperAdmin ? <Backtest /> : <Dashboard />
+  return isSuperAdmin ? <Backtest /> : <DashboardV4 />
 }
 
 function Router() {
   const route = useRoute()
   useGlassLight()
-  const { isSuperAdmin } = useStore()
-  // New look: owner only until it is switched on for everyone
-  const skinOn = useSkinActive(isSuperAdmin)
-  const C = { dashboard: skinOn ? DashboardV4 : Dashboard, journal: Journal, analytics: Analytics, calendar: Calendar, news: News, billing: Billing, account: Account, backtest: AdminBacktest, ...(skinOn ? { plan: Plan, network: Network } : {}) }[route]
+  const { pro } = useStore()
+  // The new look is on for every trader
+  const skinOn = useSkinActive(true)
+  const C = { dashboard: DashboardV4, journal: Journal, analytics: Analytics, calendar: Calendar, news: News, billing: Billing, account: Account, backtest: AdminBacktest, plan: Plan, network: pro ? Network : NetworkLocked }[route]
   return (
     <>
+      {skinOn && <BgScene />}
       <Chrome route={route} />
       <React.Fragment key={route}>{C ? <C /> : LEGACY[route] ? <Legacy route={route} /> : <Dashboard />}</React.Fragment>
-      {isSuperAdmin && !skinOn && <SkinReturn />}
       {skinOn ? <LogTradeV4 /> : <LogTrade />}
       {skinOn && <Splash />}
+      {skinOn && <Tour />}
       <ShareCard />
       <ToastHost />
     </>

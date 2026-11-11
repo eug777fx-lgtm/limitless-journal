@@ -10,7 +10,7 @@ import { MonthCalendar, TradeRow } from './Dashboard.jsx'
 export function Calendar() {
   const { stats, trades, isSuperAdmin } = useStore()
   const skin = useSkin()
-  const skinOn = !!isSuperAdmin && skin.on
+  const skinOn = skin.on
   const [ym, setYm] = React.useState(stats.thisMonth)
   const [day, setDay] = React.useState(stats.today)
   const list = trades.filter((t) => t.date === day)

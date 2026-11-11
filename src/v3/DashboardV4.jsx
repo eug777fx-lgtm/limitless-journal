@@ -251,7 +251,7 @@ function Greeting() {
 }
 
 export default function DashboardV4() {
-  const { trades, user, openLog, sample } = useStore()
+  const { trades, user, openLog, sample, isSuperAdmin } = useStore()
   const { theme } = useSkin()
   const on = true
   const [period, setPeriod] = React.useState('month')
@@ -289,7 +289,6 @@ export default function DashboardV4() {
 
   return (
     <div className={'stage app v4' + (hidden && trades.length > 0 && intro ? ' intro-on' : '')}>
-      <Scene light={theme === 'light'} />
       <div className="chrome-space" aria-hidden="true" />
       <div className="v4-wrap">
         <section className="hello rise">
@@ -302,17 +301,16 @@ export default function DashboardV4() {
             <div className="tools-r">
               <SampleControls />
               <SkinTools />
-              <button type="button" className="ibtn glassy" aria-label="Replay welcome" title="Replay welcome" onClick={replaySplash}><RotateCcw size={16} /></button>
             </div>
           </div>
         </section>
 
         {!trades.length ? (
-          <section className="hero glassy rise" style={{ alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 12 }}>
+          <section className="hero glassy rise hero-empty" style={{ alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 12 }}>
             <span className="mono k">Net P&amp;L</span>
             <span className="odo" style={{ fontSize: 64 }}>$0</span>
             <span style={{ color: 'var(--v4-ink2)' }}>Log your first trade and this fills in.</span>
-            <button type="button" className="owner" style={{ cursor: 'pointer', border: 0 }} onClick={() => setSkin({ sample: true })}>Preview with sample trades</button>
+            {isSuperAdmin && <button type="button" className="owner" style={{ cursor: 'pointer', border: 0 }} onClick={() => setSkin({ sample: true })}>Preview with sample trades</button>}
             <button type="button" className="ibtn" onClick={openLog} style={{ width: 'auto', padding: '0 18px', borderRadius: 99, background: 'var(--v4-btn)', color: 'var(--v4-btn-ink)', fontWeight: 600, gap: 8, display: 'inline-flex', alignItems: 'center' }}><Plus size={15} /> Log trade</button>
           </section>
         ) : (

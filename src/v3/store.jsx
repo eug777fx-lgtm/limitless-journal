@@ -1,9 +1,11 @@
 // v3 state. The real app (App.jsx) owns auth, the profile, the trades array and
 // billing; this provider wraps them with the actions the glass screens need.
 import React from 'react'
+import { flushSync } from 'react-dom'
 import { supabase } from '../lib/supabase'
 import { toView, computeStats } from './data.js'
 import { useSkin, sampleRows } from './skin.jsx'
+import { hasPaidAccess } from '../lib/billing'
 
 const Ctx = React.createContext(null)
 const SETTINGS_KEY = 'ltj_v3_settings'
@@ -49,6 +51,8 @@ export function V3Provider({ app, children }) {
     ...app,
     user: { name, email: session?.user?.email || '', id: uid },
     trades, stats, toast, settings, share, log, sample,
+    // Pro unlocks the Network and TradeSync. Admins always have them.
+    pro: !!(app.isAdmin || app.isSuperAdmin || (app.subscription && app.subscription.plan === 'pro' && hasPaidAccess(app.subscription))),
     notify,
     setSetting: (k, v) => setSettings((s) => ({ ...s, [k]: v })),
     openShare: (t) => setShare(t),
@@ -110,10 +114,28 @@ const readRoute = () => {
   const h = ALIAS[raw] || raw || (location.pathname.startsWith('/asia') ? 'backtest' : '')
   return ROUTES.includes(h) ? h : 'dashboard'
 }
+// Page switches: a real cross-fade between the old and new page where the browser supports it.
+// The trader picks Smooth, Quick or Off in Account (key ltj_transition).
+export const TRANSITION_KEY = 'ltj_transition'
+export const getTransition = () => { try { return localStorage.getItem(TRANSITION_KEY) || 'smooth' } catch { return 'smooth' } }
+export const applyTransitionPref = () => {
+  const m = getTransition()
+  const vt = m !== 'off' && typeof document !== 'undefined' && !!document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches
+  document.documentElement.setAttribute('data-transition', m)
+  document.documentElement.classList.toggle('vt-on', vt)
+}
 export function useRoute() {
   const [route, setRoute] = React.useState(readRoute)
   React.useEffect(() => {
-    const on = () => { setRoute(readRoute()); window.scrollTo(0, 0) }
+    applyTransitionPref()
+    const on = () => {
+      const next = readRoute()
+      const apply = () => { flushSync(() => setRoute(next)); window.scrollTo(0, 0) }
+      if (document.documentElement.classList.contains('vt-on') && !document.querySelector('.overlay')) {
+        try { document.startViewTransition(apply); return } catch { /* fall back */ }
+      }
+      apply()
+    }
     window.addEventListener('hashchange', on)
     return () => window.removeEventListener('hashchange', on)
   }, [])

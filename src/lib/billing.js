@@ -33,6 +33,8 @@ export const PLANS = {
     // Shown blurred until Pro launches.
     features: [
       'Everything in Lite',
+      'The LIMITLESS Network: feed, leaderboard and challenges',
+      'TradeSync copy trading',
       'Daily journal reminders by email',
       'Prop firm rule engines and drawdown gauges',
       'Payout tracker and scaling planner',

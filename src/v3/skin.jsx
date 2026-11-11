@@ -10,7 +10,7 @@ export const HEROES = ['paint', 'haze', 'art', 'custom']
 const read = (k, d) => { try { return localStorage.getItem(k) ?? d } catch { return d } }
 const write = (k, v) => { try { localStorage.setItem(k, v) } catch { /* private mode */ } }
 
-let state = { on: read(ON, '1') === '1', theme: read(THEME, 'light') === 'dark' ? 'dark' : 'light', sample: read(SAMPLE, '0') === '1', scene: SCENES.some(([k]) => k === read(SCENE, '')) ? read(SCENE, '') : 'ink',
+let state = { on: true, theme: read(THEME, 'light') === 'dark' ? 'dark' : 'light', sample: read(SAMPLE, '0') === '1', scene: SCENES.some(([k]) => k === read(SCENE, '')) ? read(SCENE, '') : 'ink',
   hero: HEROES.includes(read(HERO, '')) ? read(HERO, '') : 'paint', heroImg: read(HERO_IMG, '') || '', heroColor: read(HERO_COLOR, '0') === '1' }
 if (state.hero === 'custom' && !state.heroImg) state.hero = 'paint'
 // ?sample=1 in the link turns the example trades on for this device (?sample=0 turns them off)
@@ -20,6 +20,7 @@ try {
 } catch { /* ignore */ }
 const subs = new Set()
 export function setSkin(patch) {
+  if ('on' in patch) patch = { ...patch, on: true } // the new look is the only look now
   state = { ...state, ...patch }
   if ('on' in patch) write(ON, state.on ? '1' : '0')
   if ('theme' in patch) write(THEME, state.theme)
@@ -38,7 +39,7 @@ export function useSkinActive(owner) {
   const s = useSkin()
   const active = !!owner && s.on
   const light = active && s.theme === 'light'
-  React.useEffect(() => { try { localStorage.setItem('ltj_v4_owner', owner ? '1' : '0') } catch { /* ignore */ } }, [owner])
+  React.useEffect(() => { try { localStorage.setItem('ltj_v4_owner', active ? '1' : '0') } catch { /* ignore */ } }, [active])
   React.useLayoutEffect(() => {
     document.documentElement.classList.toggle('ltj-v4', active)
     document.documentElement.classList.toggle('ltj-v4-light', light)
@@ -73,8 +74,6 @@ export function SkinTools({ children }) {
   return (
     <div className="sk-tools">
       {children}
-      <span className="sk-owner">Only you see this <button type="button" onClick={() => setSkin({ on: false })}>Old view</button></span>
-      <button type="button" className="sk-old" title="Only you see the new look" onClick={() => setSkin({ on: false })}>Old view</button>
       <span className="sk-scenes">
         <button type="button" className="sk-ibtn" aria-label="Background scene" aria-expanded={open} onClick={() => setOpen((o) => !o)}><Clapperboard size={16} /></button>
         {open && (

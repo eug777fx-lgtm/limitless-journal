@@ -19,7 +19,7 @@ const MORE_ROUTES = ['account', 'billing', 'news', 'network', 'calendar', 'plan'
 export const initials = (name) => (name || 'T').trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase()
 
 function TopNav({ route }) {
-  const { openLog, user, logout, isAdmin, isSuperAdmin } = useStore()
+  const { openLog, user, logout, isAdmin, isSuperAdmin, pro } = useStore()
   const ref = React.useRef(null)
   const [pill, setPill] = React.useState(null)
   const [menu, setMenu] = React.useState(false)
@@ -42,11 +42,12 @@ function TopNav({ route }) {
     document.addEventListener('pointerdown', close)
     return () => document.removeEventListener('pointerdown', close)
   }, [menu])
-  const items = [[User, 'Account and settings', 'account'], [CreditCard, 'Subscription', 'billing'], [Newspaper, 'News calendar', 'news'], [Users, 'Network', 'network']]
+  const items = [[User, 'Account and settings', 'account'], [CreditCard, 'Subscription', 'billing'], [Newspaper, 'News calendar', 'news'], ...(pro ? [[Users, 'Network', 'network']] : [])]
   if (isSuperAdmin) items.push([FlaskConical, 'Asia backtest', 'backtest'])
   if (isAdmin) items.push([ShieldCheck, 'Admin panel', 'admin'])
-  const skinOn = useSkin().on && isSuperAdmin
-  if (isSuperAdmin) items.push(...(skinOn ? [] : [[ScrollText, 'TOS', 'tos']]), [Repeat, 'TradeSync', 'copy'])
+  const skinOn = useSkin().on
+  if (isSuperAdmin && !skinOn) items.push([ScrollText, 'TOS', 'tos'])
+  if (pro) items.push([Repeat, 'TradeSync', 'copy'])
   return (
     <div className="topnav wrap">
       <nav ref={ref} aria-label="Main" className="capsule glass">
@@ -116,11 +117,10 @@ export function Chrome({ route }) {
 export default function AppShell({ route, word, title, children }) {
   const { isSuperAdmin } = useStore()
   const skin = useSkin()
-  if (isSuperAdmin && skin.on) {
+  if (skin.on) {
     const date = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
     return (
       <div className="stage app view v4page" key={route}>
-        <Scene light={skin.theme === 'light'} />
         <div className="chrome-space" aria-hidden="true" />
         <main>
           <header className="wrap sk-head">
