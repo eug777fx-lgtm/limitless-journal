@@ -67,8 +67,8 @@
       html.ltj-v4 .ltj-boot-grid, html.ltj-v4 .ltj-boot-spot, html.ltj-v4 .ltj-boot-bar { display: none; }
       html.ltj-v4 .ltj-boot-chip, html.ltj-v4 #app-loader .ltj-boot-chip { width: 96px; height: 96px; background: #0B0B0C; box-shadow: 0 24px 44px -16px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,255,255,.12); animation: ltjIn .7s cubic-bezier(.34, 1.56, .64, 1) both; }
       html.ltj-v4 .ltj-boot-chip img { width: 54px; filter: none; }
-      html.ltj-v4 .ltj-boot-chip::after { content: ""; position: absolute; inset: -21px; border-radius: 50%; border: 2.2px solid transparent; border-top-color: #fff; border-right-color: rgba(255,255,255,.35); animation: ltjSpin 1s linear infinite; }
-      html.ltj-v4.ltj-v4-light .ltj-boot-chip::after { border-top-color: #0B0B0C; border-right-color: rgba(11,11,12,.3); }
+      html.ltj-v4 .ltj-boot-chip::after { content: ""; position: absolute; inset: -21px; border-radius: 50%; border: 2.2px solid transparent; border-top-color: #fff; animation: ltjSpin 1s linear infinite; }
+      html.ltj-v4.ltj-v4-light .ltj-boot-chip::after { border-top-color: #0B0B0C; }
       @keyframes ltjSpin { to { transform: rotate(360deg); } }
       @keyframes ltjIn { from { opacity: 0; transform: scale(.86); } to { opacity: 1; transform: none; } }
       @keyframes ltjFade { from { opacity: 0; } to { opacity: 1; } }

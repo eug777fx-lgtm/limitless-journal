@@ -751,3 +751,15 @@ body.v4-skin.v4-light .v3-legacy { filter: invert(.95) hue-rotate(180deg) graysc
 body.v4-skin.v4-light .v3-legacy img, body.v4-skin.v4-light .v3-legacy video { filter: invert(1) hue-rotate(180deg); }
 body.v4-skin .v3-legacy { font-family: var(--body); border-radius: 24px; }
 .v4 .gnow b { font-size: 22px; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+
+/* splash: logo sits exactly where the loading screen had it (dead center), text hangs below */
+.splash { display: block; padding: 0; }
+.splash-mark { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+.splash-hi { position: absolute; left: 0; right: 0; top: calc(50% + 96px); padding: 0 20px; text-align: center; }
+.splash-date { position: absolute; left: 0; right: 0; top: calc(50% + 96px + clamp(44px, 9vw, 62px)); text-align: center; }
+/* coming from the loading screen: the spinning arc keeps turning and closes into the full ring */
+.splash.cont .r1 { stroke-dashoffset: 433; animation: ringClose .9s cubic-bezier(.4,0,.2,1) forwards; }
+.splash.cont .splash-mark svg { animation: ringTurn .9s cubic-bezier(.2,0,.2,1) forwards; }
+@keyframes ringClose { from { stroke-dashoffset: 433; } to { stroke-dashoffset: 0; } }
+@keyframes ringTurn { from { transform: rotate(-90deg); } to { transform: rotate(270deg); } }
+.splash .r1 { stroke-width: 2.93; }
