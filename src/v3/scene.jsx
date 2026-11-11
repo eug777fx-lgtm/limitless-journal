@@ -31,7 +31,7 @@ export function Scene({ light }) {
   const mood = useMood()
   return (
     <div className={'sk-scene ' + (scene === 'aurora' ? 'aurora' : 'ink')} aria-hidden="true">
-      {scene !== 'aurora' && <Ink key={light ? 'l' : 'd'} phoneFps={8} phoneScale={0.22} range={light ? [0.865, 0.985] : [0.012, 0.13]} highlight={light ? 0.07 : 0.16} zoom={1.25} scale={0.42} />}
+      {scene !== 'aurora' && <Ink key={light ? 'l' : 'd'} phoneFps={15} phoneScale={0.45} range={light ? [0.865, 0.985] : [0.012, 0.13]} highlight={light ? 0.07 : 0.16} zoom={1.25} scale={0.42} />}
       {scene === 'aurora' && <Aurora mood={mood} />}
       {scene === 'aurora' && <div className="sk-terrain drift"><Terrain light={light} /></div>}
     </div>

@@ -12,7 +12,7 @@ export function HeroBg({ theme }) {
   if (hero === 'haze') return <div className="hero-haze" aria-hidden="true"><div className="sk-aurora"><i className="a1" /><i className="a2" /><i className="a3" /></div></div>
   if (hero === 'art') return <span className={'hero-art ' + theme} aria-hidden="true"><i /></span>
   if (hero === 'custom' && heroImg) return <span className={'hero-art custom' + (heroColor ? ' color' : '')} aria-hidden="true"><i style={{ backgroundImage: `url(${heroImg})` }} /></span>
-  return <Ink key={theme} className="hero-ink" phoneFps={20} phoneScale={0.36} range={light ? [0.7, 1.0] : [0.0, 0.26]} highlight={light ? 0.12 : 0.26} zoom={1.05} scale={0.6} seed={7.7} />
+  return <Ink key={theme} className="hero-ink" phoneFps={30} phoneScale={0.6} range={light ? [0.7, 1.0] : [0.0, 0.26]} highlight={light ? 0.12 : 0.26} zoom={1.05} scale={0.6} seed={7.7} />
 }
 
 // Shrink an uploaded picture so it fits in the browser's storage

@@ -67,7 +67,7 @@ export default function Ink({ range = [0.86, 0.985], highlight = 0.12, zoom = 1.
 
     let W = 1, H = 1
     const size = () => {
-      const r = cv.getBoundingClientRect(), sc = opts.current.scale * (PHONE ? 1 : Math.min(2, devicePixelRatio || 1))
+      const r = cv.getBoundingClientRect(), sc = opts.current.scale * Math.min(PHONE ? 1.5 : 2, devicePixelRatio || 1)
       W = cv.width = Math.max(2, Math.round(r.width * sc)); H = cv.height = Math.max(2, Math.round(r.height * sc))
       gl.viewport(0, 0, W, H)
     }
@@ -85,6 +85,10 @@ export default function Ink({ range = [0.86, 0.985], highlight = 0.12, zoom = 1.
     const fine = false // the paint moves on its own; the pointer does not push it
 
     const t0 = performance.now() - 40000
+    // give page switches the whole phone for a moment
+    let hold = 0
+    const onNav = () => { hold = performance.now() + (PHONE ? 500 : 250) }
+    addEventListener('hashchange', onNav)
     let raf = 0, last = 0, running = false, visible = true
     const draw = (now) => {
       const o = opts.current
@@ -99,7 +103,7 @@ export default function Ink({ range = [0.86, 0.985], highlight = 0.12, zoom = 1.
     }
     const frame = (now) => {
       raf = requestAnimationFrame(frame)
-      if (now - last < opts.current.gap) return
+      if (now - last < opts.current.gap || now < hold) return
       last = now; draw(now)
     }
     const start = () => { if (running || still() || document.hidden || !visible) return; running = true; raf = requestAnimationFrame(frame) }
@@ -109,7 +113,7 @@ export default function Ink({ range = [0.86, 0.985], highlight = 0.12, zoom = 1.
     const vis = () => (document.hidden ? stop() : start())
     document.addEventListener('visibilitychange', vis)
     draw(performance.now()); start()
-    return () => { stop(); ro.disconnect(); io.disconnect(); document.removeEventListener('visibilitychange', vis); removeEventListener('pointermove', move); const ext = gl.getExtension('WEBGL_lose_context'); if (ext) ext.loseContext() }
+    return () => { stop(); removeEventListener('hashchange', onNav); ro.disconnect(); io.disconnect(); document.removeEventListener('visibilitychange', vis); removeEventListener('pointermove', move); const ext = gl.getExtension('WEBGL_lose_context'); if (ext) ext.loseContext() }
   }, [])
   return <canvas ref={ref} className={'paint ' + className} aria-hidden="true" />
 }

@@ -620,8 +620,8 @@ body.v4-skin .chrome .tabbar { transition: opacity .3s, transform .4s cubic-bezi
 .jg-card { content-visibility: auto; contain-intrinsic-size: 260px 230px; }
 @media (max-width: 760px), (pointer: coarse) {
   /* glass blur is the heaviest thing a phone draws: use solid cards instead */
-  body.v4-skin { --v4-card: rgba(22,22,24,.92); }
-  body.v4-skin.v4-light { --v4-card: rgba(255,255,255,.94); }
+  body.v4-skin { --v4-card: rgba(20,20,22,.74); }
+  body.v4-skin.v4-light { --v4-card: rgba(255,255,255,.82); }
   body.v4-skin :is(.v4page, .overlay, .v4) :is(.glass, .glassy, .jg-card, .gs, .jr-tabs, .sk-ibtn, .sk-owner, .pill),
   body.v4-skin .v4 .seg4, body.v4-skin .v4 .ibtn { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
   body.v4-skin .chrome .tabbar nav, body.v4-skin .chrome .capsule { -webkit-backdrop-filter: blur(14px) !important; backdrop-filter: blur(14px) !important; }
