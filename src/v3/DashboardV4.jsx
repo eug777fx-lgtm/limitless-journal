@@ -242,14 +242,33 @@ function Intro({ name, label, net, geom, chartEl, onDone }) {
   )
 }
 
+function sampleTrades() {
+  let z = 11; const r = () => ((z = (z * 1664525 + 1013904223) >>> 0) / 2 ** 32)
+  const out = [], now = new Date()
+  for (let d = 420; d >= 0; d--) {
+    const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - d), wd = day.getDay()
+    if (wd === 0 || wd === 6 || r() < 0.2) continue
+    for (let k = 0, n = 1 + Math.floor(r() * 2.2); k < n; k++) {
+      const win = r() < 0.56, size = 120 + r() * 520
+      const pnl = Math.round((win ? size * (1 + r() * 1.6) : -size * (0.55 + r() * 0.6)) * 100) / 100
+      out.push({ id: `s${d}-${k}`, date: isoLocal(day), created: '', symbol: ['NQ', 'ES', 'MNQ', 'XAU/USD', 'EUR/USD'][Math.floor(r() * 5)], side: r() < 0.55 ? 'Long' : 'Short', pnl, r: null, setup: 'Example', shots: [] })
+    }
+  }
+  return out.reverse()
+}
+
 export default function DashboardV4() {
-  const { trades, user, openLog } = useStore()
+  const { trades: realTrades, user, openLog } = useStore()
+  const [sample, setSample] = React.useState(false)
+  const trades = React.useMemo(() => (sample && !realTrades.length ? sampleTrades() : realTrades), [sample, realTrades])
   const [on, setOn] = React.useState(() => read(ON_KEY, '1') === '1')
   const [theme, setTheme] = React.useState(() => read(THEME_KEY, 'dark'))
   const [period, setPeriod] = React.useState('month')
   const [intro, setIntro] = React.useState(() => { try { return !sessionStorage.getItem(INTRO_KEY) } catch { return false } })
   const [hidden, setHidden] = React.useState(intro)
   const [geom, setGeom] = React.useState(null)
+  // never leave the page hidden if the welcome cannot run
+  React.useEffect(() => { if (!intro) return; const t = setTimeout(() => { setHidden(false); setIntro(false) }, 6000); return () => clearTimeout(t) }, [intro])
   const chart = React.useRef(null)
   const segRef = React.useRef(null)
   const [pill, setPill] = React.useState(null)
@@ -290,7 +309,7 @@ export default function DashboardV4() {
   const openTrade = (t) => { sessionStorage.setItem('ltj_v3_sel', t.id); location.hash = 'journal' }
 
   return (
-    <div className={'stage app v4' + (hidden ? ' intro-on' : '')}>
+    <div className={'stage app v4' + (hidden && trades.length > 0 && intro ? ' intro-on' : '')}>
       <Terrain light={theme === 'light'} />
       <div className="chrome-space" aria-hidden="true" />
       <div className="v4-wrap">
@@ -300,6 +319,7 @@ export default function DashboardV4() {
             <p>{today} · {monthTrades} {monthTrades === 1 ? 'trade' : 'trades'} this month</p>
           </div>
           <div className="tools">
+            {sample && <span className="owner">Sample trades <button type="button" onClick={() => setSample(false)}>Hide</button></span>}
             <span className="owner">Only you see this <button type="button" onClick={() => { write(ON_KEY, '0'); setOn(false) }}>Old view</button></span>
             <button type="button" className="ibtn glassy" aria-label={theme === 'light' ? 'Dark mode' : 'Light mode'} onClick={() => { const n = theme === 'light' ? 'dark' : 'light'; write(THEME_KEY, n); setTheme(n) }}>{theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}</button>
             <button type="button" className="ibtn glassy" aria-label="Replay welcome" onClick={() => { setHidden(true); setIntro(true) }}><RotateCcw size={16} /></button>
@@ -315,6 +335,7 @@ export default function DashboardV4() {
             <span className="mono k">Net P&amp;L</span>
             <span className="odo" style={{ fontSize: 64 }}>$0</span>
             <span style={{ color: 'var(--v4-ink2)' }}>Log your first trade and this fills in.</span>
+            <button type="button" className="owner" style={{ cursor: 'pointer', border: 0 }} onClick={() => setSample(true)}>Preview with sample trades</button>
             <button type="button" className="ibtn" onClick={openLog} style={{ width: 'auto', padding: '0 18px', borderRadius: 99, background: 'var(--v4-btn)', color: 'var(--v4-btn-ink)', fontWeight: 600, gap: 8, display: 'inline-flex', alignItems: 'center' }}><Plus size={15} /> Log trade</button>
           </section>
         ) : (
@@ -325,7 +346,7 @@ export default function DashboardV4() {
                 <span className="mono legend"><span><i />{b.label}</span>{s.prev && <span><i className="g" />{b.prevLabel}</span>}</span>
               </div>
               <div className="num">
-                <Odo value={hidden ? 0 : s.net} />
+                <Odo value={hidden && intro ? 0 : s.net} />
                 <div className="sub">
                   <span className="pill">{s.wins.length}W · {s.losses.length}L</span>
                   <span className={'pill ' + (s.last7 >= 0 ? 'up' : 'down')}>{signedK(s.last7)} last 7 days</span>
