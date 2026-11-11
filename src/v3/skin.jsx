@@ -13,6 +13,11 @@ const write = (k, v) => { try { localStorage.setItem(k, v) } catch { /* private 
 let state = { on: read(ON, '1') === '1', theme: read(THEME, 'light') === 'dark' ? 'dark' : 'light', sample: read(SAMPLE, '0') === '1', scene: SCENES.some(([k]) => k === read(SCENE, '')) ? read(SCENE, '') : 'ink',
   hero: HEROES.includes(read(HERO, '')) ? read(HERO, '') : 'paint', heroImg: read(HERO_IMG, '') || '', heroColor: read(HERO_COLOR, '0') === '1' }
 if (state.hero === 'custom' && !state.heroImg) state.hero = 'paint'
+// ?sample=1 in the link turns the example trades on for this device (?sample=0 turns them off)
+try {
+  const q = new URLSearchParams(location.search).get('sample')
+  if (q === '1' || q === '0') { state.sample = q === '1'; write(SAMPLE, q) }
+} catch { /* ignore */ }
 const subs = new Set()
 export function setSkin(patch) {
   state = { ...state, ...patch }
