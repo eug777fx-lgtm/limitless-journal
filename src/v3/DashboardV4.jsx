@@ -1,11 +1,13 @@
 // LIMITLESS dashboard v4. Owner preview only: index.jsx shows it to the super admin,
 // everyone else keeps the current Dashboard until it is switched on for all.
 import React from 'react'
-import { Plus, RotateCcw, Sun, Moon, ArrowRight } from 'lucide-react'
+import { Plus, RotateCcw, ArrowRight } from 'lucide-react'
 import { useStore } from './store.jsx'
 import { LOGO } from './ui.jsx'
 import { isoLocal, monthLabel, dayLabel } from './data.js'
-import { useSkin, setSkin, Terrain } from './skin.jsx'
+import { useSkin, setSkin, SkinTools } from './skin.jsx'
+import { Scene } from './scene.jsx'
+import { TradeImage } from './art.jsx'
 import './v4.css'
 
 const PERIODS = [['week', 'Week'], ['month', 'Month'], ['year', 'Year'], ['all', 'All time']]
@@ -225,8 +227,13 @@ export default function DashboardV4() {
   const strip = React.useRef(null)
 
   React.useLayoutEffect(() => {
-    const b = segRef.current && segRef.current.querySelector('button.on')
-    if (b) setPill({ left: b.offsetLeft, width: b.offsetWidth })
+    const measure = () => { const b = segRef.current && segRef.current.querySelector('button.on'); if (b) setPill({ left: b.offsetLeft, width: b.offsetWidth }) }
+    measure()
+    let alive = true
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => alive && measure())
+    const ro = typeof ResizeObserver !== 'undefined' && segRef.current ? new ResizeObserver(measure) : null
+    if (ro) ro.observe(segRef.current)
+    return () => { alive = false; if (ro) ro.disconnect() }
   }, [period, on])
 
   const b = React.useMemo(() => bounds(period), [period])
@@ -245,7 +252,7 @@ export default function DashboardV4() {
 
   return (
     <div className={'stage app v4' + (hidden && trades.length > 0 && intro ? ' intro-on' : '')}>
-      <Terrain light={theme === 'light'} />
+      <Scene light={theme === 'light'} />
       <div className="chrome-space" aria-hidden="true" />
       <div className="v4-wrap">
         <section className="hello rise">
@@ -255,8 +262,7 @@ export default function DashboardV4() {
           </div>
           <div className="tools">
             {sample && <span className="owner">Sample trades <button type="button" onClick={() => setSkin({ sample: false })}>Hide</button></span>}
-            <span className="owner">Only you see this <button type="button" onClick={() => setSkin({ on: false })}>Old view</button></span>
-            <button type="button" className="ibtn glassy" aria-label={theme === 'light' ? 'Dark mode' : 'Light mode'} onClick={() => setSkin({ theme: theme === 'light' ? 'dark' : 'light' })}>{theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}</button>
+            <SkinTools />
             <button type="button" className="ibtn glassy" aria-label="Replay welcome" onClick={() => { setHidden(true); setIntro(true) }}><RotateCcw size={16} /></button>
             <div ref={segRef} className="seg4 glassy" role="group" aria-label="Period">
               {pill && <i style={{ left: pill.left, width: pill.width }} />}
@@ -319,7 +325,7 @@ export default function DashboardV4() {
                   const c = t.pnl > 0 ? 'var(--v4-pos)' : t.pnl < 0 ? 'var(--v4-neg)' : 'var(--v4-ink2)'
                   return (
                     <button type="button" key={t.id} className="tc" onClick={() => openTrade(t)}>
-                      <div className="shot">{t.shots[0] ? <img src={t.shots[0]} alt="" loading="lazy" /> : <span className="noshot" style={{ color: c }}>{signed(t.pnl)}</span>}<span className="side">{String(t.side).toUpperCase()}</span></div>
+                      <div className="shot"><TradeImage t={t} /><span className="side">{String(t.side).toUpperCase()}</span></div>
                       <div className="meta"><b>{t.symbol}</b><span className="p" style={{ color: c }}>{signed(t.pnl)}</span><small>{dayLabel(t.date)}</small><small>{t.shots[0] ? 'Chart saved' : t.setup !== 'Untagged' ? t.setup : 'No screenshot'}</small></div>
                     </button>
                   )

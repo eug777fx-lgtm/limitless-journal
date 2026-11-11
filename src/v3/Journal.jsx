@@ -5,11 +5,23 @@ import { Seg, PnL, Modal, CloseBtn } from './ui.jsx'
 import { money, fmtR, dayLabel, parseCSV, tradesToCSV } from './data.js'
 import AppShell, { Empty } from './Shell.jsx'
 import { TradeRow } from './Dashboard.jsx'
+import { useSkin } from './skin.jsx'
+import { TradeArt, TradeImage } from './art.jsx'
 
 function Shots({ t }) {
   const [i, setI] = React.useState(0)
   const [zoom, setZoom] = React.useState(false)
   React.useEffect(() => { setI(0) }, [t.id])
+  const { isSuperAdmin } = useStore()
+  const skin = useSkin()
+  if (!t.shots.length && isSuperAdmin && skin.on) {
+    return (
+      <div className="jg-art">
+        <TradeArt t={t} />
+        <span className="sk-mono">Drawn from this trade · add a screenshot in Edit</span>
+      </div>
+    )
+  }
   if (!t.shots.length) {
     return (
       <div className="ink col" style={{ borderRadius: 24, minHeight: 150, alignItems: 'center', justifyContent: 'center', gap: 8 }}>
@@ -202,7 +214,9 @@ export function exportCSV(trades) {
 }
 
 export default function Journal() {
-  const { trades, stats, openLog } = useStore()
+  const { trades, stats, openLog, isSuperAdmin } = useStore()
+  const skin = useSkin()
+  const gallery = !!isSuperAdmin && skin.on
   const [seg, setSeg] = React.useState('All')
   const [q, setQ] = React.useState('')
   const [sel, setSel] = React.useState(() => { try { return sessionStorage.getItem('ltj_v3_sel') || (trades[0] && trades[0].id) } catch { return trades[0] && trades[0].id } })
@@ -212,7 +226,7 @@ export default function Journal() {
   React.useEffect(() => {
     try {
       const pre = sessionStorage.getItem('ltj_v3_sel')
-      if (pre) { sessionStorage.removeItem('ltj_v3_sel'); if (window.matchMedia('(max-width: 760px)').matches) setSheet(true) }
+      if (pre) { sessionStorage.removeItem('ltj_v3_sel'); if (gallery || window.matchMedia('(max-width: 760px)').matches) setSheet(true) }
     } catch { /* ignore */ }
   }, [])
   const filtered = trades.filter((t) => {
@@ -233,7 +247,7 @@ export default function Journal() {
     g.trades.push(t); g.net += t.pnl
   })
   const current = trades.find((t) => t.id === sel) || filtered[0]
-  const choose = (id) => { setSel(id); if (window.matchMedia('(max-width: 760px)').matches) setSheet(true) }
+  const choose = (id) => { setSel(id); if (gallery || window.matchMedia('(max-width: 760px)').matches) setSheet(true) }
   const fnet = filtered.reduce((s, t) => s + t.pnl, 0)
 
   return (
@@ -258,6 +272,39 @@ export default function Journal() {
 
         {!trades.length ? (
           <Empty title="Your journal is empty." body="Log a trade or import a CSV from your platform." action={<button type="button" className="btn btn-primary" onClick={openLog}>Log trade</button>} />
+        ) : gallery ? (
+          <div className="col" style={{ gap: 16 }}>
+            {groups.length === 0 && <Empty title="No trades match." body="Try another filter or clear the search." action={q ? <button type="button" className="btn btn-ghost btn-sm" onClick={() => setQ('')}><X size={13} /> Clear search</button> : null} />}
+            <div className="jg-grid">
+              {groups.map((g, gi) => {
+                const w = g.trades.filter((t) => t.pnl > 0).length
+                const d = new Date(g.date + 'T12:00:00')
+                return (
+                  <React.Fragment key={g.date}>
+                    <div className={'jg-dayt ' + (g.net > 0 ? 'win' : g.net < 0 ? 'loss' : '')} style={{ '--d': `${Math.min(gi * 3, 14) * 45}ms` }} aria-label={dayLabel(g.date, true)}>
+                      <span className="sk-mono">{d.toLocaleDateString('en-US', { weekday: 'short' })} · {d.toLocaleDateString('en-US', { month: 'short' })}</span>
+                      <b className="jg-dnum">{d.getDate()}</b>
+                      <PnL v={g.net} className="jg-net" />
+                      <span className="jg-dots">{g.trades.map((t) => <i key={t.id} className={t.pnl > 0 ? 'w' : t.pnl < 0 ? 'l' : ''} />)}</span>
+                      <span className="sk-mono">{g.trades.length} {g.trades.length === 1 ? 'trade' : 'trades'} · {w}W {g.trades.length - w}L</span>
+                    </div>
+                    {g.trades.map((t, i) => (
+                      <button key={t.id} type="button" className={'jg-card ' + (t.pnl > 0 ? 'win' : t.pnl < 0 ? 'loss' : '')} style={{ '--d': `${Math.min(gi * 3 + i + 1, 16) * 45}ms` }} onClick={() => choose(t.id)} aria-label={`${t.symbol} ${t.side} ${money(t.pnl)}`}>
+                        <span className="jg-img"><TradeImage t={t} /></span>
+                        <span className="jg-chip side">{(t.side || '').toUpperCase()}</span>
+                        {t.r !== null && <span className="jg-chip r">{fmtR(t.r, 1)}</span>}
+                        <span className="jg-meta">
+                          <span className="jg-row"><b>{t.symbol}</b><PnL v={t.pnl} /></span>
+                          <small>{[t.setup !== 'Untagged' ? t.setup : null, t.session, t.plan === 'YES' ? 'plan kept' : t.plan === 'NO' ? 'off plan' : t.plan === 'PARTIALLY' ? 'partly' : null].filter(Boolean).join(' · ') || dayLabel(t.date)}</small>
+                        </span>
+                      </button>
+                    ))}
+                  </React.Fragment>
+                )
+              })}
+            </div>
+            {filtered.length > limit && <button type="button" className="btn btn-ghost" onClick={() => setLimit((l) => l + 60)}>Show more trades</button>}
+          </div>
         ) : (
           <div className="row" style={{ alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
             <div className="col" style={{ flex: '999 1 520px', minWidth: 0, gap: 14 }}>
@@ -280,7 +327,7 @@ export default function Journal() {
           </div>
         )}
       </div>
-      <Modal open={sheet && !!current} onClose={() => setSheet(false)} label="Trade detail" maxWidth={520}>
+      <Modal open={sheet && !!current} onClose={() => setSheet(false)} label="Trade detail" maxWidth={gallery ? 640 : 520}>
         <Detail t={current} onClose={() => setSheet(false)} />
       </Modal>
       <ImportModal open={imp} onClose={() => setImp(false)} />

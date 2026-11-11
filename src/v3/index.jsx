@@ -9,6 +9,7 @@ import AppShell, { Chrome } from './Shell.jsx'
 import Dashboard from './Dashboard.jsx'
 import DashboardV4 from './DashboardV4.jsx'
 import Journal from './Journal.jsx'
+import Plan from './Plan.jsx'
 import Analytics from './Analytics.jsx'
 import { Calendar, News } from './Pages.jsx'
 import { Billing, Account } from './Account.jsx'
@@ -83,7 +84,7 @@ function Router() {
   const { isSuperAdmin } = useStore()
   // New look: owner only until it is switched on for everyone
   const skinOn = useSkinActive(isSuperAdmin)
-  const C = { dashboard: skinOn ? DashboardV4 : Dashboard, journal: Journal, analytics: Analytics, calendar: Calendar, news: News, billing: Billing, account: Account, backtest: AdminBacktest }[route]
+  const C = { dashboard: skinOn ? DashboardV4 : Dashboard, journal: Journal, analytics: Analytics, calendar: Calendar, news: News, billing: Billing, account: Account, backtest: AdminBacktest, ...(skinOn ? { plan: Plan } : {}) }[route]
   return (
     <>
       <Chrome route={route} />

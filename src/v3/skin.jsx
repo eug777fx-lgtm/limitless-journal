@@ -1,20 +1,22 @@
 // LIMITLESS v4 skin: the new look for every page. Owner only for now; index.jsx
 // switches it on for the super admin, everyone else keeps the current glass app.
 import React from 'react'
-import { Sun, Moon, Sparkles } from 'lucide-react'
+import { Sun, Moon, Sparkles, Clapperboard, Check } from 'lucide-react'
 import { isoLocal } from './data.js'
 
-const ON = 'ltj_v4_on', THEME = 'ltj_v4_theme', SAMPLE = 'ltj_v4_sample'
+const ON = 'ltj_v4_on', THEME = 'ltj_v4_theme', SAMPLE = 'ltj_v4_sample', SCENE = 'ltj_v4_scene'
+export const SCENES = [['aurora', 'Aurora'], ['drive', 'Night drive'], ['terrain', 'Terrain'], ['still', 'Still']]
 const read = (k, d) => { try { return localStorage.getItem(k) ?? d } catch { return d } }
 const write = (k, v) => { try { localStorage.setItem(k, v) } catch { /* private mode */ } }
 
-let state = { on: read(ON, '1') === '1', theme: read(THEME, 'light') === 'dark' ? 'dark' : 'light', sample: read(SAMPLE, '0') === '1' }
+let state = { on: read(ON, '1') === '1', theme: read(THEME, 'light') === 'dark' ? 'dark' : 'light', sample: read(SAMPLE, '0') === '1', scene: SCENES.some(([k]) => k === read(SCENE, '')) ? read(SCENE, '') : 'aurora' }
 const subs = new Set()
 export function setSkin(patch) {
   state = { ...state, ...patch }
   if ('on' in patch) write(ON, state.on ? '1' : '0')
   if ('theme' in patch) write(THEME, state.theme)
   if ('sample' in patch) write(SAMPLE, state.sample ? '1' : '0')
+  if ('scene' in patch) write(SCENE, state.scene)
   subs.forEach((f) => f())
 }
 const subscribe = (f) => { subs.add(f); return () => subs.delete(f) }
@@ -43,10 +45,28 @@ export function useSkinActive(owner) {
 // Theme switch + way back to the old look, shown in every page header
 export function SkinTools({ children }) {
   const s = useSkin()
+  const [open, setOpen] = React.useState(false)
+  React.useEffect(() => {
+    if (!open) return
+    const close = (e) => { if (!e.target.closest || !e.target.closest('.sk-scenes')) setOpen(false) }
+    document.addEventListener('pointerdown', close)
+    return () => document.removeEventListener('pointerdown', close)
+  }, [open])
   return (
     <div className="sk-tools">
       {children}
       <span className="sk-owner">Only you see this <button type="button" onClick={() => setSkin({ on: false })}>Old view</button></span>
+      <span className="sk-scenes">
+        <button type="button" className="sk-ibtn" aria-label="Background scene" aria-expanded={open} onClick={() => setOpen((o) => !o)}><Clapperboard size={16} /></button>
+        {open && (
+          <span className="sk-menu" role="menu">
+            <span className="sk-mono" style={{ padding: '4px 10px 6px' }}>Scene · reacts to your week</span>
+            {SCENES.map(([k, l]) => (
+              <button key={k} type="button" role="menuitemradio" aria-checked={s.scene === k} onClick={() => { setSkin({ scene: k }); setOpen(false) }}>{l}{s.scene === k && <Check size={14} />}</button>
+            ))}
+          </span>
+        )}
+      </span>
       <button type="button" className="sk-ibtn" aria-label={s.theme === 'light' ? 'Dark mode' : 'Light mode'} onClick={() => setSkin({ theme: s.theme === 'light' ? 'dark' : 'light' })}>
         {s.theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}
       </button>

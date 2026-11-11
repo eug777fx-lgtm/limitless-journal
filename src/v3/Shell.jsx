@@ -2,7 +2,8 @@ import React from 'react'
 import { Plus, Search, Home, BookOpen, BarChart3, User, CreditCard, Newspaper, LogOut, Globe, Users, ShieldCheck, ScrollText, Repeat, FlaskConical } from 'lucide-react'
 import { useStore, go } from './store.jsx'
 import { Backdrop, Logo, wordSize } from './ui.jsx'
-import { useSkin, setSkin, SkinTools, SampleBanner, Terrain } from './skin.jsx'
+import { useSkin, setSkin, SkinTools, SampleBanner } from './skin.jsx'
+import { Scene } from './scene.jsx'
 
 const SITE = 'https://limitless-journal.com'
 const NAV = [
@@ -117,7 +118,7 @@ export default function AppShell({ route, word, title, children }) {
     const date = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
     return (
       <div className="stage app view v4page" key={route}>
-        <Terrain light={skin.theme === 'light'} />
+        <Scene light={skin.theme === 'light'} />
         <div className="chrome-space" aria-hidden="true" />
         <main>
           <header className="wrap sk-head">
