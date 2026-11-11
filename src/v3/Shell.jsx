@@ -2,6 +2,7 @@ import React from 'react'
 import { Plus, Search, Home, BookOpen, BarChart3, User, CreditCard, Newspaper, LogOut, Globe, Users, ShieldCheck, ScrollText, Repeat, FlaskConical } from 'lucide-react'
 import { useStore, go } from './store.jsx'
 import { Backdrop, Logo, wordSize } from './ui.jsx'
+import { useSkin, setSkin, SkinTools, SampleBanner, Terrain } from './skin.jsx'
 
 const SITE = 'https://limitless-journal.com'
 const NAV = [
@@ -51,7 +52,7 @@ function TopNav({ route }) {
         {NAV.map((n) => (
           <a key={n.id} href={'#' + n.id} className="nav-link" aria-current={route === n.id ? 'page' : undefined}>{n.label}</a>
         ))}
-        <button type="button" className="icon-btn" style={{ background: 'transparent', color: 'rgba(255,255,255,.75)' }} aria-label="Search trades" onClick={() => go('journal')}><Search size={17} /></button>
+        <button type="button" className="icon-btn" style={{ background: 'transparent', color: 'color-mix(in srgb, var(--fg) 75%, transparent)' }} aria-label="Search trades" onClick={() => go('journal')}><Search size={17} /></button>
         <div data-menu style={{ position: 'relative' }}>
           <button type="button" className="icon-btn ink" aria-label="Account menu" aria-expanded={menu} onClick={() => setMenu((m) => !m)} style={{ fontFamily: 'var(--display)', fontSize: 12, fontWeight: 600, width: 44 }}>
             {initials(user.name)}
@@ -109,7 +110,28 @@ export function Chrome({ route }) {
   )
 }
 
-export default function AppShell({ route, word, children }) {
+export default function AppShell({ route, word, title, children }) {
+  const { isSuperAdmin } = useStore()
+  const skin = useSkin()
+  if (isSuperAdmin && skin.on) {
+    const date = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+    return (
+      <div className="stage app view v4page" key={route}>
+        <Terrain light={skin.theme === 'light'} />
+        <div className="chrome-space" aria-hidden="true" />
+        <main>
+          <header className="wrap sk-head">
+            <div>
+              <span className="sk-mono">{date}</span>
+              <h1>{title || TITLES[route] || 'LIMITLESS'}</h1>
+            </div>
+            <SkinTools><SampleBanner /></SkinTools>
+          </header>
+          {children}
+        </main>
+      </div>
+    )
+  }
   return (
     <div className="stage app view" key={route}>
       <Backdrop word={word} top={104} size={240} orbs={[{ left: '5%', top: 700, width: 360, height: 360 }, { right: '4%', top: 1100, width: 420, height: 420 }]} />
@@ -123,11 +145,14 @@ export default function AppShell({ route, word, children }) {
 }
 
 export function Empty({ title, body, action }) {
+  const { isSuperAdmin, trades } = useStore()
+  const skin = useSkin()
   return (
     <div className="glass panel" style={{ alignItems: 'center', textAlign: 'center', padding: '40px 24px', gap: 10 }}>
       <span className="display" style={{ fontSize: 18, fontWeight: 600 }}>{title}</span>
       {body && <span className="muted" style={{ fontSize: 13.5, maxWidth: 420 }}>{body}</span>}
       {action}
+      {isSuperAdmin && skin.on && !trades.length && <button type="button" className="sk-owner" style={{ marginTop: 6, cursor: 'pointer', border: 0 }} onClick={() => setSkin({ sample: true })}>Preview with sample trades</button>}
     </div>
   )
 }

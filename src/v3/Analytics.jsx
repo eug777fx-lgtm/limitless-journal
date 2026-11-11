@@ -74,7 +74,7 @@ export default function Analytics() {
                   <span className="col"><span className="faint" style={{ fontSize: 11 }}>Win</span><span className="num" style={{ fontWeight: 600 }}>{Math.round(g.win * 100)}%</span></span>
                   <span className="col"><span className="faint" style={{ fontSize: 11 }}>Avg R</span><span className="num" style={{ fontWeight: 600 }}>{fmtR(g.avgR)}</span></span>
                   <span className="col"><span className="faint" style={{ fontSize: 11 }}>Per trade</span><span className="num" style={{ fontWeight: 600 }}>{money(Math.round(g.exp))}</span></span>
-                  <div className="bar well"><i style={{ width: `${(Math.abs(g.net) / maxNet) * 100}%`, background: g.net >= 0 ? '#FFF' : 'rgba(255,169,161,.6)', '--d': 0.15 + i * 0.06 + 's' }} /></div>
+                  <div className="bar well"><i style={{ width: `${(Math.abs(g.net) / maxNet) * 100}%`, background: g.net >= 0 ? 'var(--fg)' : 'color-mix(in srgb, var(--neg) 60%, transparent)', '--d': 0.15 + i * 0.06 + 's' }} /></div>
                   <span style={{ textAlign: 'right' }}><PnL v={g.net} className="display" /></span>
                 </div>
               ))}
@@ -98,7 +98,7 @@ export default function Analytics() {
                     const a = Math.abs(v) / heatMax
                     const has = d.counts[si] > 0
                     return (
-                      <div key={si} title={`${d.day} ${stats.sessionsList[si]}: ${money(v)} on ${d.counts[si]} trades`} style={{ height: 42, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600, background: v > 0 ? `rgba(255,255,255,${(0.08 + a * 0.8).toFixed(2)})` : v < 0 ? `rgba(255,169,161,${(0.05 + a * 0.2).toFixed(2)})` : 'rgba(255,255,255,0.03)', color: v > 0 && a > 0.5 ? '#000' : v < 0 ? 'var(--neg)' : '#FFF' }}>
+                      <div key={si} title={`${d.day} ${stats.sessionsList[si]}: ${money(v)} on ${d.counts[si]} trades`} style={{ height: 42, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600, background: v > 0 ? `color-mix(in srgb, var(--fg) ${Math.round((0.08 + a * 0.8) * 100)}%, transparent)` : v < 0 ? `color-mix(in srgb, var(--neg) ${Math.round((0.05 + a * 0.2) * 100)}%, transparent)` : 'color-mix(in srgb, var(--fg) 3%, transparent)', color: v > 0 && a > 0.5 ? 'var(--bg)' : v < 0 ? 'var(--neg)' : 'var(--fg)' }}>
                         {has ? compact(v) : ''}
                       </div>
                     )
@@ -120,8 +120,8 @@ export default function Analytics() {
                 <div key={s.key} style={{ display: 'grid', gridTemplateColumns: '100px minmax(0, 1fr) 80px', gap: 12, alignItems: 'center', minHeight: 40 }}>
                   <span className="col"><span style={{ fontSize: 13.5, fontWeight: 500 }}>{s.key}</span><span className="faint num" style={{ fontSize: 11 }}>{s.n} · {Math.round(s.win * 100)}% win</span></span>
                   <div style={{ height: 14, position: 'relative' }}>
-                    <div style={{ position: 'absolute', top: -4, bottom: -4, left: '50%', width: 1, background: 'rgba(255,255,255,.18)' }} />
-                    <div style={{ position: 'absolute', top: 0, height: 14, left: `${s.net >= 0 ? 50 : 50 - w}%`, width: `${w}%`, borderRadius: 99, background: s.net >= 0 ? '#FFF' : 'rgba(255,169,161,.6)', transformOrigin: s.net >= 0 ? 'left' : 'right', animation: `growX .9s var(--ease) ${0.2 + i * 0.06}s both` }} />
+                    <div style={{ position: 'absolute', top: -4, bottom: -4, left: '50%', width: 1, background: 'color-mix(in srgb, var(--fg) 18%, transparent)' }} />
+                    <div style={{ position: 'absolute', top: 0, height: 14, left: `${s.net >= 0 ? 50 : 50 - w}%`, width: `${w}%`, borderRadius: 99, background: s.net >= 0 ? 'var(--fg)' : 'color-mix(in srgb, var(--neg) 60%, transparent)', transformOrigin: s.net >= 0 ? 'left' : 'right', animation: `growX .9s var(--ease) ${0.2 + i * 0.06}s both` }} />
                   </div>
                   <span style={{ textAlign: 'right' }}><PnL v={s.net} className="display" /></span>
                 </div>
@@ -136,7 +136,7 @@ export default function Analytics() {
               <h2 style={{ fontSize: 20, fontWeight: 600 }}>R multiple distribution</h2>
               <span className="muted" style={{ fontSize: 13 }}>{stats.nR} trades with an R logged · average {fmtR(stats.avgR)}</span>
             </div>
-            <PillBars height={170} width={16} items={stats.bins.map((b, i) => ({ label: b.label, value: String(b.n), pct: b.n / bmax, fill: b.loss ? 'rgba(255,169,161,.6)' : '#FFF', peak: i === peakBin }))} />
+            <PillBars height={170} width={16} items={stats.bins.map((b, i) => ({ label: b.label, value: String(b.n), pct: b.n / bmax, fill: b.loss ? 'color-mix(in srgb, var(--neg) 60%, transparent)' : 'var(--fg)', peak: i === peakBin }))} />
           </section>
         )}
       </div>

@@ -62,24 +62,24 @@ export function EquityChart({ series, target, height = 250, ticks = 5, labelFor 
         aria-label={`Equity from ${money(series[0] ? series[0].value : 0, false)} to ${money(series.length ? series[series.length - 1].value : 0, false)}`}>
         <defs>
           <linearGradient id="eqFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.17" />
-            <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
+            <stop offset="0%" stopColor="var(--fg)" stopOpacity="0.17" />
+            <stop offset="100%" stopColor="var(--fg)" stopOpacity="0" />
           </linearGradient>
         </defs>
         {target && <>
-          <line x1={padL} y1={y(target)} x2={W - padR} y2={y(target)} stroke="rgba(255,255,255,0.3)" strokeDasharray="2 7" />
-          <text x={padL} y={y(target) - 10} fill="rgba(255,255,255,0.55)" style={{ font: '500 12px Inter, sans-serif' }}>Goal {money(target, false)}</text>
+          <line x1={padL} y1={y(target)} x2={W - padR} y2={y(target)} stroke="color-mix(in srgb, var(--fg) 30%, transparent)" strokeDasharray="2 7" />
+          <text x={padL} y={y(target) - 10} fill="color-mix(in srgb, var(--fg) 55%, transparent)" style={{ font: '500 12px Inter, sans-serif' }}>Goal {money(target, false)}</text>
         </>}
-        {min < 0 && <line x1={padL} y1={y(0)} x2={W - padR} y2={y(0)} stroke="rgba(255,255,255,0.12)" />}
+        {min < 0 && <line x1={padL} y1={y(0)} x2={W - padR} y2={y(0)} stroke="color-mix(in srgb, var(--fg) 12%, transparent)" />}
         <path d={area} fill="url(#eqFill)" style={{ animation: 'fade 1.2s var(--ease) .5s both' }} />
-        <path d={line} fill="none" stroke="#FFFFFF" strokeWidth={narrow ? 3 : 3.5} strokeLinecap="round" pathLength="1" strokeDasharray="1"
-          style={{ animation: 'draw 1.6s var(--ease) .15s both', filter: 'drop-shadow(0 0 10px rgba(255,255,255,0.45))' }} />
+        <path d={line} fill="none" stroke="var(--fg)" strokeWidth={narrow ? 3 : 3.5} strokeLinecap="round" pathLength="1" strokeDasharray="1"
+          style={{ animation: 'draw 1.6s var(--ease) .15s both', filter: 'drop-shadow(0 0 10px color-mix(in srgb, var(--fg) 45%, transparent))' }} />
         {hp ? <>
-          <line x1={hp[0]} y1={hp[1]} x2={hp[0]} y2={H} stroke="rgba(255,255,255,0.65)" strokeWidth="1.5" strokeDasharray="4 6" />
-          <circle cx={hp[0]} cy={hp[1]} r="9" fill="#000" stroke="#FFFFFF" strokeWidth="4" />
+          <line x1={hp[0]} y1={hp[1]} x2={hp[0]} y2={H} stroke="color-mix(in srgb, var(--fg) 65%, transparent)" strokeWidth="1.5" strokeDasharray="4 6" />
+          <circle cx={hp[0]} cy={hp[1]} r="9" fill="var(--bg)" stroke="var(--fg)" strokeWidth="4" />
         </> : <>
-          <line x1={last[0]} y1={last[1]} x2={last[0]} y2={H} stroke="rgba(255,255,255,0.6)" strokeWidth="1.5" strokeDasharray="4 6" style={{ animation: 'fade .6s 1.5s both' }} />
-          <circle cx={last[0]} cy={last[1]} r="10" fill="#000" stroke="#FFFFFF" strokeWidth="4" style={{ transformOrigin: `${last[0]}px ${last[1]}px`, animation: 'pop .6s var(--spring) 1.5s both' }} />
+          <line x1={last[0]} y1={last[1]} x2={last[0]} y2={H} stroke="color-mix(in srgb, var(--fg) 60%, transparent)" strokeWidth="1.5" strokeDasharray="4 6" style={{ animation: 'fade .6s 1.5s both' }} />
+          <circle cx={last[0]} cy={last[1]} r="10" fill="var(--bg)" stroke="var(--fg)" strokeWidth="4" style={{ transformOrigin: `${last[0]}px ${last[1]}px`, animation: 'pop .6s var(--spring) 1.5s both' }} />
         </>}
       </svg>
       {hp && (
@@ -91,7 +91,7 @@ export function EquityChart({ series, target, height = 250, ticks = 5, labelFor 
       )}
       <div className="num display" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, color: 'var(--fg3)', marginTop: 6 }}>
         {labels.map((l, k) => k === labels.length - 1
-          ? <span key={l} style={{ background: '#FFFFFF', color: '#000', fontWeight: 600, borderRadius: 99, padding: '6px 12px' }}>{l}</span>
+          ? <span key={l} style={{ background: 'var(--fg)', color: 'var(--bg)', fontWeight: 600, borderRadius: 99, padding: '6px 12px' }}>{l}</span>
           : <span key={l}>{l}</span>)}
       </div>
     </div>
@@ -106,9 +106,9 @@ export function PillBars({ items, height = 140, width = 12 }) {
     <div style={{ display: 'grid', gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))`, gap: 12, alignItems: 'end' }}>
       {items.map((it, i) => (
         <div key={it.label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-          <span className="num" style={{ fontSize: 12, fontWeight: 600, padding: it.peak ? '5px 10px' : 0, borderRadius: 10, background: it.peak ? '#FFF' : 'transparent', color: it.peak ? '#000' : 'rgba(255,255,255,0.8)', boxShadow: it.peak ? '0 0 18px rgba(255,255,255,0.4)' : 'none' }}>{it.value}</span>
+          <span className="num" style={{ fontSize: 12, fontWeight: 600, padding: it.peak ? '5px 10px' : 0, borderRadius: 10, background: it.peak ? 'var(--fg)' : 'transparent', color: it.peak ? 'var(--bg)' : 'color-mix(in srgb, var(--fg) 80%, transparent)', boxShadow: it.peak ? '0 0 18px color-mix(in srgb, var(--fg) 40%, transparent)' : 'none' }}>{it.value}</span>
           <div className="well" style={{ width, height, borderRadius: 99, position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: `${Math.max(3, it.pct * 100)}%`, borderRadius: 99, background: it.fill || '#FFFFFF', transformOrigin: 'bottom', animation: `growY 1s var(--ease) ${0.2 + i * 0.07}s both` }} />
+            <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: `${Math.max(3, it.pct * 100)}%`, borderRadius: 99, background: it.fill || 'var(--fg)', transformOrigin: 'bottom', animation: `growY 1s var(--ease) ${0.2 + i * 0.07}s both` }} />
           </div>
           <span style={{ fontSize: 11, lineHeight: 1.3, color: 'var(--fg2)', textAlign: 'center' }}>{it.label}</span>
         </div>

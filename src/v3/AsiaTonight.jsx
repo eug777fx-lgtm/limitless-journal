@@ -64,7 +64,7 @@ export default function AsiaTonight({ rows, onLog }) {
           {days.map((d) => {
             const has = logged.has(d), isToday = d === today
             return (
-              <div key={d} className="col" style={{ alignItems: 'center', gap: 6, padding: '10px 0', borderRadius: 16, background: isToday ? 'rgba(255,255,255,0.08)' : 'transparent', boxShadow: isToday ? 'inset 0 0 0 1px rgba(255,255,255,0.16)' : 'none' }}>
+              <div key={d} className="col" style={{ alignItems: 'center', gap: 6, padding: '10px 0', borderRadius: 16, background: isToday ? 'color-mix(in srgb, var(--fg) 8%, transparent)' : 'transparent', boxShadow: isToday ? 'inset 0 0 0 1px color-mix(in srgb, var(--fg) 16%, transparent)' : 'none' }}>
                 <span className="faint" style={{ fontSize: 11.5 }}>{short(d)}</span>
                 <span className={has ? 'check' : 'check off'} style={{ width: 26, height: 26, opacity: has || isToday ? 1 : 0.45 }}>{has && <Check size={13} strokeWidth={3} />}</span>
               </div>

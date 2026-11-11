@@ -26,7 +26,7 @@ function Shots({ t }) {
       {t.shots.length > 1 && (
         <div className="row" style={{ gap: 8 }}>
           {t.shots.map((s, k) => (
-            <button key={s} type="button" onClick={() => setI(k)} aria-label={`Screenshot ${k + 1}`} style={{ width: 64, height: 44, borderRadius: 10, overflow: 'hidden', padding: 0, border: 'none', boxShadow: k === i ? '0 0 0 2px #fff' : 'inset 0 0 0 1px rgba(255,255,255,.15)' }}>
+            <button key={s} type="button" onClick={() => setI(k)} aria-label={`Screenshot ${k + 1}`} style={{ width: 64, height: 44, borderRadius: 10, overflow: 'hidden', padding: 0, border: 'none', boxShadow: k === i ? '0 0 0 2px #fff' : 'inset 0 0 0 1px color-mix(in srgb, var(--fg) 15%, transparent)' }}>
               <img src={s} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </button>
           ))}
@@ -46,7 +46,7 @@ function ReviewBlock({ label, text }) {
   return (
     <div className="well col" style={{ borderRadius: 20, padding: '14px 16px', gap: 6 }}>
       <span className="faint" style={{ fontSize: 12 }}>{label}</span>
-      <p style={{ fontSize: 13.5, lineHeight: 1.6, color: 'rgba(255,255,255,.88)', whiteSpace: 'pre-wrap' }}>{text}</p>
+      <p style={{ fontSize: 13.5, lineHeight: 1.6, color: 'color-mix(in srgb, var(--fg) 88%, transparent)', whiteSpace: 'pre-wrap' }}>{text}</p>
     </div>
   )
 }

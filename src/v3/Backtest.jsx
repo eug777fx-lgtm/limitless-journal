@@ -73,7 +73,7 @@ function RCurve({ points }) {
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block', overflow: 'visible' }} role="img"
       aria-label={`Cumulative result ${fmtR(last.value, 1)} over ${points.length} trades`}>
-      <line x1={pad} x2={W - pad} y1={y(0)} y2={y(0)} stroke="rgba(255,255,255,.18)" />
+      <line x1={pad} x2={W - pad} y1={y(0)} y2={y(0)} stroke="color-mix(in srgb, var(--fg) 18%, transparent)" />
       <path d={d} fill="none" stroke="#FFF" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
       <circle cx={x(points.length - 1)} cy={y(last.value)} r="6" fill="#000" stroke="#FFF" strokeWidth="3" />
       <text x={x(points.length - 1) - 10} y={y(last.value) - 14} textAnchor="end" fill="#FFF" style={{ font: '600 15px Inter, sans-serif' }}>{fmtR(last.value, 1)}</text>

@@ -216,7 +216,7 @@ export function Account() {
                   <PnL v={m.achieved} className="display" />
                   <span className="faint num" style={{ fontSize: 12 }}>{m.target ? `${m.pct}% of ${money(m.target, false)}` : 'No goal set'}</span>
                 </span>
-                <div className="bar well" style={{ height: 6 }}><i style={{ width: `${Math.max(0, Math.min(100, m.pct))}%`, background: '#FFF' }} /></div>
+                <div className="bar well" style={{ height: 6 }}><i style={{ width: `${Math.max(0, Math.min(100, m.pct))}%`, background: 'var(--fg)' }} /></div>
               </div>
             ))}
           </div>

@@ -3,6 +3,7 @@
 import React from 'react'
 import { supabase } from '../lib/supabase'
 import { toView, computeStats } from './data.js'
+import { useSkin, sampleRows } from './skin.jsx'
 
 const Ctx = React.createContext(null)
 const SETTINGS_KEY = 'ltj_v3_settings'
@@ -26,9 +27,12 @@ export function V3Provider({ app, children }) {
     root.setAttribute('data-motion', settings.motion ? 'on' : 'off')
   }, [settings])
 
+  // owner preview: example trades fill an empty account so every page can be seen
+  const skin = useSkin()
+  const sample = !!app.isSuperAdmin && skin.on && skin.sample && !(rawTrades || []).length
   const trades = React.useMemo(
-    () => (rawTrades || []).map(toView).sort((a, b) => (b.date + b.created).localeCompare(a.date + a.created)),
-    [rawTrades],
+    () => (sample ? sampleRows() : rawTrades || []).map(toView).sort((a, b) => (b.date + b.created).localeCompare(a.date + a.created)),
+    [rawTrades, sample],
   )
   const stats = React.useMemo(() => computeStats(trades), [trades])
 
@@ -44,7 +48,7 @@ export function V3Provider({ app, children }) {
   const api = React.useMemo(() => ({
     ...app,
     user: { name, email: session?.user?.email || '', id: uid },
-    trades, stats, toast, settings, share, log,
+    trades, stats, toast, settings, share, log, sample,
     notify,
     setSetting: (k, v) => setSettings((s) => ({ ...s, [k]: v })),
     openShare: (t) => setShare(t),
@@ -83,7 +87,7 @@ export function V3Provider({ app, children }) {
       setProfile && setProfile(data)
       return data
     },
-  }), [app, name, session, uid, trades, stats, toast, settings, share, log, notify, setTrades, setProfile])
+  }), [app, name, session, uid, trades, stats, toast, settings, share, log, sample, notify, setTrades, setProfile])
 
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>
 }

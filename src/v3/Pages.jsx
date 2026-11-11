@@ -127,12 +127,12 @@ export function News() {
                   <span className="col" style={{ flex: 1, minWidth: 0, gap: 4 }}>
                     <span style={{ fontSize: 14, fontWeight: 500 }}>{e.title}</span>
                     <span className="row faint" style={{ gap: 10, fontSize: 11.5, flexWrap: 'wrap' }}>
-                      <span className="well display" style={{ fontSize: 10.5, fontWeight: 600, padding: '2px 8px', borderRadius: 99, color: '#fff' }}>{e.country || '—'}</span>
+                      <span className="well display" style={{ fontSize: 10.5, fontWeight: 600, padding: '2px 8px', borderRadius: 99, color: 'var(--fg)' }}>{e.country || '—'}</span>
                       {e.forecast ? <span>Fcst <b style={{ color: 'var(--fg2)', fontWeight: 600 }}>{e.forecast}</b></span> : null}
                       {e.previous ? <span>Prev <b style={{ color: 'var(--fg2)', fontWeight: 600 }}>{e.previous}</b></span> : null}
                     </span>
                   </span>
-                  <span className="row" style={{ gap: 4, flexShrink: 0 }} aria-label={`Impact ${lvl} of 3`}>{[1, 2, 3].map((k) => <span key={k} style={{ width: 8, height: 8, borderRadius: '50%', background: k <= lvl ? (lvl === 3 ? '#FFA9A1' : '#FFF') : 'rgba(255,255,255,.15)' }} />)}</span>
+                  <span className="row" style={{ gap: 4, flexShrink: 0 }} aria-label={`Impact ${lvl} of 3`}>{[1, 2, 3].map((k) => <span key={k} style={{ width: 8, height: 8, borderRadius: '50%', background: k <= lvl ? (lvl === 3 ? '#FFA9A1' : '#FFF') : 'color-mix(in srgb, var(--fg) 15%, transparent)' }} />)}</span>
                 </div>
               )
             })}

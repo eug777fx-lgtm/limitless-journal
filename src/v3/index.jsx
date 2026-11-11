@@ -16,6 +16,8 @@ import Backtest from './Backtest.jsx'
 import LogTrade from './LogTrade.jsx'
 import ShareCard from './ShareCard.jsx'
 import { BootLoader, BootDone } from '../lib/bootLoader.jsx'
+import { useSkinActive, SkinReturn } from './skin.jsx'
+import skinCss from './skin.css?inline'
 
 const FONTS = 'https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@500;600&family=Poppins:wght@300;400;500;600;700;800&display=swap'
 
@@ -25,7 +27,7 @@ function useV3Document() {
     html.classList.add('v3-on')
     const style = document.createElement('style')
     style.setAttribute('data-v3', '')
-    style.textContent = css
+    style.textContent = css + '\n' + skinCss
     document.head.appendChild(style)
     let link = document.querySelector('link[data-v3-fonts]')
     if (!link) {
@@ -79,12 +81,14 @@ function Router() {
   const route = useRoute()
   useGlassLight()
   const { isSuperAdmin } = useStore()
-  // New dashboard: owner only until it is switched on for everyone
-  const C = { dashboard: isSuperAdmin ? DashboardV4 : Dashboard, journal: Journal, analytics: Analytics, calendar: Calendar, news: News, billing: Billing, account: Account, backtest: AdminBacktest }[route]
+  // New look: owner only until it is switched on for everyone
+  const skinOn = useSkinActive(isSuperAdmin)
+  const C = { dashboard: skinOn ? DashboardV4 : Dashboard, journal: Journal, analytics: Analytics, calendar: Calendar, news: News, billing: Billing, account: Account, backtest: AdminBacktest }[route]
   return (
     <>
       <Chrome route={route} />
       <React.Fragment key={route}>{C ? <C /> : LEGACY[route] ? <Legacy route={route} /> : <Dashboard />}</React.Fragment>
+      {isSuperAdmin && !skinOn && <SkinReturn />}
       <LogTrade />
       <ShareCard />
       <ToastHost />

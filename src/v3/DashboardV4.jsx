@@ -5,16 +5,12 @@ import { Plus, RotateCcw, Sun, Moon, ArrowRight } from 'lucide-react'
 import { useStore } from './store.jsx'
 import { LOGO } from './ui.jsx'
 import { isoLocal, monthLabel, dayLabel } from './data.js'
-import Dashboard from './Dashboard.jsx'
+import { useSkin, setSkin, Terrain } from './skin.jsx'
 import './v4.css'
 
 const PERIODS = [['week', 'Week'], ['month', 'Month'], ['year', 'Year'], ['all', 'All time']]
-const THEME_KEY = 'ltj_v4_theme'
-const ON_KEY = 'ltj_v4_on'
 const INTRO_KEY = 'ltj_v4_intro'
 const reduced = () => document.documentElement.getAttribute('data-motion') === 'off' || matchMedia('(prefers-reduced-motion: reduce)').matches
-const read = (k, d) => { try { return localStorage.getItem(k) ?? d } catch { return d } }
-const write = (k, v) => { try { localStorage.setItem(k, v) } catch { /* private mode */ } }
 const signed = (v) => (v < 0 ? '−$' : '+$') + Math.abs(v).toLocaleString('en-US', { maximumFractionDigits: 0 })
 const signedK = (v) => (v < 0 ? '−$' : '+$') + (Math.abs(v) >= 1000 ? (Math.abs(v) / 1000).toFixed(1) + 'K' : Math.round(Math.abs(v)))
 const plain = (v) => '$' + Math.round(Math.abs(v)).toLocaleString('en-US')
@@ -152,35 +148,6 @@ function Curve({ eq, prev, chartRef, onGeom, veiled }) {
   )
 }
 
-function Terrain({ light }) {
-  const ref = React.useRef(null)
-  React.useEffect(() => {
-    const draw = () => {
-      const cv = ref.current; if (!cv) return
-      const dpr = Math.min(2, devicePixelRatio || 1), W = innerWidth, H = innerHeight
-      cv.width = W * dpr; cv.height = H * dpr
-      const c = cv.getContext('2d'); c.scale(dpr, dpr); c.clearRect(0, 0, W, H)
-      const f = (x, y) => Math.sin(x * 0.0042 + Math.sin(y * 0.003) * 1.6) + Math.cos(y * 0.0051 + Math.sin(x * 0.0024) * 1.8) + 0.6 * Math.sin((x + y) * 0.0029)
-      c.strokeStyle = light ? 'rgba(11,11,12,.07)' : 'rgba(255,255,255,.05)'; c.lineWidth = 1
-      const s = 12
-      for (let lv = -2.4; lv <= 2.4; lv += 0.32) {
-        c.beginPath()
-        for (let y = 0; y < H; y += s) for (let x = 0; x < W; x += s) {
-          const a = f(x, y) - lv, b = f(x + s, y) - lv, dd = f(x, y + s) - lv, e = f(x + s, y + s) - lv, P = []
-          if (a * b < 0) P.push([x + s * a / (a - b), y]); if (b * e < 0) P.push([x + s, y + s * b / (b - e)])
-          if (dd * e < 0) P.push([x + s * dd / (dd - e), y + s]); if (a * dd < 0) P.push([x, y + s * a / (a - dd)])
-          if (P.length >= 2) { c.moveTo(P[0][0], P[0][1]); c.lineTo(P[1][0], P[1][1]) }
-          if (P.length === 4) { c.moveTo(P[2][0], P[2][1]); c.lineTo(P[3][0], P[3][1]) }
-        }
-        c.stroke()
-      }
-    }
-    draw(); addEventListener('resize', draw)
-    return () => removeEventListener('resize', draw)
-  }, [light])
-  return <canvas ref={ref} className="v4-terrain" aria-hidden="true" />
-}
-
 // Welcome: greeting, the period P&L counts up while its equity line draws, then the line flies into the chart
 function Intro({ name, label, net, geom, chartEl, onDone }) {
   const [phase, setPhase] = React.useState('')
@@ -242,27 +209,10 @@ function Intro({ name, label, net, geom, chartEl, onDone }) {
   )
 }
 
-function sampleTrades() {
-  let z = 11; const r = () => ((z = (z * 1664525 + 1013904223) >>> 0) / 2 ** 32)
-  const out = [], now = new Date()
-  for (let d = 420; d >= 0; d--) {
-    const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - d), wd = day.getDay()
-    if (wd === 0 || wd === 6 || r() < 0.2) continue
-    for (let k = 0, n = 1 + Math.floor(r() * 2.2); k < n; k++) {
-      const win = r() < 0.56, size = 120 + r() * 520
-      const pnl = Math.round((win ? size * (1 + r() * 1.6) : -size * (0.55 + r() * 0.6)) * 100) / 100
-      out.push({ id: `s${d}-${k}`, date: isoLocal(day), created: '', symbol: ['NQ', 'ES', 'MNQ', 'XAU/USD', 'EUR/USD'][Math.floor(r() * 5)], side: r() < 0.55 ? 'Long' : 'Short', pnl, r: null, setup: 'Example', shots: [] })
-    }
-  }
-  return out.reverse()
-}
-
 export default function DashboardV4() {
-  const { trades: realTrades, user, openLog } = useStore()
-  const [sample, setSample] = React.useState(false)
-  const trades = React.useMemo(() => (sample && !realTrades.length ? sampleTrades() : realTrades), [sample, realTrades])
-  const [on, setOn] = React.useState(() => read(ON_KEY, '1') === '1')
-  const [theme, setTheme] = React.useState(() => read(THEME_KEY, 'dark'))
+  const { trades, user, openLog, sample } = useStore()
+  const { theme } = useSkin()
+  const on = true
   const [period, setPeriod] = React.useState('month')
   const [intro, setIntro] = React.useState(() => { try { return !sessionStorage.getItem(INTRO_KEY) } catch { return false } })
   const [hidden, setHidden] = React.useState(intro)
@@ -274,12 +224,6 @@ export default function DashboardV4() {
   const [pill, setPill] = React.useState(null)
   const strip = React.useRef(null)
 
-  React.useEffect(() => {
-    document.body.classList.toggle('v4-light', on && theme === 'light')
-    const meta = document.querySelector('meta[name="theme-color"]')
-    if (meta) meta.setAttribute('content', on && theme === 'light' ? '#F1F2F3' : '#000000')
-    return () => { document.body.classList.remove('v4-light'); if (meta) meta.setAttribute('content', '#000000') }
-  }, [on, theme])
   React.useLayoutEffect(() => {
     const b = segRef.current && segRef.current.querySelector('button.on')
     if (b) setPill({ left: b.offsetLeft, width: b.offsetWidth })
@@ -289,15 +233,6 @@ export default function DashboardV4() {
   const s = React.useMemo(() => periodStats(trades, b), [trades, b])
   const monthTrades = React.useMemo(() => trades.filter((t) => t.date.slice(0, 7) === isoLocal(new Date()).slice(0, 7)).length, [trades])
   const first = (user.name || 'Trader').split(' ')[0]
-
-  if (!on) {
-    return (
-      <>
-        <Dashboard />
-        <button type="button" onClick={() => { write(ON_KEY, '1'); setOn(true) }} style={{ position: 'fixed', right: 18, bottom: 100, zIndex: 70, border: 0, borderRadius: 99, padding: '10px 16px', background: '#fff', color: '#000', font: '600 13px Inter, sans-serif', boxShadow: '0 10px 30px rgba(0,0,0,.5)', cursor: 'pointer' }}>Try the new dashboard</button>
-      </>
-    )
-  }
 
   const wr = s.chron.length ? (s.wins.length / s.chron.length) * 100 : 0
   const seq = s.chron.slice(-40), mx = Math.max(1, ...seq.map((t) => Math.abs(t.pnl)))
@@ -319,9 +254,9 @@ export default function DashboardV4() {
             <p>{today} · {monthTrades} {monthTrades === 1 ? 'trade' : 'trades'} this month</p>
           </div>
           <div className="tools">
-            {sample && <span className="owner">Sample trades <button type="button" onClick={() => setSample(false)}>Hide</button></span>}
-            <span className="owner">Only you see this <button type="button" onClick={() => { write(ON_KEY, '0'); setOn(false) }}>Old view</button></span>
-            <button type="button" className="ibtn glassy" aria-label={theme === 'light' ? 'Dark mode' : 'Light mode'} onClick={() => { const n = theme === 'light' ? 'dark' : 'light'; write(THEME_KEY, n); setTheme(n) }}>{theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}</button>
+            {sample && <span className="owner">Sample trades <button type="button" onClick={() => setSkin({ sample: false })}>Hide</button></span>}
+            <span className="owner">Only you see this <button type="button" onClick={() => setSkin({ on: false })}>Old view</button></span>
+            <button type="button" className="ibtn glassy" aria-label={theme === 'light' ? 'Dark mode' : 'Light mode'} onClick={() => setSkin({ theme: theme === 'light' ? 'dark' : 'light' })}>{theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}</button>
             <button type="button" className="ibtn glassy" aria-label="Replay welcome" onClick={() => { setHidden(true); setIntro(true) }}><RotateCcw size={16} /></button>
             <div ref={segRef} className="seg4 glassy" role="group" aria-label="Period">
               {pill && <i style={{ left: pill.left, width: pill.width }} />}
@@ -335,7 +270,7 @@ export default function DashboardV4() {
             <span className="mono k">Net P&amp;L</span>
             <span className="odo" style={{ fontSize: 64 }}>$0</span>
             <span style={{ color: 'var(--v4-ink2)' }}>Log your first trade and this fills in.</span>
-            <button type="button" className="owner" style={{ cursor: 'pointer', border: 0 }} onClick={() => setSample(true)}>Preview with sample trades</button>
+            <button type="button" className="owner" style={{ cursor: 'pointer', border: 0 }} onClick={() => setSkin({ sample: true })}>Preview with sample trades</button>
             <button type="button" className="ibtn" onClick={openLog} style={{ width: 'auto', padding: '0 18px', borderRadius: 99, background: 'var(--v4-btn)', color: 'var(--v4-btn-ink)', fontWeight: 600, gap: 8, display: 'inline-flex', alignItems: 'center' }}><Plus size={15} /> Log trade</button>
           </section>
         ) : (

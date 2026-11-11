@@ -78,12 +78,12 @@ export function Ring({ pct, size = 104, stroke = 10, label, sub }) {
   const p = Math.max(0, Math.min(1, pct))
   return (
     <svg width={size} height={size} viewBox="0 0 100 100" role="img" aria-label={`${Math.round(p * 100)} percent ${sub || ''}`} style={{ flexShrink: 0 }}>
-      <circle cx="50" cy="50" r={r} fill="rgba(0,0,0,0.35)" stroke="rgba(255,255,255,0.12)" strokeWidth={stroke} />
-      <circle cx="50" cy="50" r={r} fill="none" stroke="#FFFFFF" strokeWidth={stroke} strokeLinecap="round"
+      <circle cx="50" cy="50" r={r} fill="rgba(0,0,0,0.35)" stroke="color-mix(in srgb, var(--fg) 12%, transparent)" strokeWidth={stroke} />
+      <circle cx="50" cy="50" r={r} fill="none" stroke="var(--fg)" strokeWidth={stroke} strokeLinecap="round"
         strokeDasharray={`${len * p} ${len}`} transform="rotate(-90 50 50)"
-        style={{ '--len': len * p, strokeDashoffset: 0, animation: 'ring 1.4s var(--ease) .3s both', filter: 'drop-shadow(0 0 6px rgba(255,255,255,0.55))' }} />
-      <text x="50" y={sub ? 52 : 57} textAnchor="middle" fill="#FFFFFF" style={{ font: '700 20px Poppins, sans-serif' }}>{label}</text>
-      {sub && <text x="50" y="68" textAnchor="middle" fill="rgba(255,255,255,0.6)" style={{ font: '500 9px Inter, sans-serif' }}>{sub}</text>}
+        style={{ '--len': len * p, strokeDashoffset: 0, animation: 'ring 1.4s var(--ease) .3s both', filter: 'drop-shadow(0 0 6px color-mix(in srgb, var(--fg) 55%, transparent))' }} />
+      <text x="50" y={sub ? 52 : 57} textAnchor="middle" fill="var(--fg)" style={{ font: '700 20px Poppins, sans-serif' }}>{label}</text>
+      {sub && <text x="50" y="68" textAnchor="middle" fill="color-mix(in srgb, var(--fg) 60%, transparent)" style={{ font: '500 9px Inter, sans-serif' }}>{sub}</text>}
     </svg>
   )
 }
@@ -91,7 +91,7 @@ export function Ring({ pct, size = 104, stroke = 10, label, sub }) {
 export function Bar({ pct, fill, delay = 0.2 }) {
   return (
     <div className="bar well">
-      <i style={{ width: `${Math.max(0, Math.min(100, pct * 100))}%`, background: fill, '--d': delay + 's', boxShadow: '0 0 14px rgba(255,255,255,0.3)' }} />
+      <i style={{ width: `${Math.max(0, Math.min(100, pct * 100))}%`, background: fill, '--d': delay + 's', boxShadow: '0 0 14px color-mix(in srgb, var(--fg) 30%, transparent)' }} />
     </div>
   )
 }

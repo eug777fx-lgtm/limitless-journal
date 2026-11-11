@@ -9,7 +9,7 @@ import AppShell, { Empty } from './Shell.jsx'
 export function TradeRow({ t, onClick, active }) {
   const meta = [dayLabel(t.date), t.session, t.state, t.plan === 'YES' ? 'plan kept' : t.plan === 'NO' ? 'off plan' : t.plan === 'PARTIALLY' ? 'partly on plan' : null].filter(Boolean).join(' · ')
   return (
-    <button type="button" onClick={onClick} className="list-row" style={active ? { background: 'rgba(255,255,255,0.12)', borderRadius: 20, boxShadow: 'inset 0 1px 0 rgba(255,255,255,.3)' } : null}>
+    <button type="button" onClick={onClick} className="list-row" style={active ? { background: 'color-mix(in srgb, var(--fg) var(--sel, 12%), transparent)', borderRadius: 20, boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3)' } : null}>
       <span className="sym ink"><b style={{ fontSize: t.symbol.length > 4 ? 9.5 : 12 }}>{t.symbol.replace('/USD', '')}</b><small>{(t.side || '').toUpperCase()}</small></span>
       <span className="col" style={{ flex: 1, minWidth: 0, gap: 3 }}>
         <span className="display" style={{ fontSize: 14.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.setup !== 'Untagged' ? t.setup : t.rating || t.symbol}</span>
@@ -79,17 +79,17 @@ export function MonthCalendar({ stats, ym, compact: smallProp = false, selected,
               const isSel = selected === iso
               const a = v ? Math.min(Math.abs(v) / maxAbs, 1) : 0
               const hi = isToday || isSel
-              const bg = hi ? '#FFFFFF' : future ? 'rgba(255,255,255,0.02)' : v > 0 ? `rgba(166,242,190,${(0.08 + a * 0.16).toFixed(2)})` : v < 0 ? `rgba(255,169,161,${(0.06 + a * 0.12).toFixed(2)})` : 'rgba(255,255,255,0.035)'
+              const bg = hi ? 'var(--fg)' : future ? 'color-mix(in srgb, var(--fg) 2%, transparent)' : v > 0 ? `color-mix(in srgb, var(--pos) ${Math.round((0.08 + a * 0.16) * 100)}%, transparent)` : v < 0 ? `color-mix(in srgb, var(--neg) ${Math.round((0.06 + a * 0.12) * 100)}%, transparent)` : 'color-mix(in srgb, var(--fg) 4%, transparent)'
               return (
                 <button key={c} type="button" disabled={!onSelect} onClick={() => onSelect && onSelect(iso)}
                   aria-label={`${dayLabel(iso, true)}: ${v === undefined ? 'no trades' : money(v)}`}
-                  style={{ height: h, borderRadius: small ? 14 : 20, border: 'none', background: bg, color: hi ? '#000' : '#FFF', boxShadow: hi ? '0 0 24px rgba(255,255,255,.4)' : 'inset 0 1px 0 rgba(255,255,255,.08)', display: 'flex', flexDirection: 'column', alignItems: small ? 'center' : 'flex-start', justifyContent: small ? 'center' : 'space-between', padding: small ? 0 : '10px 12px', gap: 1, cursor: onSelect ? 'pointer' : 'default', opacity: future ? 0.45 : 1, minWidth: 0 }}>
+                  style={{ height: h, borderRadius: small ? 14 : 20, border: 'none', background: bg, color: hi ? 'var(--bg)' : 'var(--fg)', boxShadow: hi ? '0 0 24px color-mix(in srgb, var(--fg) 40%, transparent)' : 'inset 0 1px 0 color-mix(in srgb, var(--fg) 8%, transparent)', display: 'flex', flexDirection: 'column', alignItems: small ? 'center' : 'flex-start', justifyContent: small ? 'center' : 'space-between', padding: small ? 0 : '10px 12px', gap: 1, cursor: onSelect ? 'pointer' : 'default', opacity: future ? 0.45 : 1, minWidth: 0 }}>
                   <span className="num" style={{ fontSize: small ? 10.5 : 12, opacity: 0.6 }}>{day}</span>
                   <span className={`num display ${hi ? '' : v > 0 ? 'pos' : v < 0 ? 'neg' : 'faint'}`} style={{ fontSize: small ? 11 : 15, fontWeight: 600, whiteSpace: 'nowrap' }}>{v === undefined ? '' : small ? compact(v) : money(Math.round(v))}</span>
                 </button>
               )
             })}
-            <span style={{ height: h, borderRadius: small ? 14 : 20, background: 'rgba(255,255,255,0.06)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.1)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1, minWidth: 0 }}>
+            <span style={{ height: h, borderRadius: small ? 14 : 20, background: 'color-mix(in srgb, var(--fg) 6%, transparent)', boxShadow: 'inset 0 1px 0 color-mix(in srgb, var(--fg) 10%, transparent)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1, minWidth: 0 }}>
               {any ? <span className={`num display ${tot > 0 ? 'pos' : tot < 0 ? 'neg' : 'faint'}`} style={{ fontSize: small ? 11 : 14, fontWeight: 600 }}>{small ? compact(tot) : money(Math.round(tot))}</span> : <span className="faint" style={{ fontSize: 11 }}>—</span>}
             </span>
           </React.Fragment>
@@ -139,7 +139,7 @@ export default function Dashboard() {
         <div className="wrap col" style={{ gap: 18, paddingBottom: 60 }}>
           <div className="display col">
             <span style={{ fontSize: 'clamp(24px, 3vw, 32px)', fontWeight: 700, lineHeight: 1.15 }}>{user.name}</span>
-            <span style={{ fontSize: 'clamp(24px, 3vw, 32px)', fontWeight: 300, lineHeight: 1.15, color: 'rgba(255,255,255,.86)' }}>{greet}.</span>
+            <span style={{ fontSize: 'clamp(24px, 3vw, 32px)', fontWeight: 300, lineHeight: 1.15, color: 'color-mix(in srgb, var(--fg) 86%, transparent)' }}>{greet}.</span>
           </div>
           <Empty title="Log your first trade." body="Every number on this dashboard comes from your own trades. Log one and it starts filling in." action={<button type="button" className="btn btn-primary" onClick={openLog}><Plus size={15} /> Log trade</button>} />
         </div>
@@ -155,7 +155,7 @@ export default function Dashboard() {
         <div className="row" style={{ justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div className="display stagger col">
             <span style={{ '--i': 0, fontSize: 'clamp(24px, 3vw, 32px)', fontWeight: 700, lineHeight: 1.15 }}>{user.name}</span>
-            <span style={{ '--i': 1, fontSize: 'clamp(24px, 3vw, 32px)', fontWeight: 300, lineHeight: 1.15, color: 'rgba(255,255,255,.86)' }}>{greet}.</span>
+            <span style={{ '--i': 1, fontSize: 'clamp(24px, 3vw, 32px)', fontWeight: 300, lineHeight: 1.15, color: 'color-mix(in srgb, var(--fg) 86%, transparent)' }}>{greet}.</span>
           </div>
           <div className="glass row" style={{ gap: 12, minHeight: 58, padding: '0 18px 0 8px', borderRadius: 99 }}>
             <span className="logo-dot ink display" style={{ width: 42, height: 42, fontSize: 11, fontWeight: 700 }}>{stats.todayTrades.length}</span>
@@ -167,7 +167,7 @@ export default function Dashboard() {
         </div>
 
         <section className="ink" aria-label="Net P&L" style={{ borderRadius: 38, padding: 'clamp(20px, 3vw, 30px) clamp(18px, 3vw, 30px) 110px', position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(80% 70% at 75% 10%, rgba(255,255,255,0.08), transparent 70%)', pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(80% 70% at 75% 10%, color-mix(in srgb, var(--fg) 8%, transparent), transparent 70%)', pointerEvents: 'none' }} />
           <div className="row" style={{ position: 'relative', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14, alignItems: 'flex-start' }}>
             <div className="col" style={{ gap: 6 }}>
               <span className="eyebrow">Net P&amp;L · {range === 'Year' ? 'last 12 months' : range === 'Week' ? 'last 7 days' : monthLabel(stats.thisMonth)}</span>
@@ -226,7 +226,7 @@ export default function Dashboard() {
             ].map((x, i) => (
               <div key={x.l} className="col" style={{ gap: 8 }}>
                 <div className="row" style={{ justifyContent: 'space-between', fontSize: 13.5 }}><span>{x.l}</span><span className="num" style={{ fontWeight: 600 }}>{pct(x.p)}</span></div>
-                <Bar pct={x.p} fill={x.p >= 0.7 ? '#fff' : 'rgba(255,255,255,0.55)'} delay={0.3 + i * 0.1} />
+                <Bar pct={x.p} fill={x.p >= 0.7 ? 'var(--fg)' : 'color-mix(in srgb, var(--fg) 55%, transparent)'} delay={0.3 + i * 0.1} />
               </div>
             ))}
           </section>
@@ -240,8 +240,8 @@ export default function Dashboard() {
               <span className="faint" style={{ fontSize: 12, maxWidth: 140, textAlign: 'right' }}>{plan.answered ? `${plan.answered} trades rated` : 'Answer "Did I follow my plan?" when you log'}</span>
             </div>
             <PillBars height={118} items={[
-              { label: 'Yes', value: String(plan.yes), pct: plan.answered ? plan.yes / plan.answered : 0, fill: '#FFF', peak: plan.answered > 0 && plan.yes >= plan.no && plan.yes >= plan.partly },
-              { label: 'Partly', value: String(plan.partly), pct: plan.answered ? plan.partly / plan.answered : 0, fill: 'rgba(255,255,255,0.6)' },
+              { label: 'Yes', value: String(plan.yes), pct: plan.answered ? plan.yes / plan.answered : 0, fill: 'var(--fg)', peak: plan.answered > 0 && plan.yes >= plan.no && plan.yes >= plan.partly },
+              { label: 'Partly', value: String(plan.partly), pct: plan.answered ? plan.partly / plan.answered : 0, fill: 'color-mix(in srgb, var(--fg) 60%, transparent)' },
               { label: 'No', value: String(plan.no), pct: plan.answered ? plan.no / plan.answered : 0, fill: 'rgba(255,169,161,0.85)' },
             ]} />
             {plan.answered > 0 && plan.offPlanNet < 0 && <span className="faint" style={{ fontSize: 12 }}>Off plan trades: <PnL v={plan.offPlanNet} /></span>}
