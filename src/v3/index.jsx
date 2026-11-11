@@ -16,6 +16,7 @@ import { Billing, Account } from './Account.jsx'
 import Backtest from './Backtest.jsx'
 import LogTrade from './LogTrade.jsx'
 import LogTradeV4 from './LogTradeV4.jsx'
+import Splash from './Splash.jsx'
 import ShareCard from './ShareCard.jsx'
 import { BootLoader, BootDone } from '../lib/bootLoader.jsx'
 import { useSkinActive, SkinReturn } from './skin.jsx'
@@ -92,6 +93,7 @@ function Router() {
       <React.Fragment key={route}>{C ? <C /> : LEGACY[route] ? <Legacy route={route} /> : <Dashboard />}</React.Fragment>
       {isSuperAdmin && !skinOn && <SkinReturn />}
       {skinOn ? <LogTradeV4 /> : <LogTrade />}
+      {skinOn && <Splash />}
       <ShareCard />
       <ToastHost />
     </>

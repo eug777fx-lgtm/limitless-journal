@@ -7,6 +7,7 @@ import { LOGO } from './ui.jsx'
 import { isoLocal, monthLabel, dayLabel } from './data.js'
 import { useSkin, setSkin, SkinTools } from './skin.jsx'
 import { Scene } from './scene.jsx'
+import { replaySplash } from './Splash.jsx'
 import { HeroBg, HeroPicker } from './hero.jsx'
 import { TradeImage } from './art.jsx'
 import './v4.css'
@@ -255,7 +256,7 @@ export default function DashboardV4() {
   const { theme } = useSkin()
   const on = true
   const [period, setPeriod] = React.useState('month')
-  const [intro, setIntro] = React.useState(() => { try { return !sessionStorage.getItem(INTRO_KEY) } catch { return false } })
+  const [intro, setIntro] = React.useState(false)
   const [hidden, setHidden] = React.useState(intro)
   const [geom, setGeom] = React.useState(null)
   // never leave the page hidden if the welcome cannot run
@@ -302,7 +303,7 @@ export default function DashboardV4() {
             <div className="tools-r">
               {sample && <span className="owner">Sample trades <button type="button" onClick={() => setSkin({ sample: false })}>Hide</button></span>}
               <SkinTools />
-              <button type="button" className="ibtn glassy" aria-label="Replay welcome" title="Replay welcome" onClick={() => { setHidden(true); setIntro(true) }}><RotateCcw size={16} /></button>
+              <button type="button" className="ibtn glassy" aria-label="Replay welcome" title="Replay welcome" onClick={replaySplash}><RotateCcw size={16} /></button>
             </div>
           </div>
         </section>

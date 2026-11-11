@@ -7,6 +7,7 @@ import AppShell, { Empty } from './Shell.jsx'
 import { TradeRow } from './Dashboard.jsx'
 import { useSkin } from './skin.jsx'
 import { TradeArt, TradeImage } from './art.jsx'
+import Mindset from './Mindset.jsx'
 
 function Shots({ t }) {
   const [i, setI] = React.useState(0)
@@ -217,6 +218,8 @@ export default function Journal() {
   const { trades, stats, openLog, isSuperAdmin } = useStore()
   const skin = useSkin()
   const gallery = !!isSuperAdmin && skin.on
+  const [tab, setTab] = React.useState(() => { try { return sessionStorage.getItem('ltj_jr_tab') || 'trades' } catch { return 'trades' } })
+  const pickTab = (t) => { setTab(t); try { sessionStorage.setItem('ltj_jr_tab', t) } catch { /* ignore */ } }
   const [seg, setSeg] = React.useState('All')
   const [q, setQ] = React.useState('')
   const [sel, setSel] = React.useState(() => { try { return sessionStorage.getItem('ltj_v3_sel') || (trades[0] && trades[0].id) } catch { return trades[0] && trades[0].id } })
@@ -253,6 +256,12 @@ export default function Journal() {
   return (
     <AppShell route="journal" word="JOURNAL" title="Journal">
       <div className="wrap col" style={{ gap: 18, paddingBottom: 60 }}>
+        {gallery && (
+          <div className="jr-tabs" role="tablist" aria-label="Journal view">
+            {[['trades', 'Trades'], ['mind', 'Mindset']].map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => pickTab(k)}>{l}</button>)}
+          </div>
+        )}
+        {gallery && tab === 'mind' ? <Mindset /> : <>
         <div className="glass row" style={{ padding: '18px 20px', gap: '14px 18px', flexWrap: 'wrap' }}>
           <div className="col display" style={{ flex: '1 1 200px', gap: 2 }}>
             <span className="eyebrow" style={{ fontFamily: 'var(--body)' }}>{filtered.length} of {stats.n} trades</span>
@@ -317,6 +326,7 @@ export default function Journal() {
             </aside>
           </div>
         )}
+        </>}
       </div>
       <Modal open={sheet && !!current} onClose={() => setSheet(false)} label="Trade detail" maxWidth={gallery ? 640 : 520}>
         <Detail t={current} onClose={() => setSheet(false)} />
