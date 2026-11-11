@@ -4,12 +4,12 @@ import React from 'react'
 import { Sun, Moon, Sparkles, Clapperboard, Check } from 'lucide-react'
 import { isoLocal } from './data.js'
 
-const ON = 'ltj_v4_on', THEME = 'ltj_v4_theme', SAMPLE = 'ltj_v4_sample', SCENE = 'ltj_v4_scene'
-export const SCENES = [['aurora', 'Aurora'], ['drive', 'Night drive'], ['terrain', 'Terrain'], ['still', 'Still']]
+const ON = 'ltj_v4_on', THEME = 'ltj_v4_theme', SAMPLE = 'ltj_v4_sample', SCENE = 'ltj_v4_scene2'
+export const SCENES = [['ink', 'Liquid paint'], ['aurora', 'Silver haze'], ['drive', 'Night drive'], ['terrain', 'Terrain'], ['still', 'Still']]
 const read = (k, d) => { try { return localStorage.getItem(k) ?? d } catch { return d } }
 const write = (k, v) => { try { localStorage.setItem(k, v) } catch { /* private mode */ } }
 
-let state = { on: read(ON, '1') === '1', theme: read(THEME, 'light') === 'dark' ? 'dark' : 'light', sample: read(SAMPLE, '0') === '1', scene: SCENES.some(([k]) => k === read(SCENE, '')) ? read(SCENE, '') : 'aurora' }
+let state = { on: read(ON, '1') === '1', theme: read(THEME, 'light') === 'dark' ? 'dark' : 'light', sample: read(SAMPLE, '0') === '1', scene: SCENES.some(([k]) => k === read(SCENE, '')) ? read(SCENE, '') : 'ink' }
 const subs = new Set()
 export function setSkin(patch) {
   state = { ...state, ...patch }
@@ -60,7 +60,7 @@ export function SkinTools({ children }) {
         <button type="button" className="sk-ibtn" aria-label="Background scene" aria-expanded={open} onClick={() => setOpen((o) => !o)}><Clapperboard size={16} /></button>
         {open && (
           <span className="sk-menu" role="menu">
-            <span className="sk-mono" style={{ padding: '4px 10px 6px' }}>Scene · reacts to your week</span>
+            <span className="sk-mono" style={{ padding: '4px 10px 6px' }}>Scene · move your mouse</span>
             {SCENES.map(([k, l]) => (
               <button key={k} type="button" role="menuitemradio" aria-checked={s.scene === k} onClick={() => { setSkin({ scene: k }); setOpen(false) }}>{l}{s.scene === k && <Check size={14} />}</button>
             ))}

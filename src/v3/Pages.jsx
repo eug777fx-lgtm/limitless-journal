@@ -4,10 +4,13 @@ import { useStore } from './store.jsx'
 import { PnL, Seg } from './ui.jsx'
 import { dayLabel, monthLabel, shiftMonth, isoLocal } from './data.js'
 import AppShell, { Empty } from './Shell.jsx'
+import { useSkin } from './skin.jsx'
 import { MonthCalendar, TradeRow } from './Dashboard.jsx'
 
 export function Calendar() {
-  const { stats, trades } = useStore()
+  const { stats, trades, isSuperAdmin } = useStore()
+  const skin = useSkin()
+  const skinOn = !!isSuperAdmin && skin.on
   const [ym, setYm] = React.useState(stats.thisMonth)
   const [day, setDay] = React.useState(stats.today)
   const list = trades.filter((t) => t.date === day)
@@ -26,7 +29,7 @@ export function Calendar() {
               <h2 style={{ fontSize: 22, textAlign: 'center' }}>{monthLabel(ym)}</h2>
               <button type="button" className="icon-btn well" aria-label="Next month" onClick={() => setYm(shiftMonth(ym, 1))}><ChevronRight size={16} /></button>
             </div>
-            <span className="faint" style={{ fontSize: 12.5, textAlign: 'center', marginTop: -6 }}>{mDays.length ? <>{green} green · {red} red · <PnL v={mNet} /> net</> : 'No trades this month'}</span>
+            <span className="faint" style={{ fontSize: 12.5, textAlign: 'center', marginTop: -6 }}>{mDays.length ? <>{green} {skinOn ? 'up' : 'green'} · {red} {skinOn ? 'down' : 'red'} · <PnL v={mNet} /> net</> : 'No trades this month'}</span>
             <MonthCalendar stats={stats} ym={ym} selected={day} onSelect={setDay} />
             {ym !== stats.thisMonth && <button type="button" className="btn btn-ghost btn-sm" style={{ alignSelf: 'center' }} onClick={() => { setYm(stats.thisMonth); setDay(stats.today) }}>Back to {monthLabel(stats.thisMonth, false)}</button>}
           </section>
@@ -132,7 +135,7 @@ export function News() {
                       {e.previous ? <span>Prev <b style={{ color: 'var(--fg2)', fontWeight: 600 }}>{e.previous}</b></span> : null}
                     </span>
                   </span>
-                  <span className="row" style={{ gap: 4, flexShrink: 0 }} aria-label={`Impact ${lvl} of 3`}>{[1, 2, 3].map((k) => <span key={k} style={{ width: 8, height: 8, borderRadius: '50%', background: k <= lvl ? (lvl === 3 ? '#FFA9A1' : '#FFF') : 'color-mix(in srgb, var(--fg) 15%, transparent)' }} />)}</span>
+                  <span className="row" style={{ gap: 4, flexShrink: 0 }} aria-label={`Impact ${lvl} of 3`}>{[1, 2, 3].map((k) => <span key={k} style={{ width: 8, height: 8, borderRadius: '50%', background: k <= lvl ? (lvl === 3 ? 'var(--neg)' : 'var(--fg)') : 'color-mix(in srgb, var(--fg) 15%, transparent)' }} />)}</span>
                 </div>
               )
             })}

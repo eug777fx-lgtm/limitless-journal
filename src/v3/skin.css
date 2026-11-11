@@ -270,3 +270,61 @@ body.v4-skin.v4-light .sk-aurora { opacity: .2; }
   .jg-dayt .jg-dots { display: none; }
 }
 @media (min-width: 761px) { body.v4-skin .overlay { padding-top: calc(env(safe-area-inset-top, 0px) + 88px); } }
+
+/* ── MONOCHROME: no hue anywhere in the new look. Wins are solid ink, losses are grey. ── */
+body.v4-skin, body.v4-skin .v4 {
+  --pos: #FFFFFF; --neg: #8E8E94; --warn: #C9C9CE;
+  --v4-pos: #FFFFFF; --v4-neg: #8E8E94; --v4-pos-soft: rgba(255,255,255,.10); --v4-neg-soft: rgba(255,255,255,.05);
+}
+body.v4-skin.v4-light, body.v4-skin.v4-light .v4 {
+  --pos: #0B0B0C; --neg: #80868F; --warn: #4A4F57;
+  --v4-pos: #0B0B0C; --v4-neg: #80868F; --v4-pos-soft: rgba(11,11,12,.08); --v4-neg-soft: rgba(11,11,12,.04);
+}
+body.v4-skin.v4-light .ink { --pos: #FFFFFF; --neg: #9A9AA0; }
+body.v4-skin .neg { font-style: normal; }
+/* the day card in the journal: inverse card, wins solid, losses dim */
+.jg-dayt .pos { color: var(--v4-btn-ink) !important; }
+.jg-dayt .neg { color: color-mix(in srgb, var(--v4-btn-ink) 55%, transparent) !important; }
+body.v4-skin:not(.v4-light) .jg-dayt .pos { color: #fff !important; }
+body.v4-skin:not(.v4-light) .jg-dayt .neg { color: rgba(255,255,255,.5) !important; }
+.jg-dots i.w { background: var(--v4-btn-ink) !important; }
+.jg-dots i.l { background: transparent !important; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--v4-btn-ink) 60%, transparent); }
+body.v4-skin:not(.v4-light) .jg-dots i.w { background: #fff !important; }
+body.v4-skin:not(.v4-light) .jg-dots i.l { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.55); }
+.jg-card.win .jg-img { box-shadow: inset 0 -2px 0 var(--v4-ink); }
+.jg-card.loss .jg-img { box-shadow: inset 0 -2px 0 var(--v4-ink3); }
+/* generated charts */
+.tart-tp { fill: color-mix(in srgb, var(--v4-ink) 9%, transparent); }
+.tart-sl { opacity: 1; }
+.tart-hatch { stroke: color-mix(in srgb, var(--v4-ink) 22%, transparent); stroke-width: 1.2; }
+.tart-out.win { fill: var(--v4-ink); }
+.tart-out.loss { fill: var(--v4-solid); stroke: var(--v4-ink); stroke-width: 1.6; }
+/* plan */
+li.on .pl-item { background: color-mix(in srgb, var(--v4-ink) 6%, var(--v4-card2)); }
+li.on .pl-box { background: var(--v4-ink); color: var(--v4-solid); }
+.pl-check.cleared { box-shadow: var(--v4-shadow), 0 0 0 1.5px var(--v4-ink), 0 30px 70px -30px rgba(0,0,0,.45); }
+.pl-ring.full .val, .pl-ring.full .tick { stroke: var(--v4-ink); fill: var(--v4-ink); }
+.pl-ring.full .trk { fill: none; }
+.pl-flag { color: var(--v4-ink); background: var(--v4-well); }
+.pl-flag.stop { color: var(--v4-btn-ink); background: var(--v4-btn); }
+.pl-days i.ok { background: var(--v4-ink); }
+.pl-days i.off { background: transparent; box-shadow: inset 0 0 0 1.5px var(--v4-ink3); opacity: 1; }
+.pl-bar i.neg { background: var(--v4-ink); }
+/* silver haze (was aurora) */
+.sk-aurora, .sk-aurora.up, .sk-aurora.down { --c1: #FFFFFF; --c2: #B9BCC2; --c3: #6B6F76; filter: blur(80px) grayscale(1); }
+body.v4-light .sk-aurora { --c1: #8F949B; --c2: #C9CCD1; --c3: #5E636B; }
+
+/* ── liquid paint ── */
+.paint { display: block; width: 100%; height: 100%; }
+.sk-scene .paint { position: absolute; inset: 0; }
+.v4 .hero .hero-ink { position: absolute; inset: 0; z-index: 0; border-radius: inherit; }
+.v4 .hero .hero-scrim { position: absolute; inset: 0; z-index: 0; pointer-events: none; border-radius: inherit;
+  background: radial-gradient(60% 55% at 50% 38%, color-mix(in srgb, var(--v4-bg) 78%, transparent), transparent 75%), linear-gradient(to top, color-mix(in srgb, var(--v4-bg) 55%, transparent), transparent 40%), linear-gradient(to bottom, color-mix(in srgb, var(--v4-bg) 70%, transparent), transparent 22%); }
+body.v4-skin .v4 .hero.glassy { background: var(--v4-solid); }
+
+/* ── cursor droplet ── */
+.sk-bubble { position: fixed; left: 0; top: 0; width: 150px; height: 150px; border-radius: 50%; opacity: 0; transition: opacity .5s; pointer-events: none; z-index: 1; will-change: transform;
+  -webkit-backdrop-filter: blur(2px) contrast(1.35) brightness(1.06); backdrop-filter: blur(2px) contrast(1.35) brightness(1.06);
+  background: radial-gradient(circle at 32% 28%, rgba(255,255,255,.55), rgba(255,255,255,0) 30%), radial-gradient(circle at 70% 78%, rgba(255,255,255,.18), transparent 40%);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.35), inset -10px -14px 30px rgba(0,0,0,.10), inset 8px 10px 24px rgba(255,255,255,.25), 0 20px 40px -20px rgba(0,0,0,.25); }
+body.v4-skin:not(.v4-light) .sk-bubble { -webkit-backdrop-filter: blur(2px) contrast(1.5) brightness(1.5); backdrop-filter: blur(2px) contrast(1.5) brightness(1.5); box-shadow: inset 0 0 0 1px rgba(255,255,255,.22), inset -10px -14px 30px rgba(0,0,0,.4), inset 8px 10px 24px rgba(255,255,255,.08); }

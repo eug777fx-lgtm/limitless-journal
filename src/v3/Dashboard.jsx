@@ -242,7 +242,7 @@ export default function Dashboard() {
             <PillBars height={118} items={[
               { label: 'Yes', value: String(plan.yes), pct: plan.answered ? plan.yes / plan.answered : 0, fill: 'var(--fg)', peak: plan.answered > 0 && plan.yes >= plan.no && plan.yes >= plan.partly },
               { label: 'Partly', value: String(plan.partly), pct: plan.answered ? plan.partly / plan.answered : 0, fill: 'color-mix(in srgb, var(--fg) 60%, transparent)' },
-              { label: 'No', value: String(plan.no), pct: plan.answered ? plan.no / plan.answered : 0, fill: 'rgba(255,169,161,0.85)' },
+              { label: 'No', value: String(plan.no), pct: plan.answered ? plan.no / plan.answered : 0, fill: 'color-mix(in srgb, var(--neg) 85%, transparent)' },
             ]} />
             {plan.answered > 0 && plan.offPlanNet < 0 && <span className="faint" style={{ fontSize: 12 }}>Off plan trades: <PnL v={plan.offPlanNet} /></span>}
           </section>

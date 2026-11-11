@@ -51,12 +51,14 @@ export function TradeArt({ t, labels = true, className = '' }) {
   const y = (v) => pad + (1 - (v - lo) / (hi - lo || 1)) * (H - pad * 2)
   const cw = W / a.candles.length
   const x0 = a.iEntry * cw, x1 = Math.min(W, (a.iExit + 3) * cw)
+  const pid = 'h' + React.useId().replace(/[^a-zA-Z0-9]/g, '')
   const hasPx = t.entry !== null && t.entry !== undefined && t.exit !== null && t.exit !== undefined
   return (
     <svg className={'tart ' + className} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
+      <defs><pattern id={pid} width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="5" className="tart-hatch" /></pattern></defs>
       {[0.25, 0.5, 0.75].map((g) => <line key={g} className="tart-grid" x1="0" x2={W} y1={H * g} y2={H * g} />)}
       <rect className="tart-tp" x={x0} width={x1 - x0} y={Math.min(y(a.entry), y(a.tp))} height={Math.abs(y(a.tp) - y(a.entry))} />
-      <rect className="tart-sl" x={x0} width={x1 - x0} y={Math.min(y(a.entry), y(a.sl))} height={Math.abs(y(a.sl) - y(a.entry))} />
+      <rect className="tart-sl" fill={`url(#${pid})`} x={x0} width={x1 - x0} y={Math.min(y(a.entry), y(a.sl))} height={Math.abs(y(a.sl) - y(a.entry))} />
       <line className="tart-entry" x1={x0} x2={x1} y1={y(a.entry)} y2={y(a.entry)} />
       {a.candles.map((c, i) => {
         const up = c.c >= c.o, cx = i * cw + cw / 2

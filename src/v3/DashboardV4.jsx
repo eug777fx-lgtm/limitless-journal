@@ -7,6 +7,7 @@ import { LOGO } from './ui.jsx'
 import { isoLocal, monthLabel, dayLabel } from './data.js'
 import { useSkin, setSkin, SkinTools } from './skin.jsx'
 import { Scene } from './scene.jsx'
+import Ink from './ink.jsx'
 import { TradeImage } from './art.jsx'
 import './v4.css'
 
@@ -282,6 +283,8 @@ export default function DashboardV4() {
         ) : (
           <>
             <section className="hero glassy rise" aria-label="Net P&L">
+              <Ink className="hero-ink" range={theme === 'light' ? [0.6, 1.0] : [0.0, 0.3]} highlight={theme === 'light' ? 0.14 : 0.3} zoom={1.05} scale={0.6} pull={2.2} seed={7.7} />
+              <span className="hero-scrim" aria-hidden="true" />
               <div className="top">
                 <span className="mono live"><b />Net P&amp;L · {b.label}</span>
                 <span className="mono legend"><span><i />{b.label}</span>{s.prev && <span><i className="g" />{b.prevLabel}</span>}</span>
@@ -311,7 +314,7 @@ export default function DashboardV4() {
                 </div>
               </div>
               <div className="tile glassy rise"><span className="mono k">Profit factor</span><div className="v">{s.gl ? (s.gw / s.gl).toFixed(2) : '∞'}</div><div className="d">{plain(s.gw)} won · {plain(s.gl)} lost</div></div>
-              <div className="tile glassy rise"><span className="mono k">Green days</span><div className="v">{green} / {s.days.length}</div><div className="days">{s.days.slice(-40).map((d) => <i key={d} className={s.byDay[d] > 0 ? 'g' : 'r'} />)}</div></div>
+              <div className="tile glassy rise"><span className="mono k">Up days</span><div className="v">{green} / {s.days.length}</div><div className="days">{s.days.slice(-40).map((d) => <i key={d} className={s.byDay[d] > 0 ? 'g' : 'r'} />)}</div></div>
               <div className="tile glassy rise"><span className="mono k">Best day</span><div className="v">{s.best ? signed(s.byDay[s.best]) : '$0'}</div><div className="d">{s.best ? new Date(s.best + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) : 'No trades yet'}</div></div>
               <div className="tile glassy rise"><span className="mono k">Avg win / loss</span><div className="v">{al ? (aw / al).toFixed(2) + 'R' : '∞'}</div>
                 <div className="bars"><div><b style={{ width: (aw / (Math.max(aw, al) || 1)) * 100 + '%', background: 'var(--v4-pos)' }} /></div><div><b style={{ width: (al / (Math.max(aw, al) || 1)) * 100 + '%', background: 'var(--v4-neg)' }} /></div></div>

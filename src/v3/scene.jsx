@@ -4,6 +4,7 @@ import React from 'react'
 import { useStore } from './store.jsx'
 import { useSkin, Terrain } from './skin.jsx'
 import { isoLocal } from './data.js'
+import Ink, { Bubble } from './ink.jsx'
 
 const still = () => document.documentElement.getAttribute('data-motion') === 'off' || matchMedia('(prefers-reduced-motion: reduce)').matches
 
@@ -44,10 +45,7 @@ function Drive({ light, mood }) {
     }
     const share = mood === 'up' ? 0.8 : mood === 'down' ? 0.25 : 0.55
     const cars = Array.from({ length: 42 }, (_, i) => ({ lane: i % lanes, k: Math.random(), v: 0.0012 + Math.random() * 0.0024, head: Math.random() < share }))
-    const col = (head) => {
-      if (light) return head ? (mood === 'up' ? 'rgba(12,154,98,' : 'rgba(11,11,12,') : 'rgba(224,68,75,'
-      return head ? (mood === 'up' ? 'rgba(150,255,200,' : 'rgba(255,248,235,') : 'rgba(255,90,80,'
-    }
+    const col = (head) => (light ? (head ? 'rgba(11,11,12,' : 'rgba(110,116,124,') : (head ? 'rgba(255,255,255,' : 'rgba(150,150,156,'))
     const frame = (t) => {
       raf = requestAnimationFrame(frame)
       if (t - last < 33) return
@@ -80,9 +78,11 @@ export function Scene({ light }) {
   const mood = useMood()
   return (
     <div className={'sk-scene ' + scene} aria-hidden="true">
+      {scene === 'ink' && <Ink range={light ? [0.865, 0.985] : [0.012, 0.13]} highlight={light ? 0.07 : 0.16} zoom={1.25} scale={0.42} />}
       {scene === 'aurora' && <Aurora mood={mood} />}
       {scene === 'drive' && <Drive light={light} mood={mood} />}
-      <div className={scene === 'still' ? 'sk-terrain' : 'sk-terrain drift'}><Terrain light={light} /></div>
+      {scene !== 'ink' && <div className={scene === 'still' ? 'sk-terrain' : 'sk-terrain drift'}><Terrain light={light} /></div>}
+      {scene !== 'still' && <Bubble />}
     </div>
   )
 }
