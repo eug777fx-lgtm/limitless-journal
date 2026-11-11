@@ -4,12 +4,15 @@ import React from 'react'
 import { Sun, Moon, Sparkles, Clapperboard, Check } from 'lucide-react'
 import { isoLocal } from './data.js'
 
-const ON = 'ltj_v4_on', THEME = 'ltj_v4_theme', SAMPLE = 'ltj_v4_sample', SCENE = 'ltj_v4_scene2'
-export const SCENES = [['ink', 'Liquid paint'], ['aurora', 'Silver haze'], ['drive', 'Night drive'], ['terrain', 'Terrain'], ['still', 'Still']]
+const ON = 'ltj_v4_on', THEME = 'ltj_v4_theme', SAMPLE = 'ltj_v4_sample', SCENE = 'ltj_v4_scene2', HERO = 'ltj_v4_hero', HERO_IMG = 'ltj_v4_hero_img', HERO_COLOR = 'ltj_v4_hero_color'
+export const SCENES = [['ink', 'Liquid paint'], ['aurora', 'Silver haze']]
+export const HEROES = ['paint', 'haze', 'art', 'custom']
 const read = (k, d) => { try { return localStorage.getItem(k) ?? d } catch { return d } }
 const write = (k, v) => { try { localStorage.setItem(k, v) } catch { /* private mode */ } }
 
-let state = { on: read(ON, '1') === '1', theme: read(THEME, 'light') === 'dark' ? 'dark' : 'light', sample: read(SAMPLE, '0') === '1', scene: SCENES.some(([k]) => k === read(SCENE, '')) ? read(SCENE, '') : 'ink' }
+let state = { on: read(ON, '1') === '1', theme: read(THEME, 'light') === 'dark' ? 'dark' : 'light', sample: read(SAMPLE, '0') === '1', scene: SCENES.some(([k]) => k === read(SCENE, '')) ? read(SCENE, '') : 'ink',
+  hero: HEROES.includes(read(HERO, '')) ? read(HERO, '') : 'paint', heroImg: read(HERO_IMG, '') || '', heroColor: read(HERO_COLOR, '0') === '1' }
+if (state.hero === 'custom' && !state.heroImg) state.hero = 'paint'
 const subs = new Set()
 export function setSkin(patch) {
   state = { ...state, ...patch }
@@ -17,6 +20,9 @@ export function setSkin(patch) {
   if ('theme' in patch) write(THEME, state.theme)
   if ('sample' in patch) write(SAMPLE, state.sample ? '1' : '0')
   if ('scene' in patch) write(SCENE, state.scene)
+  if ('hero' in patch) write(HERO, state.hero)
+  if ('heroColor' in patch) write(HERO_COLOR, state.heroColor ? '1' : '0')
+  if ('heroImg' in patch) { try { state.heroImg ? localStorage.setItem(HERO_IMG, state.heroImg) : localStorage.removeItem(HERO_IMG) } catch { /* too big or private mode: keeps for this visit */ } }
   subs.forEach((f) => f())
 }
 const subscribe = (f) => { subs.add(f); return () => subs.delete(f) }

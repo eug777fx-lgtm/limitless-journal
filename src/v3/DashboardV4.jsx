@@ -7,6 +7,7 @@ import { LOGO } from './ui.jsx'
 import { isoLocal, monthLabel, dayLabel } from './data.js'
 import { useSkin, setSkin, SkinTools } from './skin.jsx'
 import { Scene } from './scene.jsx'
+import { HeroBg, HeroPicker } from './hero.jsx'
 import { TradeImage } from './art.jsx'
 import './v4.css'
 
@@ -308,12 +309,14 @@ export default function DashboardV4() {
         <section className="hello rise">
           <Greeting first={first} s={s} label={b.label} count={s.chron.length} />
           <div className="tools">
-            {sample && <span className="owner">Sample trades <button type="button" onClick={() => setSkin({ sample: false })}>Hide</button></span>}
-            <SkinTools />
-            <button type="button" className="ibtn glassy" aria-label="Replay welcome" onClick={() => { setHidden(true); setIntro(true) }}><RotateCcw size={16} /></button>
             <div ref={segRef} className="seg4 glassy" role="group" aria-label="Period">
               {pill && <i style={{ left: pill.left, width: pill.width }} />}
               {PERIODS.map(([v, l]) => <button key={v} type="button" className={period === v ? 'on' : ''} aria-pressed={period === v} onClick={() => setPeriod(v)}>{l}</button>)}
+            </div>
+            <div className="tools-r">
+              {sample && <span className="owner">Sample trades <button type="button" onClick={() => setSkin({ sample: false })}>Hide</button></span>}
+              <SkinTools />
+              <button type="button" className="ibtn glassy" aria-label="Replay welcome" title="Replay welcome" onClick={() => { setHidden(true); setIntro(true) }}><RotateCcw size={16} /></button>
             </div>
           </div>
         </section>
@@ -329,11 +332,14 @@ export default function DashboardV4() {
         ) : (
           <>
             <section className="hero glassy rise" aria-label="Net P&L">
-              <span className={'hero-art ' + theme} aria-hidden="true"><i /></span>
+              <HeroBg theme={theme} />
               <span className="hero-scrim" aria-hidden="true" />
               <div className="top">
                 <span className="mono live"><b />Net P&amp;L · {b.label}</span>
-                <span className="mono legend"><span><i />{b.label}</span>{s.prev && <span><i className="g" />{b.prevLabel}</span>}</span>
+                <span className="row" style={{ gap: 8, alignItems: 'center' }}>
+                  <span className="mono legend"><span><i />{b.label}</span>{s.prev && <span><i className="g" />{b.prevLabel}</span>}</span>
+                  <HeroPicker />
+                </span>
               </div>
               <div className="num">
                 <Odo value={hidden && intro ? 0 : s.net} />
