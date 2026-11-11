@@ -750,3 +750,4 @@ body.v4-skin .v3-legacy { filter: grayscale(1); }
 body.v4-skin.v4-light .v3-legacy { filter: invert(.95) hue-rotate(180deg) grayscale(1); box-shadow: 0 0 0 1px rgba(255,255,255,.08); }
 body.v4-skin.v4-light .v3-legacy img, body.v4-skin.v4-light .v3-legacy video { filter: invert(1) hue-rotate(180deg); }
 body.v4-skin .v3-legacy { font-family: var(--body); border-radius: 24px; }
+.v4 .gnow b { font-size: 22px; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }

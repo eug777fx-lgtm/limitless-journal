@@ -6,6 +6,8 @@ import { supabase } from '../lib/supabase'
 import { money } from './data.js'
 import { PLANS, startCheckout, openBillingPortal, syncSubscription, hasPaidAccess, fmtDate } from '../lib/billing'
 import AppShell from './Shell.jsx'
+import { useSkin } from './skin.jsx'
+import { ZONES, useTzSetting, setTz } from './tz.js'
 import { ImportModal, exportCSV } from './Journal.jsx'
 
 export function Billing() {
@@ -99,6 +101,9 @@ function DangerModal({ cfg, busy, onClose }) {
 
 export function Account() {
   const { user, profile, settings, setSetting, notify, saveProfile, trades, setTrades, setProfile, logout, isAdmin, isSuperAdmin } = useStore()
+  const tz = useTzSetting()
+  const skinState = useSkin()
+  const skinOn = !!isSuperAdmin && skinState.on
   const init = () => ({ first_name: profile?.first_name || '', last_name: profile?.last_name || '', username: profile?.username || '', phone: profile?.phone || '', market_focus: profile?.market_focus || '' })
   const [p, setP] = React.useState(init)
   const [goal, setGoal] = React.useState(profile?.monthly_goal ? String(profile.monthly_goal) : '')
@@ -224,6 +229,14 @@ export function Account() {
           </div>
         </section>
 
+        {skinOn && (
+          <section className="glass panel" aria-label="Time zone">
+            <div className="panel-head"><h2>Time zone</h2><span className="faint" style={{ fontSize: 12.5 }}>Used for the clock on your dashboard</span></div>
+            <select className="input" value={tz} onChange={(e) => setTz(e.target.value)} aria-label="Time zone">
+              {ZONES.map(([v, l]) => <option key={v} value={v}>{l}{v === 'auto' ? ` · ${Intl.DateTimeFormat().resolvedOptions().timeZone}` : ''}</option>)}
+            </select>
+          </section>
+        )}
         <section className="glass panel" aria-label="Display" style={{ gap: 0 }}>
           <div className="panel-head" style={{ marginBottom: 10 }}><h2>Display</h2></div>
           <div style={row}>

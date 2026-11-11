@@ -3,6 +3,7 @@
 import React from 'react'
 import { useStore } from './store.jsx'
 import { LOGO } from './ui.jsx'
+import { useTzSetting, tzHour } from './tz.js'
 
 const KEY = 'ltj_v4_splash'
 const still = () => document.documentElement.getAttribute('data-motion') === 'off' || matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -26,7 +27,7 @@ export default function Splash() {
     return () => { clearTimeout(t1); clearTimeout(t2) }
   }, [show])
   if (!show) return null
-  const h = new Date().getHours()
+  const h = tzHour(useTzSetting())
   const greet = h < 5 ? 'Late night' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
   const first = (user.name || 'Trader').split(' ')[0]
   const date = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })

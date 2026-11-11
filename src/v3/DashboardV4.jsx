@@ -9,6 +9,7 @@ import { useSkin, setSkin, SkinTools } from './skin.jsx'
 import { Scene } from './scene.jsx'
 import { replaySplash } from './Splash.jsx'
 import { SampleControls } from './samples.jsx'
+import { useTzSetting, tzName, tzAbbr } from './tz.js'
 import { HeroBg, HeroPicker } from './hero.jsx'
 import { TradeImage } from './art.jsx'
 import './v4.css'
@@ -236,18 +237,15 @@ function sessionState(now, [name, tz, open, close]) {
 const dur = (m) => (m >= 60 * 24 ? `${Math.floor(m / 1440)}d ${Math.floor((m % 1440) / 60)}h` : m >= 60 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m` : `${m}m`)
 
 function Greeting() {
+  const z = useTzSetting()
   const [now, setNow] = React.useState(() => new Date())
-  React.useEffect(() => { const i = setInterval(() => setNow(new Date()), 20000); return () => clearInterval(i) }, [])
-  const date = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ' · ' + now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-  const sess = SESSIONS.map((x) => sessionState(now, x))
-  const open = sess.filter((x) => x.open)
-  const next = sess.filter((x) => !x.open).sort((a, b) => a.mins - b.mins)[0]
-  const head = open.length ? `${open.map((x) => x.name).join(' & ')} ${open.length > 1 ? 'open' : 'is open'}` : `${next.name} opens in ${dur(next.mins)}`
-  const tail = open.length ? `${dur(Math.min(...open.map((x) => x.mins)))} left` : 'markets closed'
+  React.useEffect(() => { const i = setInterval(() => setNow(new Date()), 10000); return () => clearInterval(i) }, [])
+  const date = now.toLocaleDateString('en-US', { timeZone: tzName(z), weekday: 'long', month: 'long', day: 'numeric' })
+  const time = now.toLocaleTimeString('en-US', { timeZone: tzName(z), hour: 'numeric', minute: '2-digit' })
   return (
-    <div className={'gline' + (open.length ? ' is-open' : '')} aria-live="polite">
+    <div className="gline" aria-live="polite">
       <span className="mono">{date}</span>
-      <span className="gnow"><i /><b key={head}>{head}</b><small>{tail}</small></span>
+      <span className="gnow"><b>{time}</b><small>{tzAbbr(z, now)}</small></span>
     </div>
   )
 }
