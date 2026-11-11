@@ -269,3 +269,4 @@ body.v4-skin.v4-light .sk-aurora { opacity: .2; }
   .jg-dayt .jg-net { grid-column: 3; grid-row: 1 / 3; font-size: 20px; }
   .jg-dayt .jg-dots { display: none; }
 }
+@media (min-width: 761px) { body.v4-skin .overlay { padding-top: calc(env(safe-area-inset-top, 0px) + 88px); } }
