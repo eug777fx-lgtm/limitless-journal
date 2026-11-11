@@ -236,31 +236,16 @@ const dur = (m) => (m >= 60 * 24 ? `${Math.floor(m / 1440)}d ${Math.floor((m % 1
 function Greeting() {
   const [now, setNow] = React.useState(() => new Date())
   React.useEffect(() => { const i = setInterval(() => setNow(new Date()), 20000); return () => clearInterval(i) }, [])
-  const stamp = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) + ' · ' + now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  const date = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ' · ' + now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
   const sess = SESSIONS.map((x) => sessionState(now, x))
   const open = sess.filter((x) => x.open)
   const next = sess.filter((x) => !x.open).sort((a, b) => a.mins - b.mins)[0]
-  const words = open.length
-    ? [...open.map((x) => x.name).join(' & ').split(' '), open.length > 1 ? 'open.' : 'is', ...(open.length > 1 ? [] : ['open.'])]
-    : [next.name, 'opens', 'in', dur(next.mins) + '.']
-  const sub = open.length
-    ? `${open.map((x) => `${x.name} closes in ${dur(x.mins)}`).join(' · ')}${next ? ` · ${next.name} opens in ${dur(next.mins)}` : ''}`
-    : 'Markets are quiet. Review, plan, and wait for your session.'
-  const key = open.map((x) => x.name).join() + '|' + (open.length ? '' : next.name)
+  const head = open.length ? `${open.map((x) => x.name).join(' & ')} ${open.length > 1 ? 'open' : 'is open'}` : `${next.name} opens in ${dur(next.mins)}`
+  const tail = open.length ? `${dur(Math.min(...open.map((x) => x.mins)))} left` : 'markets closed'
   return (
-    <div className="greet">
-      <span className="mono gstamp"><i />{stamp}</span>
-      <h1 key={key} aria-label={words.join(' ')}>
-        {words.map((w, i) => <span key={i} className={'gw' + (i >= words.length - (open.length ? (open.length > 1 ? 1 : 2) : 3) ? ' name' : '')} style={{ '--i': i }}><span>{w}</span></span>)}
-      </h1>
-      <p className="gsum">{sub}</p>
-      <div className="gsess" aria-label="Market sessions">
-        {sess.map((x) => (
-          <span key={x.name} className={'gs' + (x.open ? ' open' : '')}>
-            <i />{x.name}<small>{x.open ? `open · ${dur(x.mins)} left` : `opens in ${dur(x.mins)}`}</small>
-          </span>
-        ))}
-      </div>
+    <div className={'gline' + (open.length ? ' is-open' : '')} aria-live="polite">
+      <span className="mono">{date}</span>
+      <span className="gnow"><i /><b key={head}>{head}</b><small>{tail}</small></span>
     </div>
   )
 }
@@ -308,12 +293,12 @@ export default function DashboardV4() {
       <div className="chrome-space" aria-hidden="true" />
       <div className="v4-wrap">
         <section className="hello rise">
-          <Greeting />
           <div className="tools">
             <div ref={segRef} className="seg4 glassy" role="group" aria-label="Period">
               {pill && <i style={{ left: pill.left, width: pill.width }} />}
               {PERIODS.map(([v, l]) => <button key={v} type="button" className={period === v ? 'on' : ''} aria-pressed={period === v} onClick={() => setPeriod(v)}>{l}</button>)}
             </div>
+            <Greeting />
             <div className="tools-r">
               {sample && <span className="owner">Sample trades <button type="button" onClick={() => setSkin({ sample: false })}>Hide</button></span>}
               <SkinTools />
