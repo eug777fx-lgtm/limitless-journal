@@ -24,6 +24,8 @@ import { useSkinActive, useSkin } from './skin.jsx'
 import { Scene } from './scene.jsx'
 import Tour from './Tour.jsx'
 import { ProLock } from './Shell.jsx'
+import { LiveBeacon } from '../lib/live.jsx'
+import AdminV4 from './Admin.jsx'
 import skinCss from './skin.css?inline'
 
 const FONTS = 'https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@500;600&family=Poppins:wght@300;400;500;600;700;800&display=swap'
@@ -99,6 +101,12 @@ function Legacy({ route }) {
   )
 }
 
+// Admin: the new admin panel (live view, users, emails...). Everyone else lands on the dashboard.
+function AdminRoute() {
+  const { isAdmin } = useStore()
+  return isAdmin ? <AdminV4 /> : <DashboardV4 />
+}
+
 // Admin only: the Asia Model backtest lab. Everyone else lands on the dashboard.
 function AdminBacktest() {
   const { isSuperAdmin } = useStore()
@@ -108,13 +116,14 @@ function AdminBacktest() {
 function Router() {
   const route = useRoute()
   useGlassLight()
-  const { pro } = useStore()
+  const { pro, user, isAdmin } = useStore()
   // The new look is on for every trader
   const skinOn = useSkinActive(true)
-  const C = { dashboard: DashboardV4, journal: Journal, analytics: Analytics, calendar: Calendar, news: News, billing: Billing, account: Account, backtest: AdminBacktest, plan: Plan, network: pro ? Network : NetworkLocked }[route]
+  const C = { dashboard: DashboardV4, journal: Journal, analytics: Analytics, calendar: Calendar, news: News, billing: Billing, account: Account, backtest: AdminBacktest, admin: AdminRoute, plan: Plan, network: pro ? Network : NetworkLocked }[route]
   return (
     <>
       {skinOn && <BgScene />}
+      <LiveBeacon page={route} uid={user.id} admin={!!isAdmin} />
       <Chrome route={route} />
       <React.Fragment key={route}>{C ? <C /> : LEGACY[route] ? <Legacy route={route} /> : <Dashboard />}</React.Fragment>
       {skinOn ? <LogTradeV4 /> : <LogTrade />}

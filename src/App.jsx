@@ -16,6 +16,7 @@ import {
   Trophy, FileText, ExternalLink, Calendar, Brain, Crown, CreditCard, ArrowRight, EyeOff,
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
+import { LiveBeacon } from './lib/live.jsx'
 // Always-loaded Network primitives (a hook can never be lazy'd).
 import { useMyNetworkProfile } from './lib/networkShared.js'
 import { SocialAvatar } from './lib/SocialAvatar.jsx'
@@ -1032,6 +1033,7 @@ function AuthPage({ onAuth }) {
     <div className="la-root">
       <style dangerouslySetInnerHTML={{ __html: ANIM_CSS + AUTH_CSS }} />
       <BootDone />
+      <LiveBeacon page={isLogin ? 'login' : 'signup'} />
       <div className="la-bg" aria-hidden="true"><div className="la-beam" /><div className="la-grid" /></div>
 
       <a href="https://limitless-journal.com" className="la-home" aria-label="LIMITLESS home">
@@ -8196,7 +8198,7 @@ export default function App() {
 
   // ── Banned gate (admins still get access) ──
   if (profile.status === 'banned' && !isAnyAdmin(session?.user?.email)) {
-    return <BannedScreen onLogout={logout} />
+    return <><LiveBeacon page="banned" uid={session?.user?.id} /><BannedScreen onLogout={logout} /></>
   }
 
   // ── Paywall gate ──
@@ -8207,6 +8209,8 @@ export default function App() {
   const isAdminUser = isAnyAdmin(session?.user?.email)
   if (paywallOn && !isAdminUser && !betaFree && !hasPaidAccess(subscription)) {
     return (
+      <>
+      <LiveBeacon page="pay" uid={session?.user?.id} />
       <PaywallScreen
         subscription={subscription}
         tradeCount={trades.length}
@@ -8215,18 +8219,19 @@ export default function App() {
         background={<><BootDone /><AuroraBackground /></>}
         css={ANIM_CSS}
       />
+      </>
     )
   }
 
   if (!paywallOn || isAdminUser) {
     // ── Waitlist gate (beta closed — admins still get access) ──
     if (profile.status === 'waitlist' && !isAdminUser) {
-      return <WaitlistScreen onLogout={logout} />
+      return <><LiveBeacon page="waiting" uid={session?.user?.id} /><WaitlistScreen onLogout={logout} /></>
     }
 
     // ── Approval gate ──
     if (profile.status !== 'approved') {
-      return <PendingScreen onLogout={logout} />
+      return <><LiveBeacon page="waiting" uid={session?.user?.id} /><PendingScreen onLogout={logout} /></>
     }
   }
 
@@ -8275,6 +8280,7 @@ export default function App() {
           logout={logout}
           uploadImages={uploadImages}
           renderLegacy={renderLegacy}
+          onViewUser={enterViewAs}
         />
       </Suspense>
     )
