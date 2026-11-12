@@ -6944,7 +6944,7 @@ function AdminPanel({ session, setPage, onViewUser }) {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
                       {statusBadge(u.status)}
                       <div style={{ fontSize: '10px', color: '#555', minWidth: '60px', textAlign: 'right' }}>{relativeTime(u.created_at)}</div>
-                      {isPending && (
+                      {isPending && !flags.paywall && (
                         <button
                           onClick={() => updateStatus(u.id, 'approved')}
                           disabled={busy}
