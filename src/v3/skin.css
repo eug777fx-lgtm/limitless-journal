@@ -857,3 +857,8 @@ img.tart { display: block; width: 100%; height: 100%; object-fit: fill; user-sel
 .sk-aurora.cv i { visibility: hidden; animation: none !important; }
 .sk-aurora.cv .sk-haze-cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .sk-scene .sk-terrain.drift.js { animation: none; will-change: transform; }
+
+/* chart art on canvas: fades in once drawn */
+canvas.tart { display: block; width: 100%; height: 100%; opacity: 0; transition: opacity .25s ease; }
+canvas.tart.on { opacity: 1; }
+.jg-art canvas.tart { height: auto; }
