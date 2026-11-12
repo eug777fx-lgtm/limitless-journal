@@ -12,12 +12,18 @@ import { Modal } from './ui.jsx'
 import AppShell from './Shell.jsx'
 
 // ── small helpers ──
+// Database times come without a time zone but are UTC: read them as UTC, never as local time
+const T = (v) => {
+  if (v instanceof Date || typeof v === 'number') return new Date(v)
+  const str = String(v || '')
+  return new Date(/[zZ]$|[+-]\d\d:?\d\d$/.test(str) || str.length <= 10 ? str : str + 'Z')
+}
 const nameOf = (u) => (u ? [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || u.email || 'User' : 'Unknown')
 const initials = (u) => String(u?.first_name || u?.username || u?.email || 'U').slice(0, 2).toUpperCase()
-const fmtDate = (d) => { if (!d) return '—'; try { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) } catch { return '—' } }
+const fmtDate = (d) => { if (!d) return '—'; try { return T(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) } catch { return '—' } }
 const ago = (d) => {
   if (!d) return '—'
-  const s = Math.max(0, (Date.now() - new Date(d).getTime()) / 1000)
+  const s = Math.max(0, (Date.now() - T(d).getTime()) / 1000)
   if (s < 45) return 'just now'
   if (s < 3600) return Math.round(s / 60) + 'm ago'
   if (s < 86400) return Math.round(s / 3600) + 'h ago'
@@ -33,7 +39,7 @@ const since = (ms) => {
 }
 const usd = (v) => (v >= 0 ? '+' : '−') + '$' + Math.abs(Math.round(v)).toLocaleString()
 const startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d }
-const isToday = (ts) => !!ts && new Date(ts) >= startOfToday()
+const isToday = (ts) => !!ts && T(ts) >= startOfToday()
 const makeInviteCode = () => {
   const a = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
   let c = ''
@@ -349,10 +355,10 @@ function LiveTab({ A, byHash }) {
   const tradesToday = A.trades.filter((t) => isToday(t.created_at))
   const userById = new Map(A.users.map((u) => [u.id, u]))
   const dataFeed = [
-    ...signupsToday.map((u) => ({ id: 's' + u.id, ts: new Date(u.created_at).getTime(), text: `${nameOf(u)} created an account`, kind: 'signup' })),
-    ...paidToday.map((s) => ({ id: 'p' + s.user_id, ts: new Date(s.updated_at || s.created_at).getTime(), text: `${nameOf(userById.get(s.user_id))} paid for ${s.plan === 'pro' ? 'Pro' : 'Lite'}`, kind: 'paid' })),
-    ...checkoutToday.map((s) => ({ id: 'c' + s.user_id, ts: new Date(s.created_at).getTime(), text: `${nameOf(userById.get(s.user_id))} started checkout`, kind: 'checkout' })),
-    ...tradesToday.slice(0, 40).map((t) => ({ id: 't' + t.id, ts: new Date(t.created_at).getTime(), text: `${nameOf(userById.get(t.user_id))} logged a trade${t.symbol ? ' on ' + t.symbol : ''}`, kind: 'trade' })),
+    ...signupsToday.map((u) => ({ id: 's' + u.id, ts: T(u.created_at).getTime(), text: `${nameOf(u)} created an account`, kind: 'signup' })),
+    ...paidToday.map((s) => ({ id: 'p' + s.user_id, ts: T(s.updated_at || s.created_at).getTime(), text: `${nameOf(userById.get(s.user_id))} paid for ${s.plan === 'pro' ? 'Pro' : 'Lite'}`, kind: 'paid' })),
+    ...checkoutToday.map((s) => ({ id: 'c' + s.user_id, ts: T(s.created_at).getTime(), text: `${nameOf(userById.get(s.user_id))} started checkout`, kind: 'checkout' })),
+    ...tradesToday.slice(0, 40).map((t) => ({ id: 't' + t.id, ts: T(t.created_at).getTime(), text: `${nameOf(userById.get(t.user_id))} logged a trade${t.symbol ? ' on ' + t.symbol : ''}`, kind: 'trade' })),
   ]
   const feed = [...events, ...dataFeed].sort((a, b) => b.ts - a.ts).slice(0, 50)
 
@@ -450,14 +456,14 @@ function OverviewTab({ A, paying, go }) {
   const growth = []
   for (let i = 29; i >= 0; i--) {
     const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - i)
-    const next = new Date(d); next.setDate(d.getDate() + 1)
-    growth.push({ label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), count: users.filter((u) => u.created_at && new Date(u.created_at) >= d && new Date(u.created_at) < next).length })
+    const next = T(d); next.setDate(d.getDate() + 1)
+    growth.push({ label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), count: users.filter((u) => u.created_at && T(u.created_at) >= d && T(u.created_at) < next).length })
   }
   const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7)
   const activity = [
     ...users.map((u) => ({ ts: u.created_at, text: `New sign up: ${nameOf(u)}` })),
     ...trades.map((t) => ({ ts: t.created_at || t.trade_date, text: `Trade logged by ${nameOf(userById.get(t.user_id))}` })),
-  ].filter((a) => a.ts).sort((a, b) => new Date(b.ts) - new Date(a.ts)).slice(0, 12)
+  ].filter((a) => a.ts).sort((a, b) => T(b.ts) - T(a.ts)).slice(0, 12)
 
   return (
     <div className="col" style={{ gap: 16 }}>
@@ -474,7 +480,7 @@ function OverviewTab({ A, paying, go }) {
         <Stat n={usd(totalPnl)} l="Total P&L logged" />
         <Stat n={(users.length ? trades.length / users.length : 0).toFixed(1)} l="Trades per user" />
         <Stat n={best ? nameOf(userById.get(best.uid)) : '—'} l={best ? `Most active · ${best.c} trades` : 'Most active'} />
-        <Stat n={users.filter((u) => u.created_at && new Date(u.created_at) >= weekAgo).length} l="Sign ups this week" />
+        <Stat n={users.filter((u) => u.created_at && T(u.created_at) >= weekAgo).length} l="Sign ups this week" />
       </div>
 
       <section className="glass panel" aria-label="Sign ups">
@@ -554,11 +560,11 @@ function UserDetail({ u, A, plan }) {
   const mine = A.trades.filter((t) => t.user_id === u.id)
   const wins = mine.filter((t) => (Number(t.pnl) || 0) > 0).length
   const pnl = mine.reduce((s, t) => s + (Number(t.pnl) || 0), 0)
-  const last = mine.reduce((acc, t) => { const d = t.trade_date || t.created_at; return !acc || (d && new Date(d) > new Date(acc)) ? d : acc }, null)
+  const last = mine.reduce((acc, t) => { const d = t.trade_date || t.created_at; return !acc || (d && T(d) > T(acc)) ? d : acc }, null)
   const sym = {}
   mine.forEach((t) => { if (t.symbol) sym[t.symbol] = (sym[t.symbol] || 0) + 1 })
   const top = Object.entries(sym).sort((a, b) => b[1] - a[1])[0]?.[0]
-  const age = (() => { if (!u.created_at) return '—'; const d = Math.floor((Date.now() - new Date(u.created_at)) / 86400000); return d < 1 ? 'Today' : d < 30 ? d + 'd' : d < 365 ? Math.floor(d / 30) + 'mo' : (d / 365).toFixed(1) + 'y' })()
+  const age = (() => { if (!u.created_at) return '—'; const d = Math.floor((Date.now() - T(u.created_at)) / 86400000); return d < 1 ? 'Today' : d < 30 ? d + 'd' : d < 365 ? Math.floor(d / 30) + 'mo' : (d / 365).toFixed(1) + 'y' })()
   return (
     <div className="adm-detail">
       <div className="adm-dgrid">
@@ -720,7 +726,7 @@ function EmailModal({ open, onClose, ids, A, onSent }) {
 function WaitlistTab({ A }) {
   const [sort, setSort] = React.useState('date')
   const all = A.users.filter((u) => { const s = u.status || ''; return s === 'waitlist' || s === 'pending' })
-  const list = [...all].sort((a, b) => sort === 'name' ? (a.first_name || a.username || a.email || '').toLowerCase().localeCompare((b.first_name || b.username || b.email || '').toLowerCase()) : new Date(b.created_at || 0) - new Date(a.created_at || 0))
+  const list = [...all].sort((a, b) => sort === 'name' ? (a.first_name || a.username || a.email || '').toLowerCase().localeCompare((b.first_name || b.username || b.email || '').toLowerCase()) : T(b.created_at || 0) - T(a.created_at || 0))
   return (
     <div className="col" style={{ gap: 16 }}>
       <div className="row adm-toolbar">
