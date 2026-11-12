@@ -6696,8 +6696,8 @@ function AdminPanel({ session, setPage, onViewUser }) {
         : s === 'banned'
           ? { bg: 'rgba(80,80,80,0.15)', border: 'rgba(180,180,180,0.25)', color: '#bbb', label: 'Banned' }
           : s === 'waitlist'
-            ? { bg: 'rgba(124,201,255,0.08)', border: 'rgba(124,201,255,0.25)', color: '#7cc9ff', label: 'Waitlist' }
-            : { bg: 'rgba(255,217,102,0.08)', border: 'rgba(255,217,102,0.25)', color: '#ffd966', label: 'Pending' }
+            ? { bg: 'rgba(124,201,255,0.08)', border: 'rgba(124,201,255,0.25)', color: '#7cc9ff', label: flags.paywall ? 'Not paid yet' : 'Waitlist' }
+            : { bg: 'rgba(255,217,102,0.08)', border: 'rgba(255,217,102,0.25)', color: '#ffd966', label: flags.paywall ? 'Not paid yet' : 'Pending' }
     return (
       <span style={{
         background: cfg.bg, border: `1px solid ${cfg.border}`,
@@ -6763,10 +6763,10 @@ function AdminPanel({ session, setPage, onViewUser }) {
               boxShadow: '0 12px 36px rgba(0,0,0,0.6)',
             }}>
               <div style={{ fontSize: '10px', fontWeight: '600', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#666', padding: '8px 10px 6px' }}>
-                Pending Approvals
+                {flags.paywall ? 'Signed up, not paid yet' : 'Pending Approvals'}
               </div>
               {pendingList.length === 0 ? (
-                <div style={{ padding: '14px 10px', fontSize: '12px', color: '#666' }}>No pending users</div>
+                <div style={{ padding: '14px 10px', fontSize: '12px', color: '#666' }}>{flags.paywall ? 'Everyone who signed up has paid' : 'No pending users'}</div>
               ) : pendingList.map(u => {
                 const name = [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || u.email
                 const busy = actioning === u.id
@@ -6776,11 +6776,13 @@ function AdminPanel({ session, setPage, onViewUser }) {
                       <div style={{ fontSize: '12px', fontWeight: '600', color: '#ddd', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
                       <div style={{ fontSize: '10px', color: '#666', marginTop: '1px' }}>{relativeTime(u.created_at)}</div>
                     </div>
+                    {flags.paywall ? <span style={{ fontSize: '10px', color: '#888', whiteSpace: 'nowrap' }}>Gets in after paying</span> : (
                     <button
                       onClick={() => updateStatus(u.id, 'approved')}
                       disabled={busy}
                       style={{ background: 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', color: '#aaffa0', borderRadius: '6px', padding: '4px 10px', fontSize: '10px', fontWeight: '700', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', opacity: busy ? 0.6 : 1 }}
                     >Approve</button>
+                    )}
                   </div>
                 )
               })}
@@ -6845,7 +6847,7 @@ function AdminPanel({ session, setPage, onViewUser }) {
           { label: 'Total Users',      val: totalUsers,    Icon: Users,         color: '#fff',    iconColor: '#aaa',    accent: 'rgba(255,255,255,0.06)' },
           BETA_CLOSED
             ? { label: 'On Waitlist',     val: waitlistUsers, Icon: Crown,         color: '#7cc9ff', iconColor: '#7cc9ff', accent: 'rgba(124,201,255,0.10)', highlight: waitlistUsers > 0 }
-            : { label: 'Pending Approval', val: pendingUsers,  Icon: Bell,          color: '#ffd966', iconColor: '#ffd966', accent: 'rgba(255,217,102,0.10)', highlight: pendingUsers > 0 },
+            : { label: flags.paywall ? 'Not Paid Yet' : 'Pending Approval', val: pendingUsers,  Icon: Bell,          color: '#ffd966', iconColor: '#ffd966', accent: 'rgba(255,217,102,0.10)', highlight: pendingUsers > 0 },
           { label: 'Approved Users',   val: approvedUsers, Icon: Check,         color: '#aaffa0', iconColor: '#aaffa0', accent: 'rgba(170,255,160,0.08)' },
           { label: 'Total Trades',     val: totalTrades,   Icon: BarChart2,     color: '#fff',    iconColor: '#aaa',    accent: 'rgba(255,255,255,0.06)' },
         ].map(s => {
@@ -7154,7 +7156,7 @@ function AdminPanel({ session, setPage, onViewUser }) {
           {[
             { id: 'all',      label: 'All',      n: users.length    },
             { id: 'waitlist', label: 'Waitlist', n: waitlistUsers   },
-            { id: 'pending',  label: 'Pending',  n: pendingUsers    },
+            { id: 'pending',  label: flags.paywall ? 'Not paid' : 'Pending',  n: pendingUsers    },
             { id: 'approved', label: 'Approved', n: approvedUsers   },
             { id: 'rejected', label: 'Rejected', n: users.filter(u => u.status === 'rejected').length },
             { id: 'banned',   label: 'Banned',   n: users.filter(u => u.status === 'banned').length   },
@@ -7314,7 +7316,7 @@ function AdminPanel({ session, setPage, onViewUser }) {
                         <td style={{ padding: '12px 16px' }} onClick={e => e.stopPropagation()}>
                           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                             <button onClick={() => onViewUser && onViewUser(u)} disabled={busy} title="View this user's dashboard (read-only)" style={{ background: 'rgba(255,193,7,0.08)', border: '1px solid rgba(255,193,7,0.25)', color: '#ffc107', borderRadius: '6px', padding: '5px 9px', fontSize: '11px', fontWeight: '600', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', display: 'flex', alignItems: 'center', gap: '4px', opacity: busy ? 0.6 : 1 }}><Eye size={11} /> View</button>
-                            {u.status !== 'approved' && (
+                            {u.status !== 'approved' && u.status !== 'banned' && !flags.paywall && (
                               <button onClick={() => updateStatus(u.id, 'approved')} disabled={busy} style={{ background: 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', color: '#aaffa0', borderRadius: '6px', padding: '5px 11px', fontSize: '11px', fontWeight: '600', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', opacity: busy ? 0.6 : 1 }}>Approve</button>
                             )}
                             {u.status !== 'rejected' && u.status !== 'banned' && (
@@ -7432,13 +7434,13 @@ function AdminPanel({ session, setPage, onViewUser }) {
                   <option value="name">Sort: Name</option>
                 </select>
               </div>
-              <button
+              {!flags.paywall && <button
                 onClick={bulkApprove}
                 disabled={waitlistAll.length === 0}
                 style={{ background: waitlistAll.length === 0 ? 'transparent' : 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', color: waitlistAll.length === 0 ? '#444' : '#aaffa0', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: '600', cursor: waitlistAll.length === 0 ? 'not-allowed' : 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px' }}
               >
                 <Check size={13} /> Approve All
-              </button>
+              </button>}
             </div>
 
             <div style={{ ...statCard, padding: '0', overflow: 'hidden' }}>
@@ -7461,7 +7463,7 @@ function AdminPanel({ session, setPage, onViewUser }) {
                         <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>{u.email || '—'} · signed up {relativeTime(u.created_at)}</div>
                       </div>
                       <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                        <button onClick={() => updateStatus(u.id, 'approved')} disabled={busy} style={{ background: 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', color: '#aaffa0', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: '600', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', opacity: busy ? 0.6 : 1 }}>Approve</button>
+                        {!flags.paywall && <button onClick={() => updateStatus(u.id, 'approved')} disabled={busy} style={{ background: 'rgba(170,255,160,0.08)', border: '1px solid rgba(170,255,160,0.25)', color: '#aaffa0', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: '600', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', opacity: busy ? 0.6 : 1 }}>Approve</button>}
                         <button onClick={() => updateStatus(u.id, 'rejected')} disabled={busy} style={{ background: 'rgba(255,128,128,0.06)', border: '1px solid rgba(255,128,128,0.25)', color: '#ff8080', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: '600', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', minHeight: 'auto', opacity: busy ? 0.6 : 1 }}>Reject</button>
                       </div>
                     </div>
@@ -7864,7 +7866,9 @@ export default function App() {
   const [authLoading,    setAuthLoading]    = useState(true)
   const [passwordRecovery, setPasswordRecovery] = useState(false)
   const [announcement, setAnnouncement] = useState(null) // { text, active }
-  const [featureFlags, setFeatureFlags] = useState({ monthlyGoalTracker: true, aiChecklist: true, newsCalendar: true, feedSection: true, paywall: false })
+  // paywall starts on: if the settings ever fail to load, new traders still get the pay screen,
+  // never the old wait-for-approval screen
+  const [featureFlags, setFeatureFlags] = useState({ monthlyGoalTracker: true, aiChecklist: true, newsCalendar: true, feedSection: true, paywall: true })
   const [demoMode, setDemoModeRaw] = useState(() => localStorage.getItem('limitless_demo_mode') === 'true')
   const setDemoMode = (v) => {
     setDemoModeRaw(v)
